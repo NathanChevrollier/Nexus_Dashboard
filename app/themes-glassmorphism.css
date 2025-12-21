@@ -1,0 +1,517 @@
+/* ============================================
+   GLASSMORPHISM CYBER THEME
+   Futuristic theme with softer blur effects
+   ============================================ */
+
+/* === CYBER BLUE (DEFAULT) === */
+.cyber {
+  /* Gradient Background */
+  --cyber-bg-start: #3d4db7;
+  --cyber-bg-end: #6b4fa0;
+  
+  /* Surfaces - Glassmorphism */
+  --cyber-surface: rgba(255, 255, 255, 0.09);
+  --cyber-surface-hover: rgba(255, 255, 255, 0.14);
+  --cyber-border: rgba(255, 255, 255, 0.18);
+  
+  /* Colors */
+  --cyber-primary: #00d9ff;
+  --cyber-secondary: #ff006e;
+  --cyber-success: #00ff9f;
+  --cyber-warning: #ffd000;
+  
+  /* Text */
+  --cyber-text: rgba(255, 255, 255, 0.95);
+  --cyber-text-muted: rgba(255, 255, 255, 0.62);
+  
+  background: linear-gradient(135deg, var(--cyber-bg-start) 0%, var(--cyber-bg-end) 100%),
+              repeating-linear-gradient(
+                90deg,
+                rgba(255, 255, 255, 0.02) 0px,
+                rgba(255, 255, 255, 0.02) 1px,
+                transparent 1px,
+                transparent 50px
+              ),
+              repeating-linear-gradient(
+                0deg,
+                rgba(255, 255, 255, 0.02) 0px,
+                rgba(255, 255, 255, 0.02) 1px,
+                transparent 1px,
+                transparent 50px
+              );
+  background-attachment: fixed;
+  animation: grid-flow 20s linear infinite;
+  color: var(--cyber-text);
+}
+
+/* === MATRIX GREEN === */
+.cyber.matrix {
+  /* Dark Background */
+  --cyber-bg-start: #0d1117;
+  --cyber-bg-end: #0d1b2a;
+  
+  /* Matrix Green Colors */
+  --cyber-primary: #00ff41;
+  --cyber-secondary: #39ff14;
+  --cyber-success: #00ff41;
+  --cyber-warning: #ccff00;
+  
+  /* Text */
+  --cyber-text: rgba(0, 255, 65, 0.95);
+  --cyber-text-muted: rgba(0, 255, 65, 0.65);
+  
+  /* Surfaces */
+  --cyber-surface: rgba(0, 255, 65, 0.06);
+  --cyber-surface-hover: rgba(0, 255, 65, 0.12);
+  --cyber-border: rgba(0, 255, 65, 0.25);
+}
+
+/* === SYNTHWAVE === */
+.cyber.synthwave {
+  /* Retro Gradient */
+  --cyber-bg-start: #ff006e;
+  --cyber-bg-end: #8338ec;
+  
+  /* Vibrant Colors */
+  --cyber-primary: #ff006e;
+  --cyber-secondary: #ffbe0b;
+  --cyber-success: #06ffa5;
+  --cyber-warning: #fb5607;
+  
+  /* Text */
+  --cyber-text: rgba(255, 255, 255, 0.98);
+  --cyber-text-muted: rgba(255, 255, 255, 0.70);
+  
+  /* Surfaces */
+  --cyber-surface: rgba(255, 255, 255, 0.12);
+  --cyber-surface-hover: rgba(255, 255, 255, 0.18);
+  --cyber-border: rgba(255, 255, 255, 0.25);
+}
+
+/* === ARCTIC ICE === */
+.cyber.arctic {
+  /* Ice Blue Gradient */
+  --cyber-bg-start: #e0f7fa;
+  --cyber-bg-end: #80deea;
+  
+  /* Cool Colors */
+  --cyber-primary: #00acc1;
+  --cyber-secondary: #0097a7;
+  --cyber-success: #00c853;
+  --cyber-warning: #ffc107;
+  
+  /* Text - Dark on Light */
+  --cyber-text: rgba(0, 77, 64, 0.95);
+  --cyber-text-muted: rgba(0, 77, 64, 0.65);
+  
+  /* Surfaces */
+  --cyber-surface: rgba(255, 255, 255, 0.30);
+  --cyber-surface-hover: rgba(255, 255, 255, 0.45);
+  --cyber-border: rgba(0, 188, 212, 0.35);
+}
+
+/* === GRID ANIMATION === */
+@keyframes grid-flow {
+  0% { background-position: 0 0, 0 0, 0 0; }
+  100% { background-position: 0 0, 50px 50px, 50px 50px; }
+}
+
+/* === GLASSMORPHISM CARD STYLE === */
+.cyber .glass-card,
+.cyber .card,
+.cyber [class*="card"] {
+  background: var(--cyber-surface) !important;
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid var(--cyber-border) !important;
+  border-radius: 16px;
+  box-shadow: 
+    0 4px 24px 0 rgba(31, 38, 135, 0.25),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cyber .glass-card:hover,
+.cyber .card:hover {
+  background: var(--cyber-surface-hover) !important;
+  transform: translateY(-1px);
+  box-shadow: 
+    0 8px 32px 0 rgba(31, 38, 135, 0.35),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/* === BUTTONS SOFTER EFFECT === */
+.cyber button,
+.cyber .button,
+.cyber [class*="button"] {
+  position: relative;
+  background: var(--cyber-surface);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--cyber-border);
+  color: var(--cyber-text);
+  transition: all 0.3s ease;
+}
+
+.cyber button:hover,
+.cyber .button:hover {
+  border-color: var(--cyber-primary);
+  box-shadow: 
+    0 0 12px rgba(77, 212, 224, 0.4),
+    0 0 24px rgba(77, 212, 224, 0.2),
+    inset 0 0 12px rgba(77, 212, 224, 0.08);
+}
+
+.cyber button:active {
+  transform: scale(0.98);
+}
+
+/* === WIDGET GLASSMORPHISM STYLE === */
+.cyber .widget,
+.cyber [data-widget],
+.cyber .react-grid-item {
+  background: var(--cyber-surface) !important;
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid var(--cyber-border) !important;
+  border-radius: 16px !important;
+  box-shadow: 
+    0 4px 24px 0 rgba(31, 38, 135, 0.25),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.cyber .widget:hover,
+.cyber .react-grid-item:hover {
+  background: var(--cyber-surface-hover) !important;
+  border-color: var(--cyber-primary) !important;
+  transform: translateY(-2px);
+  box-shadow: 
+    0 12px 24px rgba(77, 212, 224, 0.2),
+    0 0 0 1px var(--cyber-primary),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/* === WIDGET HEADER GRADIENT === */
+.cyber .widget-header {
+  background: linear-gradient(
+    135deg,
+    rgba(77, 212, 224, 0.12) 0%,
+    rgba(214, 66, 116, 0.12) 100%
+  );
+  border-bottom: 1px solid var(--cyber-border);
+  padding: 12px 16px;
+  backdrop-filter: blur(8px);
+}
+
+/* === ICONS WITH SUBTLE GLOW === */
+.cyber svg,
+.cyber .icon {
+  filter: drop-shadow(0 0 2px rgba(77, 212, 224, 0.3));
+  transition: filter 0.3s ease;
+}
+
+.cyber svg:hover,
+.cyber .icon:hover {
+  filter: drop-shadow(0 0 6px rgba(77, 212, 224, 0.5));
+}
+
+/* === HOLOGRAPHIC BORDERS === */
+.cyber .holographic,
+.cyber .holo-border {
+  position: relative;
+  border: 2px solid transparent;
+  background: 
+    linear-gradient(var(--cyber-surface), var(--cyber-surface)) padding-box,
+    linear-gradient(45deg, var(--cyber-primary), var(--cyber-secondary), var(--cyber-success)) border-box;
+  animation: holo-rotate 3s linear infinite;
+}
+
+@keyframes holo-rotate {
+  to { 
+    filter: hue-rotate(360deg); 
+  }
+}
+
+/* === FLOATING PARTICLES === */
+.cyber-particles {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.cyber-particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: var(--cyber-primary);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--cyber-primary);
+  animation: float-up linear infinite;
+  opacity: 0;
+}
+
+.cyber-particle:nth-child(odd) {
+  background: var(--cyber-secondary);
+  box-shadow: 0 0 10px var(--cyber-secondary);
+}
+
+@keyframes float-up {
+  0% {
+    transform: translateY(100vh) translateX(0) scale(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.8;
+    transform: translateY(90vh) translateX(10px) scale(1);
+  }
+  90% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-10vh) translateX(100px) scale(0.5);
+    opacity: 0;
+  }
+}
+
+/* === WIDGET APPEAR ANIMATION === */
+@keyframes widget-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+    filter: blur(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+.cyber .widget,
+.cyber .react-grid-item {
+  animation: widget-appear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+
+.cyber .react-grid-item:nth-child(1) { animation-delay: 0s; }
+.cyber .react-grid-item:nth-child(2) { animation-delay: 0.05s; }
+.cyber .react-grid-item:nth-child(3) { animation-delay: 0.1s; }
+.cyber .react-grid-item:nth-child(4) { animation-delay: 0.15s; }
+.cyber .react-grid-item:nth-child(5) { animation-delay: 0.2s; }
+.cyber .react-grid-item:nth-child(6) { animation-delay: 0.25s; }
+.cyber .react-grid-item:nth-child(7) { animation-delay: 0.3s; }
+.cyber .react-grid-item:nth-child(8) { animation-delay: 0.35s; }
+
+/* === INPUT FIELDS === */
+.cyber input,
+.cyber textarea,
+.cyber select {
+  background: rgba(255, 255, 255, 0.05) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--cyber-border) !important;
+  color: var(--cyber-text);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.cyber input:focus,
+.cyber textarea:focus,
+.cyber select:focus {
+  border-color: var(--cyber-primary) !important;
+  box-shadow: 0 0 20px rgba(0, 245, 255, 0.3);
+  outline: none;
+}
+
+.cyber input::placeholder,
+.cyber textarea::placeholder {
+  color: var(--cyber-text-muted);
+}
+
+/* === SCROLLBAR === */
+.cyber ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.cyber ::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.cyber ::-webkit-scrollbar-thumb {
+  background: var(--cyber-primary);
+  border-radius: 10px;
+  box-shadow: 0 0 10px var(--cyber-primary);
+}
+
+.cyber ::-webkit-scrollbar-thumb:hover {
+  background: var(--cyber-secondary);
+  box-shadow: 0 0 20px var(--cyber-secondary);
+}
+
+/* === NAVBAR === */
+.cyber nav,
+.cyber header {
+  background: var(--cyber-surface) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid var(--cyber-border);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+/* === TEXT COLORS === */
+.cyber h1,
+.cyber h2,
+.cyber h3,
+.cyber h4,
+.cyber h5,
+.cyber h6 {
+  color: var(--cyber-text);
+  text-shadow: 0 0 20px rgba(0, 245, 255, 0.3);
+}
+
+.cyber p,
+.cyber span,
+.cyber div {
+  color: var(--cyber-text);
+}
+
+.cyber .text-muted,
+.cyber [class*="muted"] {
+  color: var(--cyber-text-muted);
+}
+
+/* === CATEGORY SECTIONS === */
+.cyber .category-section {
+  background: var(--cyber-surface);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--cyber-border);
+  border-radius: 20px;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+
+.cyber .category-header {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 245, 255, 0.1) 0%,
+    rgba(255, 0, 110, 0.1) 100%
+  );
+  border-bottom: 1px solid var(--cyber-border);
+  padding: 16px 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cyber .category-header:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 245, 255, 0.2) 0%,
+    rgba(255, 0, 110, 0.2) 100%
+  );
+  box-shadow: inset 0 0 20px rgba(0, 245, 255, 0.2);
+}
+
+/* === DIALOGS === */
+.cyber .dialog,
+.cyber [role="dialog"] {
+  background: var(--cyber-surface) !important;
+  backdrop-filter: blur(30px) saturate(180%);
+  border: 2px solid var(--cyber-border);
+  border-radius: 24px;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* === TABS === */
+.cyber [role="tablist"] {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 4px;
+}
+
+.cyber [role="tab"] {
+  background: transparent;
+  color: var(--cyber-text-muted);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.cyber [role="tab"][data-state="active"] {
+  background: var(--cyber-primary);
+  color: white;
+  box-shadow: 0 0 20px var(--cyber-primary);
+}
+
+.cyber [role="tab"]:hover {
+  color: var(--cyber-text);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* === BADGES === */
+.cyber .badge,
+.cyber [class*="badge"] {
+  background: var(--cyber-primary);
+  color: white;
+  border-radius: 12px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  box-shadow: 0 0 20px var(--cyber-primary);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* === LOADING SPINNER === */
+.cyber .spinner,
+.cyber [class*="loading"] {
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--cyber-primary);
+  border-radius: 50%;
+  box-shadow: 0 0 20px var(--cyber-primary);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* === TOOLTIPS === */
+.cyber [role="tooltip"],
+.cyber .tooltip {
+  background: var(--cyber-surface);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--cyber-border);
+  border-radius: 12px;
+  padding: 8px 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  color: var(--cyber-text);
+}
+
+/* === PERFORMANCE: Disable animations on low-end devices === */
+@media (prefers-reduced-motion: reduce) {
+  .cyber * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 768px) {
+  .cyber .glass-card,
+  .cyber .widget,
+  .cyber .react-grid-item {
+    border-radius: 16px !important;
+  }
+  
+  .cyber-particles {
+    display: none; /* Économie de performance sur mobile */
+  }
+}

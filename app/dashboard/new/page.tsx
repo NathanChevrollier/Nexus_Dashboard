@@ -1,0 +1,107 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
+
+export default function NewDashboardPage() {
+  const router = useRouter();
+  const [name, setName] = useState("");
+  const [isPublic, setIsPublic] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/dashboards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, isPublic }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Erreur lors de la création du dashboard");
+      } else {
+        router.push(`/dashboard/${data.slug}`);
+        router.refresh();
+      }
+    } catch (error) {
+      setError("Une erreur est survenue");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto py-8 px-4 max-w-2xl">
+        <Button variant="ghost" asChild className="mb-4">
+          <Link href="/dashboard">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Retour
+          </Link>
+        </Button>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Créer un Nouveau Dashboard</CardTitle>
+            <CardDescription>
+              Créez un espace personnalisé pour organiser vos widgets
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nom du Dashboard</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Home, Work, Monitoring..."
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <input
+                  id="isPublic"
+                  type="checkbox"
+                  checked={isPublic}
+                  onChange={(e) => setIsPublic(e.target.checked)}
+                  disabled={loading}
+                  className="h-4 w-4"
+                />
+                <Label htmlFor="isPublic" className="cursor-pointer">
+                  Dashboard public (partageable en lecture seule)
+                </Label>
+              </div>
+
+              {error && (
+                <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+                  {error}
+                </div>
+              )}
+
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Création..." : "Créer le Dashboard"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

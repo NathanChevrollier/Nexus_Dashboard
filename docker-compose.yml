@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: nexus-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password_2025
+      MYSQL_DATABASE: nexus_dashboard
+      MYSQL_USER: nexus
+      MYSQL_PASSWORD: nexus_password_2025
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - nexus-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  app:
+    build: .
+    container_name: nexus-app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_HOST: db
+      DATABASE_PORT: 3306
+      DATABASE_USER: nexus
+      DATABASE_PASSWORD: nexus_password_2025
+      DATABASE_NAME: nexus_dashboard
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: super_secret_key_change_in_production_12345
+      NODE_ENV: production
+      NEXT_PUBLIC_TMDB_API_KEY: ${NEXT_PUBLIC_TMDB_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - nexus-network
+
+volumes:
+  mysql_data:
+
+networks:
+  nexus-network:
+    driver: bridge
