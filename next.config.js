@@ -63,12 +63,7 @@ const nextConfig = {
   // Redirections
   async redirects() {
     return [
-      // Rediriger /admin vers /dashboard
-      {
-        source: '/admin',
-        destination: '/dashboard',
-        permanent: true,
-      },
+      // (aucune redirection critique pour le moment)
     ];
   },
   output: 'standalone',

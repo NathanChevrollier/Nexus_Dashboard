@@ -2,7 +2,7 @@
 
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { LogOut, Settings, Shield, Plus, LayoutDashboard } from "lucide-react";
+import { LogOut, Settings, Plus, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
 import { Dashboard } from "@/lib/db/schema";
 
@@ -18,7 +18,7 @@ interface NavbarProps {
 
 export function Navbar({ user, dashboards, currentDashboardId }: NavbarProps) {
   return (
-    <nav className="border-b bg-card">
+    <nav className="border-b bg-background/80 backdrop-blur">
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <Link href="/dashboard" className="flex items-center gap-2">
@@ -31,10 +31,10 @@ export function Navbar({ user, dashboards, currentDashboardId }: NavbarProps) {
               <Link
                 key={dash.id}
                 href={`/dashboard/${dash.slug}`}
-                className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                   dash.id === currentDashboardId
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-accent"
+                    ? "bg-primary text-black dark:text-black shadow-sm ring-1 ring-primary"
+                    : "text-black dark:text-black/90 hover:bg-accent hover:text-black"
                 }`}
               >
                 {dash.name}
@@ -57,15 +57,6 @@ export function Navbar({ user, dashboards, currentDashboardId }: NavbarProps) {
               </span>
             )}
           </div>
-          
-          {user.role === "ADMIN" && (
-            <Button size="sm" variant="outline" asChild>
-              <Link href="/admin">
-                <Shield className="h-4 w-4 mr-1" />
-                Admin
-              </Link>
-            </Button>
-          )}
           
           <Link href="/settings">
             <Button size="sm" variant="outline">

@@ -107,7 +107,6 @@ export function DraggableCategoriesView({
                             isEditMode={isEditMode}
                             onWidgetDelete={onWidgetDelete}
                             onWidgetEdit={onWidgetEdit}
-                            dragHandleProps={provided.dragHandleProps}
                           />
                           {provided.placeholder}
                         </div>

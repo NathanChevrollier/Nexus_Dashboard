@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { updateWidget } from "@/lib/actions/widgets";
 
 interface NotesWidgetProps {
   widget: Widget;
@@ -27,8 +28,12 @@ export function NotesWidget({ widget }: NotesWidgetProps) {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Ici, appeler une server action pour sauvegarder les notes
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await updateWidget(widget.id, {
+        options: {
+          ...(widget.options || {}),
+          content,
+        },
+      });
       setIsEditing(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);

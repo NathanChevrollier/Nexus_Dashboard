@@ -22,20 +22,35 @@ interface TimerWidgetProps {
 type TimerMode = 'pomodoro' | 'short-break' | 'long-break' | 'custom';
 
 export function TimerWidget({ widget }: TimerWidgetProps) {
+  const options = (widget.options || {}) as {
+    title?: string;
+    pomodoroMinutes?: number;
+    shortBreakMinutes?: number;
+    longBreakMinutes?: number;
+    customMinutes?: number;
+  };
+
+  const baseDurationsMinutes = {
+    pomodoro: options.pomodoroMinutes ?? 25,
+    'short-break': options.shortBreakMinutes ?? 5,
+    'long-break': options.longBreakMinutes ?? 15,
+    custom: options.customMinutes ?? 30,
+  } as const;
+
+  const durations = {
+    pomodoro: baseDurationsMinutes.pomodoro * 60,
+    'short-break': baseDurationsMinutes['short-break'] * 60,
+    'long-break': baseDurationsMinutes['long-break'] * 60,
+    custom: baseDurationsMinutes.custom * 60,
+  } as const;
+
   const [mode, setMode] = useState<TimerMode>('pomodoro');
-  const [timeLeft, setTimeLeft] = useState(25 * 60); // 25 minutes in seconds
+  const [timeLeft, setTimeLeft] = useState(durations.pomodoro);
   const [isRunning, setIsRunning] = useState(false);
   const [sessions, setSessions] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const isCompact = widget.w <= 2 && widget.h <= 1;
-
-  const durations = {
-    pomodoro: 25 * 60,
-    'short-break': 5 * 60,
-    'long-break': 15 * 60,
-    custom: 30 * 60,
-  };
 
   useEffect(() => {
     if (isRunning) {

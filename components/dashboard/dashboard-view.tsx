@@ -155,51 +155,54 @@ export function DashboardView({ dashboard, isOwner, initialWidgets = [], initial
           {dashboardCategories.length > 0 && (
             <h3 className="text-lg font-semibold mb-4 text-muted-foreground">Widgets sans catégorie</h3>
           )}
-          <div style={{ width: "100%" }}>
-            <GridLayout
-              className="layout"
-              layout={layout}
-              cols={12}
-              rowHeight={80}
-              width={1200}
-              isDraggable={isEditMode}
-              isResizable={isEditMode}
-              compactType={null}
-              preventCollision={false}
-              onLayoutChange={handleLayoutChange}
-              draggableHandle={isEditMode ? ".widget-drag-handle" : undefined}
-              draggableCancel=".widget-no-drag, input, textarea, button, select, a, [role='button']"
-              {...({} as any)}
-            >
-              {widgets.filter((w) => !w.categoryId).map((widget) => (
-                <div key={widget.id} className="bg-card border rounded-lg shadow-sm relative">
-                  <WidgetComponent widget={widget} isEditMode={isEditMode} />
-                  {isEditMode && (
-                    <div className="absolute top-2 right-2 flex gap-1 z-10 widget-no-drag">
-                      <Button
-                        onClick={() => handleEditWidget(widget)}
-                        size="icon"
-                        variant="secondary"
-                        className="h-6 w-6"
-                        title="Modifier le widget"
-                      >
-                        <Settings className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        onClick={() => handleDeleteWidget(widget.id)}
-                        size="icon"
-                        variant="destructive"
-                        className="h-6 w-6"
-                        title="Supprimer le widget"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </GridLayout>
-          </div>
+
+          {isEditMode ? (
+            <div style={{ width: "100%" }}>
+              <GridLayout
+                className="layout"
+                layout={layout}
+                cols={12}
+                rowHeight={80}
+                width={1200}
+                isDraggable={true}
+                isResizable={true}
+                compactType={null}
+                preventCollision={false}
+                onLayoutChange={handleLayoutChange}
+                draggableHandle=".widget-drag-handle"
+                draggableCancel=".widget-no-drag, input, textarea, button, select, a, [role='button']"
+                {...({} as any)}
+              >
+                {widgets.filter((w) => !w.categoryId).map((widget) => (
+                  <div
+                    key={widget.id}
+                    className="bg-card border rounded-lg shadow-sm relative"
+                  >
+                    <WidgetComponent
+                      widget={widget}
+                      isEditMode={true}
+                      onEdit={() => handleEditWidget(widget)}
+                      onDelete={() => handleDeleteWidget(widget.id)}
+                    />
+                  </div>
+                ))}
+              </GridLayout>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {widgets
+                .filter((w) => !w.categoryId)
+                .sort((a, b) => a.y - b.y || a.x - b.x)
+                .map((widget) => (
+                  <div
+                    key={widget.id}
+                    className="bg-card border rounded-lg shadow-sm relative"
+                  >
+                    <WidgetComponent widget={widget} isEditMode={false} />
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
       ) : widgets.length === 0 ? (
         <div className="flex items-center justify-center h-96 border-2 border-dashed rounded-lg">

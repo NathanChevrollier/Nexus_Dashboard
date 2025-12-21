@@ -42,6 +42,7 @@ const widgetTypes = [
   { type: "countdown", icon: CalendarClock, label: "Compte à rebours", description: "Compte à rebours événement" },
   { type: "universal-calendar", icon: CalendarRange, label: "Calendrier Universel", description: "Tous vos médias et événements" },
   { type: "movies-tv-calendar", icon: Film, label: "Films & Séries", description: "Sorties cinéma et TV" },
+  { type: "media-library", icon: Film, label: "Médiathèque", description: "Page complète films/séries/musiques" },
 ] as const;
 
 export function WidgetSelectorDialog({ open, onOpenChange, dashboardId, categories = [], onWidgetAdded }: WidgetSelectorDialogProps) {

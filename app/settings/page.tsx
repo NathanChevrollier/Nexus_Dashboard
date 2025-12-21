@@ -6,7 +6,10 @@ import { dashboards } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { ThemeSettingsEnhanced } from "@/components/settings/theme-settings-enhanced";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Users } from "lucide-react";
+import { IntegrationsSettings } from "@/components/settings/integrations-settings";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { UserManagementSettings } from "@/components/settings/user-management-settings";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -55,7 +58,32 @@ export default async function SettingsPage() {
           </p>
         </div>
         
-        <ThemeSettingsEnhanced user={session.user} dashboardId={currentDashboard.id} />
+        <Tabs defaultValue="appearance" className="mt-6">
+          <TabsList className="mb-4">
+            <TabsTrigger value="appearance">Apparence</TabsTrigger>
+            <TabsTrigger value="integrations">Intégrations</TabsTrigger>
+            {session.user.role === "ADMIN" && (
+              <TabsTrigger value="users" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Utilisateurs
+              </TabsTrigger>
+            )}
+          </TabsList>
+
+          <TabsContent value="appearance">
+            <ThemeSettingsEnhanced user={session.user} dashboardId={currentDashboard.id} />
+          </TabsContent>
+
+          <TabsContent value="integrations">
+            <IntegrationsSettings />
+          </TabsContent>
+
+          {session.user.role === "ADMIN" && (
+            <TabsContent value="users">
+              <UserManagementSettings />
+            </TabsContent>
+          )}
+        </Tabs>
       </div>
     </div>
   );

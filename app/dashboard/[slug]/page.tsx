@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { dashboards, widgets } from "@/lib/db/schema";
+import { dashboards, widgets, categories } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { Navbar } from "@/components/dashboard/navbar";
@@ -38,6 +38,13 @@ export default async function DashboardSlugPage({
     .from(widgets)
     .where(eq(widgets.dashboardId, currentDashboard.id));
 
+  // Récupérer les catégories du dashboard
+  const dashboardCategories = await db
+    .select()
+    .from(categories)
+    .where(eq(categories.dashboardId, currentDashboard.id))
+    .orderBy(categories.order);
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar 
@@ -49,6 +56,7 @@ export default async function DashboardSlugPage({
         dashboard={currentDashboard}
         isOwner={true}
         initialWidgets={dashboardWidgets}
+        initialCategories={dashboardCategories}
       />
     </div>
   );

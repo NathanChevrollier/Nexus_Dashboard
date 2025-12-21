@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { TrendingUp, TrendingDown } from "lucide-react";
+import { TrendingUp, TrendingDown, Settings, Save, X } from "lucide-react";
 import { Widget } from "@/lib/db/schema";
+import { updateWidget } from "@/lib/actions/widgets";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -52,10 +53,14 @@ export function ChartWidget({ widget }: ChartWidgetProps) {
   };
   
   const [data, setData] = useState<DataPoint[]>([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [labelsInput, setLabelsInput] = useState<string>((options.labels || []).join(", "));
+  const [valuesInput, setValuesInput] = useState<string>((options.values || []).join(", "));
+  const [validationError, setValidationError] = useState<string | null>(null);
   const chartType = options.chartType || "bar";
 
   useEffect(() => {
-    // Utiliser les données fournies ou générer des données de demo
+    // Utiliser les données fournies ou un exemple simple
     if (options.labels && options.values) {
       const chartData = options.labels.map((label, i) => ({
         label,
@@ -63,15 +68,10 @@ export function ChartWidget({ widget }: ChartWidgetProps) {
       }));
       setData(chartData);
     } else {
-      // Simuler des données
-      const generateData = () => {
-        const labels = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-        return labels.map(label => ({
-          label,
-          value: Math.random() * 100,
-        }));
-      };
-      setData(generateData());
+      // Jeu de données d'exemple fixe pour éviter les graphes aléatoires
+      const labels = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
+      const values = [20, 35, 40, 30, 50];
+      setData(labels.map((label, i) => ({ label, value: values[i] })));
     }
   }, [options.labels, options.values]);
 
@@ -162,10 +162,53 @@ export function ChartWidget({ widget }: ChartWidgetProps) {
     }
   };
 
+  const handleSaveConfig = async () => {
+    const labels = labelsInput
+      .split(",")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const values = valuesInput
+      .split(",")
+      .map((v) => Number(v.trim()))
+      .filter((v) => !Number.isNaN(v));
+
+    if (labels.length === 0 || values.length === 0 || labels.length !== values.length) {
+      setValidationError(
+        "Veuillez fournir le même nombre de labels et de valeurs (séparés par des virgules)."
+      );
+      return;
+    }
+
+    const newData = labels.map((label, i) => ({ label, value: values[i] }));
+    setData(newData);
+    setIsEditing(false);
+
+    try {
+      await updateWidget(widget.id, {
+        options: {
+          ...widget.options,
+          labels,
+          values,
+        },
+      });
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde du graphique", error);
+    }
+  };
+
   return (
     <div className="p-4 h-full flex flex-col">
-      <div className="flex items-center justify-between mb-3">
-        <div className="text-sm font-medium">{options.title || "📊 Statistiques"}</div>
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <div className="text-sm font-medium truncate">{options.title || "📊 Statistiques"}</div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+            onClick={() => setIsEditing((v) => !v)}
+          >
+            <Settings className="h-3 w-3" />
+            Config
+          </button>
         {(chartType === "line" || chartType === "area" || chartType === "bar") && (
           <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
             trend ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"
@@ -174,7 +217,60 @@ export function ChartWidget({ widget }: ChartWidgetProps) {
             {trendValue.toFixed(1)}
           </div>
         )}
+        </div>
       </div>
+
+      {isEditing && (
+        <div className="mb-3 space-y-2 text-xs">
+          <div className="space-y-1">
+            <div className="font-medium">Labels (séparés par des virgules)</div>
+            <input
+              value={labelsInput}
+              onChange={(e) => {
+                setLabelsInput(e.target.value);
+                if (validationError) setValidationError(null);
+              }}
+              className="w-full rounded border px-2 py-1 bg-background"
+              placeholder="Jan, Fév, Mar"
+            />
+          </div>
+          <div className="space-y-1">
+            <div className="font-medium">Valeurs (séparées par des virgules)</div>
+            <input
+              value={valuesInput}
+              onChange={(e) => {
+                setValuesInput(e.target.value);
+                if (validationError) setValidationError(null);
+              }}
+              className="w-full rounded border px-2 py-1 bg-background"
+              placeholder="10, 20, 15"
+            />
+          </div>
+          {validationError && (
+            <div className="text-[11px] text-red-500 bg-red-500/5 border border-red-500/30 rounded px-2 py-1">
+              {validationError}
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              className="text-xs px-2 py-1 rounded border border-input text-muted-foreground hover:bg-accent"
+              onClick={() => setIsEditing(false)}
+            >
+              <X className="h-3 w-3 mr-1 inline" />
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:opacity-90 flex items-center gap-1"
+              onClick={handleSaveConfig}
+            >
+              <Save className="h-3 w-3" />
+              Appliquer
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 min-h-0">
         {renderChart()}

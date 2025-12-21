@@ -11,6 +11,29 @@ const updateUserSchema = z.object({
   role: z.enum(["USER", "VIP", "ADMIN"]).optional(),
 });
 
+export async function GET() {
+  try {
+    const session = await auth();
+
+    if (!session || session.user.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Non autorisé" },
+        { status: 403 },
+      );
+    }
+
+    const allUsers = await db.select().from(users);
+
+    return NextResponse.json({ users: allUsers });
+  } catch (error) {
+    console.error("Erreur lors du chargement des utilisateurs:", error);
+    return NextResponse.json(
+      { error: "Erreur serveur" },
+      { status: 500 },
+    );
+  }
+}
+
 export async function PATCH(request: Request) {
   try {
     const session = await auth();

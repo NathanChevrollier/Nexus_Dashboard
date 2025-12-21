@@ -39,6 +39,10 @@ export const LazyQuoteWidget = lazy(() => import('@/components/widgets/quote-wid
 export const LazyCountdownWidget = lazy(() => import('@/components/widgets/countdown-widget').then(mod => ({ default: mod.CountdownWidget })));
 export const LazyUniversalCalendarWidget = lazy(() => import('@/components/widgets/universal-calendar-widget').then(mod => ({ default: mod.UniversalCalendarWidget })));
 export const LazyMoviesTVCalendarWidget = lazy(() => import('@/components/widgets/movies-tv-calendar-widget').then(mod => ({ default: mod.MoviesAndTVCalendarWidget })));
+export const LazyMediaRequestsWidget = lazy(() => import('@/components/widgets/media-requests-widget').then(mod => ({ default: mod.MediaRequestsWidget })));
+export const LazyTorrentOverviewWidget = lazy(() => import('@/components/widgets/torrent-overview-widget').then(mod => ({ default: mod.TorrentOverviewWidget })));
+export const LazyMonitoringWidget = lazy(() => import('@/components/widgets/monitoring-widget').then(mod => ({ default: mod.MonitoringWidget })));
+export const LazyMediaLibraryWidget = lazy(() => import('@/components/widgets/media-library-widget').then(mod => ({ default: mod.MediaLibraryWidget })));
 
 /**
  * Wrapper avec Suspense pour un widget lazy-loaded
@@ -107,4 +111,8 @@ export const lazyWidgetMap = {
   countdown: LazyCountdownWidget,
   'universal-calendar': LazyUniversalCalendarWidget,
   'movies-tv-calendar': LazyMoviesTVCalendarWidget,
+  'media-requests': LazyMediaRequestsWidget,
+  'torrent-overview': LazyTorrentOverviewWidget,
+  monitoring: LazyMonitoringWidget,
+  'media-library': LazyMediaLibraryWidget,
 } as const;

@@ -2,8 +2,8 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { widgets } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { widgets, dashboards } from "@/lib/db/schema";
+import { eq, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { generateId } from "@/lib/utils";
 
@@ -23,6 +23,18 @@ export async function createWidget(
   
   if (!session) {
     throw new Error("Non authentifié");
+  }
+
+  // Vérifier que l'utilisateur possède ce dashboard
+  const dashboard = await db.query.dashboards.findFirst({
+    where: and(
+      eq(dashboards.id, dashboardId),
+      eq(dashboards.userId, session.user.id)
+    ),
+  });
+
+  if (!dashboard) {
+    throw new Error("Dashboard non trouvé ou accès refusé");
   }
 
   const widgetId = generateId();
@@ -77,6 +89,26 @@ export async function updateWidget(
     throw new Error("Non authentifié");
   }
 
+  // Vérifier que le widget appartient bien à un dashboard de l'utilisateur
+  const widget = await db.query.widgets.findFirst({
+    where: eq(widgets.id, widgetId),
+  });
+
+  if (!widget) {
+    throw new Error("Widget non trouvé");
+  }
+
+  const dashboard = await db.query.dashboards.findFirst({
+    where: and(
+      eq(dashboards.id, widget.dashboardId),
+      eq(dashboards.userId, session.user.id)
+    ),
+  });
+
+  if (!dashboard) {
+    throw new Error("Accès refusé");
+  }
+
   await db
     .update(widgets)
     .set({
@@ -96,6 +128,26 @@ export async function deleteWidget(widgetId: string) {
     throw new Error("Non authentifié");
   }
 
+  // Vérifier que le widget appartient bien à un dashboard de l'utilisateur
+  const widget = await db.query.widgets.findFirst({
+    where: eq(widgets.id, widgetId),
+  });
+
+  if (!widget) {
+    throw new Error("Widget non trouvé");
+  }
+
+  const dashboard = await db.query.dashboards.findFirst({
+    where: and(
+      eq(dashboards.id, widget.dashboardId),
+      eq(dashboards.userId, session.user.id)
+    ),
+  });
+
+  if (!dashboard) {
+    throw new Error("Accès refusé");
+  }
+
   await db.delete(widgets).where(eq(widgets.id, widgetId));
 
   revalidatePath("/dashboard");
@@ -109,6 +161,28 @@ export async function updateWidgetPositions(
   
   if (!session) {
     throw new Error("Non authentifié");
+  }
+
+  const widgetIds = updates.map((u) => u.id);
+
+  // Vérifier que tous les widgets appartiennent à des dashboards de l'utilisateur
+  const allowedWidgets = await db
+    .select({ id: widgets.id })
+    .from(widgets)
+    .innerJoin(dashboards, eq(widgets.dashboardId, dashboards.id))
+    .where(
+      and(
+        inArray(widgets.id, widgetIds),
+        eq(dashboards.userId, session.user.id)
+      )
+    );
+
+  const allowedIds = new Set(allowedWidgets.map((w) => w.id));
+
+  for (const update of updates) {
+    if (!allowedIds.has(update.id)) {
+      throw new Error("Accès refusé pour au moins un widget");
+    }
   }
 
   // Mise à jour en batch

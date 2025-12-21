@@ -25,8 +25,12 @@ import {
   Film, 
   CalendarRange,
   ArrowLeft,
-  Check
+  Check,
+  ListChecks,
+  Download,
+  Server,
 } from "lucide-react";
+import { getIntegrations } from "@/lib/actions/integrations";
 import type { Widget } from "@/lib/db/schema";
 
 interface AddWidgetDialogProps {
@@ -36,7 +40,27 @@ interface AddWidgetDialogProps {
   onWidgetAdded?: (widget: Widget) => void;
 }
 
-type WidgetType = "link" | "ping" | "iframe" | "datetime" | "weather" | "notes" | "chart" | "anime-calendar" | "todo-list" | "watchlist" | "timer" | "bookmarks" | "quote" | "countdown" | "universal-calendar" | "movies-tv-calendar";
+type WidgetType =
+  | "link"
+  | "ping"
+  | "iframe"
+  | "datetime"
+  | "weather"
+  | "notes"
+  | "chart"
+  | "anime-calendar"
+  | "todo-list"
+  | "watchlist"
+  | "timer"
+  | "bookmarks"
+  | "quote"
+  | "countdown"
+  | "universal-calendar"
+  | "movies-tv-calendar"
+  | "media-requests"
+  | "torrent-overview"
+  | "monitoring"
+  | "media-library";
 
 const widgetDefinitions = [
   {
@@ -151,12 +175,42 @@ const widgetDefinitions = [
     description: "Sorties cinéma et TV",
     color: "from-rose-500 to-red-600",
   },
+  {
+    type: "media-requests" as WidgetType,
+    icon: ListChecks,
+    name: "Media Requests",
+    description: "Liste des demandes (Overseerr)",
+    color: "from-emerald-500 to-teal-600",
+  },
+  {
+    type: "media-library" as WidgetType,
+    icon: Film,
+    name: "Médiathèque",
+    description: "Page complète films/séries/musiques",
+    color: "from-fuchsia-500 to-indigo-500",
+  },
+  {
+    type: "torrent-overview" as WidgetType,
+    icon: Download,
+    name: "Torrent Overview",
+    description: "Vitesse & torrents en cours",
+    color: "from-blue-500 to-cyan-500",
+  },
+  {
+    type: "monitoring" as WidgetType,
+    icon: Server,
+    name: "Monitoring Serveur",
+    description: "CPU, RAM, load & uptime",
+    color: "from-amber-500 to-orange-500",
+  },
 ];
 
 export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidgetAdded }: AddWidgetDialogProps) {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<"select" | "configure">("select");
   const [selectedWidget, setSelectedWidget] = useState<WidgetType | null>(null);
+  const [availableIntegrations, setAvailableIntegrations] = useState<any[]>([]);
+  const [loadingIntegrations, setLoadingIntegrations] = useState(false);
 
   // Formulaires pour chaque type
   const [linkForm, setLinkForm] = useState({ title: "", url: "", icon: "🔗", openInNewTab: true });
@@ -168,7 +222,13 @@ export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidge
   const [animeForm, setAnimeForm] = useState({ defaultTab: "anime", daysToShow: 7 });
   const [todoForm, setTodoForm] = useState({ title: "Todo List", todos: [] });
   const [watchlistForm, setWatchlistForm] = useState({ title: "Watchlist", watchlist: [] });
-  const [timerForm, setTimerForm] = useState({ title: "Timer" });
+  const [timerForm, setTimerForm] = useState({ 
+    title: "Timer",
+    pomodoroMinutes: 25,
+    shortBreakMinutes: 5,
+    longBreakMinutes: 15,
+    customMinutes: 30,
+  });
   const [bookmarksForm, setBookmarksForm] = useState({ title: "Bookmarks", bookmarks: [] });
   const [quoteForm, setQuoteForm] = useState({ title: "Quote of the Day" });
   const [countdownForm, setCountdownForm] = useState({ 
@@ -193,10 +253,45 @@ export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidge
     timeWindow: "day",
     showTrending: true,
   });
+  const [mediaRequestsForm, setMediaRequestsForm] = useState({
+    title: "Media Requests",
+    integrationId: "",
+    statusFilter: "all" as "all" | "pending" | "approved" | "declined",
+    limit: 10,
+  });
+  const [torrentForm, setTorrentForm] = useState({
+    title: "Torrent Overview",
+    integrationId: "",
+    limitActive: 10,
+    showCompleted: true,
+  });
+  const [monitoringForm, setMonitoringForm] = useState({
+    title: "Monitoring Serveur",
+    integrationId: "",
+  });
+  const [mediaLibraryForm, setMediaLibraryForm] = useState({
+    title: "Médiathèque",
+  });
+
+  const loadIntegrations = async () => {
+    try {
+      setLoadingIntegrations(true);
+      const data = await getIntegrations();
+      setAvailableIntegrations(data || []);
+    } catch (error) {
+      console.error("Erreur lors du chargement des intégrations", error);
+    } finally {
+      setLoadingIntegrations(false);
+    }
+  };
 
   const handleWidgetSelect = (type: WidgetType) => {
     setSelectedWidget(type);
     setStep("configure");
+
+    if (type === "media-requests" || type === "torrent-overview" || type === "monitoring") {
+      loadIntegrations();
+    }
   };
 
   const handleBack = () => {
@@ -276,6 +371,22 @@ export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidge
         case "movies-tv-calendar":
           options = moviesTVForm;
           defaultSize = { w: 3, h: 3 };
+          break;
+        case "media-requests":
+          options = mediaRequestsForm;
+          defaultSize = { w: 3, h: 3 };
+          break;
+        case "torrent-overview":
+          options = torrentForm;
+          defaultSize = { w: 3, h: 3 };
+          break;
+        case "monitoring":
+          options = monitoringForm;
+          defaultSize = { w: 3, h: 2 };
+          break;
+        case "media-library":
+          options = mediaLibraryForm;
+          defaultSize = { w: 3, h: 2 };
           break;
       }
 
@@ -403,6 +514,193 @@ export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidge
                   </div>
                 </>
               )}
+              {selectedWidget === "media-library" && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Titre</Label>
+                    <Input
+                      value={mediaLibraryForm.title}
+                      onChange={(e) => setMediaLibraryForm({ ...mediaLibraryForm, title: e.target.value })}
+                      placeholder="Médiathèque"
+                    />
+                  </div>
+                  <div className="bg-muted/50 p-4 rounded-lg mt-2">
+                    <p className="text-sm text-muted-foreground">
+                      Ce widget agit comme un raccourci vers une page complète où vous pouvez gérer vos films,
+                      séries et musiques, et lancer un lecteur vidéo capable de lire des sources 4K.
+                    </p>
+                  </div>
+                </>
+              )}
+              {selectedWidget === "media-requests" && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Titre</Label>
+                    <Input
+                      value={mediaRequestsForm.title}
+                      onChange={(e) =>
+                        setMediaRequestsForm({ ...mediaRequestsForm, title: e.target.value })
+                      }
+                      placeholder="Media Requests"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Intégration Overseerr</Label>
+                    {loadingIntegrations ? (
+                      <p className="text-xs text-muted-foreground">
+                        Chargement des intégrations...
+                      </p>
+                    ) : availableIntegrations.filter((i) => i.type === "overseerr").length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Aucune intégration Overseerr trouvée. Rendez-vous dans les Paramètres &gt; Intégrations
+                        pour en ajouter une, puis revenez ici.
+                      </p>
+                    ) : (
+                      <select
+                        value={mediaRequestsForm.integrationId}
+                        onChange={(e) =>
+                          setMediaRequestsForm({
+                            ...mediaRequestsForm,
+                            integrationId: e.target.value,
+                          })
+                        }
+                        className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+                      >
+                        <option value="">Sélectionner une intégration</option>
+                        {availableIntegrations
+                          .filter((i) => i.type === "overseerr")
+                          .map((integration) => (
+                            <option key={integration.id} value={integration.id}>
+                              {integration.name}
+                            </option>
+                          ))}
+                      </select>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Filtre de statut</Label>
+                    <select
+                      value={mediaRequestsForm.statusFilter}
+                      onChange={(e) =>
+                        setMediaRequestsForm({
+                          ...mediaRequestsForm,
+                          statusFilter: e.target.value as any,
+                        })
+                      }
+                      className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+                    >
+                      <option value="all">Toutes les demandes</option>
+                      <option value="pending">En attente</option>
+                      <option value="approved">Approuvées</option>
+                      <option value="declined">Refusées</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nombre maximum de demandes</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={mediaRequestsForm.limit}
+                      onChange={(e) =>
+                        setMediaRequestsForm({
+                          ...mediaRequestsForm,
+                          limit: Number(e.target.value) || 10,
+                        })
+                      }
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Ce widget affiche les dernières demandes de médias depuis votre instance Overseerr / Jellyseerr
+                    en utilisant l'intégration configurée.
+                  </p>
+                </>
+              )}
+
+              {selectedWidget === "torrent-overview" && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Titre</Label>
+                    <Input
+                      value={torrentForm.title}
+                      onChange={(e) =>
+                        setTorrentForm({
+                          ...torrentForm,
+                          title: e.target.value,
+                        })
+                      }
+                      placeholder="Torrent Overview"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Intégration Torrent</Label>
+                    {loadingIntegrations ? (
+                      <p className="text-xs text-muted-foreground">
+                        Chargement des intégrations...
+                      </p>
+                    ) : availableIntegrations.filter((i) => i.type === "torrent-client").length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Aucune intégration de client torrent trouvée. Rendez-vous dans les Paramètres &gt; Intégrations
+                        pour en ajouter une, puis revenez ici.
+                      </p>
+                    ) : (
+                      <select
+                        value={torrentForm.integrationId}
+                        onChange={(e) =>
+                          setTorrentForm({
+                            ...torrentForm,
+                            integrationId: e.target.value,
+                          })
+                        }
+                        className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+                      >
+                        <option value="">Sélectionner une intégration</option>
+                        {availableIntegrations
+                          .filter((i) => i.type === "torrent-client")
+                          .map((integration) => (
+                            <option key={integration.id} value={integration.id}>
+                              {integration.name}
+                            </option>
+                          ))}
+                      </select>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nombre maximum de torrents actifs</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={torrentForm.limitActive}
+                      onChange={(e) =>
+                        setTorrentForm({
+                          ...torrentForm,
+                          limitActive: Number(e.target.value) || 10,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={torrentForm.showCompleted}
+                      onChange={(e) =>
+                        setTorrentForm({
+                          ...torrentForm,
+                          showCompleted: e.target.checked,
+                        })
+                      }
+                      id="showCompletedTorrents"
+                      className="rounded"
+                    />
+                    <Label htmlFor="showCompletedTorrents">Afficher aussi les torrents terminés</Label>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Ce widget affiche un aperçu de votre client torrent (vitesse de téléchargement, nombre de torrents actifs,
+                    et liste des torrents sélectionnés) en utilisant l'intégration configurée.
+                  </p>
+                </>
+              )}
 
               {selectedWidget === "ping" && (
                 <>
@@ -431,6 +729,61 @@ export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidge
                       placeholder="80"
                     />
                   </div>
+                </>
+              )}
+
+              {selectedWidget === "monitoring" && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Titre</Label>
+                    <Input
+                      value={monitoringForm.title}
+                      onChange={(e) =>
+                        setMonitoringForm({
+                          ...monitoringForm,
+                          title: e.target.value,
+                        })
+                      }
+                      placeholder="Monitoring Serveur"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Intégration Monitoring</Label>
+                    {loadingIntegrations ? (
+                      <p className="text-xs text-muted-foreground">
+                        Chargement des intégrations...
+                      </p>
+                    ) : availableIntegrations.filter((i) => i.type === "monitoring").length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Aucune intégration de monitoring trouvée. Rendez-vous dans les Paramètres &gt; Intégrations
+                        pour en ajouter une, puis revenez ici.
+                      </p>
+                    ) : (
+                      <select
+                        value={monitoringForm.integrationId}
+                        onChange={(e) =>
+                          setMonitoringForm({
+                            ...monitoringForm,
+                            integrationId: e.target.value,
+                          })
+                        }
+                        className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+                      >
+                        <option value="">Sélectionner une intégration</option>
+                        {availableIntegrations
+                          .filter((i) => i.type === "monitoring")
+                          .map((integration) => (
+                            <option key={integration.id} value={integration.id}>
+                              {integration.name}
+                            </option>
+                          ))}
+                      </select>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Ce widget affiche un aperçu de l'état de votre serveur (CPU, mémoire, charge, uptime)
+                    en utilisant l'intégration de monitoring configurée.
+                  </p>
                 </>
               )}
 
@@ -564,12 +917,66 @@ export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidge
               )}
 
               {selectedWidget === "timer" && (
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    Minuteur et chronomètre intégrés.
-                    Configurez vos sessions de travail directement dans le widget.
-                  </p>
-                </div>
+                <>
+                  <div className="space-y-2 mb-4">
+                    <Label>Titre</Label>
+                    <Input
+                      value={timerForm.title}
+                      onChange={(e) => setTimerForm({ ...timerForm, title: e.target.value })}
+                      placeholder="Timer de travail"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label>Pomodoro (min)</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={timerForm.pomodoroMinutes}
+                        onChange={(e) => setTimerForm({ 
+                          ...timerForm, 
+                          pomodoroMinutes: parseInt(e.target.value) || 1,
+                        })}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Pause courte (min)</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={timerForm.shortBreakMinutes}
+                        onChange={(e) => setTimerForm({ 
+                          ...timerForm, 
+                          shortBreakMinutes: parseInt(e.target.value) || 1,
+                        })}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Pause longue (min)</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={timerForm.longBreakMinutes}
+                        onChange={(e) => setTimerForm({ 
+                          ...timerForm, 
+                          longBreakMinutes: parseInt(e.target.value) || 1,
+                        })}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Mode custom (min)</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={timerForm.customMinutes}
+                        onChange={(e) => setTimerForm({ 
+                          ...timerForm, 
+                          customMinutes: parseInt(e.target.value) || 1,
+                        })}
+                      />
+                    </div>
+                  </div>
+                </>
               )}
 
               {selectedWidget === "bookmarks" && (

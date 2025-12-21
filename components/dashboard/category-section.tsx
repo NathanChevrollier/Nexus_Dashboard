@@ -104,32 +104,13 @@ export function CategorySection({ category, widgets, isEditMode, onWidgetDelete,
               widgets.map((widget) => (
                 <div key={widget.id} className="relative">
                   <div className="bg-card border rounded-lg shadow-sm h-full">
-                    <WidgetComponent widget={widget} isEditMode={isEditMode} />
+                    <WidgetComponent
+                      widget={widget}
+                      isEditMode={isEditMode}
+                      onEdit={onWidgetEdit ? () => onWidgetEdit(widget) : undefined}
+                      onDelete={() => onWidgetDelete(widget.id)}
+                    />
                   </div>
-                  {isEditMode && (
-                    <div className="absolute top-2 right-2 flex gap-1 z-10">
-                      {onWidgetEdit && (
-                        <Button
-                          onClick={() => onWidgetEdit(widget)}
-                          size="icon"
-                          variant="secondary"
-                          className="h-6 w-6"
-                          title="Modifier le widget"
-                        >
-                          <Settings className="h-3 w-3" />
-                        </Button>
-                      )}
-                      <Button
-                        onClick={() => onWidgetDelete(widget.id)}
-                        size="icon"
-                        variant="destructive"
-                        className="h-6 w-6"
-                        title="Supprimer le widget"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  )}
                 </div>
               ))
             )}

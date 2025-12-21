@@ -15,6 +15,13 @@ import { relations } from 'drizzle-orm';
 // ============= ENUMS =============
 export const userRoleEnum = mysqlEnum('role', ['USER', 'VIP', 'ADMIN']);
 export const userStatusEnum = mysqlEnum('status', ['PENDING', 'ACTIVE', 'BANNED']);
+export const integrationTypeEnum = mysqlEnum('integration_type', [
+  'overseerr',
+  'torrent-client',
+  'monitoring',
+  'jellyfin',
+]);
+export const mediaTypeEnum = mysqlEnum('media_type', ['movie', 'series', 'music']);
 
 // ============= USERS TABLE =============
 export const users = mysqlTable('users', {
@@ -140,10 +147,49 @@ export const calendarEvents = mysqlTable('calendar_events', {
   typeIdx: index('type_idx').on(table.type),
 }));
 
+// ============= MEDIA ITEMS TABLE =============
+export const mediaItems = mysqlTable('media_items', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull(),
+  title: varchar('title', { length: 255 }).notNull(),
+  type: mediaTypeEnum.notNull(),
+  tmdbId: int('tmdb_id'),
+  year: varchar('year', { length: 10 }),
+  posterUrl: text('poster_url'),
+  backdropUrl: text('backdrop_url'),
+  streamUrl: text('stream_url'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: index('media_items_user_id_idx').on(table.userId),
+  typeIdx: index('media_items_type_idx').on(table.type),
+  tmdbIdx: index('media_items_tmdb_id_idx').on(table.tmdbId),
+}));
+
+// ============= INTEGRATIONS TABLE =============
+export const integrations = mysqlTable('integrations', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull(),
+  name: varchar('name', { length: 255 }).notNull(),
+  type: integrationTypeEnum.notNull(),
+  baseUrl: varchar('base_url', { length: 512 }),
+  apiKey: varchar('api_key', { length: 512 }),
+  username: varchar('username', { length: 255 }),
+  password: varchar('password', { length: 255 }),
+  config: json('config').$type<Record<string, any>>(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: index('integrations_user_id_idx').on(table.userId),
+  typeIdx: index('integrations_type_idx').on(table.type),
+}));
+
 // ============= RELATIONS =============
 export const usersRelations = relations(users, ({ many }) => ({
   dashboards: many(dashboards),
   calendarEvents: many(calendarEvents),
+  integrations: many(integrations),
+  mediaItems: many(mediaItems),
 }));
 
 export const dashboardsRelations = relations(dashboards, ({ one, many }) => ({
@@ -158,6 +204,20 @@ export const widgetsRelations = relations(widgets, ({ one }) => ({
   dashboard: one(dashboards, {
     fields: [widgets.dashboardId],
     references: [dashboards.id],
+  }),
+}));
+
+export const integrationsRelations = relations(integrations, ({ one }) => ({
+  user: one(users, {
+    fields: [integrations.userId],
+    references: [users.id],
+  }),
+}));
+
+export const mediaItemsRelations = relations(mediaItems, ({ one }) => ({
+  user: one(users, {
+    fields: [mediaItems.userId],
+    references: [users.id],
   }),
 }));
 
@@ -176,6 +236,12 @@ export type NewCategory = typeof categories.$inferInsert;
 
 export type CalendarEvent = typeof calendarEvents.$inferSelect;
 export type NewCalendarEvent = typeof calendarEvents.$inferInsert;
+
+export type Integration = typeof integrations.$inferSelect;
+export type NewIntegration = typeof integrations.$inferInsert;
+
+export type MediaItem = typeof mediaItems.$inferSelect;
+export type NewMediaItem = typeof mediaItems.$inferInsert;
 
 // Theme Configuration Type
 export interface ThemeConfig {
