@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Palette, Code, Globe, Check, Sparkles, Clock } from "lucide-react";
@@ -237,8 +238,10 @@ export function ThemeSettingsEnhanced({ user, dashboardId }: ThemeSettingsProps)
               </CardHeader>
               <CardContent>
                 {theme.startsWith('cyber') && (
-                  <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-sm text-yellow-800 dark:text-yellow-200">
-                    ⚠️ Les dégradés ne sont pas compatibles avec les thèmes Cyber. Veuillez sélectionner Light, Dark ou OLED.
+                  <div className="mb-4 p-3 bg-yellow-500/10 dark:bg-yellow-500/10 oled:bg-yellow-500/15 border border-yellow-500/30 rounded-lg text-sm">
+                    <p className="text-yellow-800 dark:text-yellow-200 oled:text-yellow-100">
+                      ⚠️ Les dégradés ne sont pas compatibles avec les thèmes Cyber. Veuillez sélectionner Light.
+                    </p>
                   </div>
                 )}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -276,8 +279,10 @@ export function ThemeSettingsEnhanced({ user, dashboardId }: ThemeSettingsProps)
               </CardHeader>
               <CardContent>
                 {theme.startsWith('cyber') && (
-                  <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-sm text-yellow-800 dark:text-yellow-200">
-                    ⚠️ Les palettes personnalisées ne modifient pas les thèmes Cyber qui utilisent des couleurs prédéfinies.
+                  <div className="mb-4 p-3 bg-yellow-500/10 dark:bg-yellow-500/10 oled:bg-yellow-500/15 border border-yellow-500/30 rounded-lg text-sm">
+                    <p className="text-yellow-800 dark:text-yellow-200 oled:text-yellow-100">
+                      ⚠️ Les palettes personnalisées ne modifient pas les thèmes Cyber qui utilisent des couleurs prédéfinies.
+                    </p>
                   </div>
                 )}
                 <div className="space-y-3">
@@ -398,9 +403,9 @@ export function ThemeSettingsEnhanced({ user, dashboardId }: ThemeSettingsProps)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-md text-sm">
-                <p className="font-medium mb-2">⚠️ Règles de sécurité</p>
-                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 oled:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 oled:border-yellow-700 p-4 rounded-md text-sm">
+                <p className="font-medium mb-2 text-yellow-900 dark:text-yellow-200 oled:text-yellow-100">⚠️ Règles de sécurité</p>
+                <ul className="list-disc list-inside space-y-1 text-yellow-800 dark:text-yellow-300 oled:text-yellow-200">
                   <li>Le CSS sera automatiquement préfixé par l'ID de votre dashboard</li>
                   <li>Les sélecteurs globaux (body, html) sont interdits</li>
                   <li>Les positions fixes en plein écran sont bloquées</li>
@@ -409,7 +414,7 @@ export function ThemeSettingsEnhanced({ user, dashboardId }: ThemeSettingsProps)
 
               <div className="space-y-2">
                 <Label htmlFor="scopedCss">Votre CSS Personnalisé</Label>
-                <textarea
+                <Textarea
                   id="scopedCss"
                   value={scopedCss}
                   onChange={(e) => setScopedCss(e.target.value)}
@@ -423,7 +428,7 @@ export function ThemeSettingsEnhanced({ user, dashboardId }: ThemeSettingsProps)
   transform: translateY(-4px);
   transition: all 0.3s ease;
 }"
-                  className="w-full h-64 px-3 py-2 border rounded-md bg-background font-mono text-sm"
+                  className="w-full h-64 font-mono text-sm"
                 />
               </div>
 
@@ -444,9 +449,9 @@ export function ThemeSettingsEnhanced({ user, dashboardId }: ThemeSettingsProps)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-md text-sm">
-                <p className="font-medium mb-2 text-red-600 dark:text-red-400">⚠️ ATTENTION - Zone Administrateur</p>
-                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+              <div className="bg-red-50 dark:bg-red-900/20 oled:bg-red-900/30 border border-red-200 dark:border-red-800 oled:border-red-700 p-4 rounded-md text-sm">
+                <p className="font-medium mb-2 text-red-700 dark:text-red-400 oled:text-red-300">⚠️ ATTENTION - Zone Administrateur</p>
+                <ul className="list-disc list-inside space-y-1 text-red-600 dark:text-red-300 oled:text-red-200">
                   <li>Ces modifications affectent TOUS les utilisateurs</li>
                   <li>Aucune restriction de sécurité appliquée</li>
                   <li>Utilisez avec précaution !</li>
@@ -455,7 +460,7 @@ export function ThemeSettingsEnhanced({ user, dashboardId }: ThemeSettingsProps)
 
               <div className="space-y-2">
                 <Label htmlFor="globalCss">CSS Global de l'Application</Label>
-                <textarea
+                <Textarea
                   id="globalCss"
                   value={globalCss}
                   onChange={(e) => setGlobalCss(e.target.value)}
@@ -468,7 +473,7 @@ body {
   backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(255,255,255,0.1);
 }"
-                  className="w-full h-64 px-3 py-2 border rounded-md bg-background font-mono text-sm"
+                  className="w-full h-64 font-mono text-sm"
                 />
               </div>
 

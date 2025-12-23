@@ -58,7 +58,16 @@ else
     echo ""
 fi
 
-# Vérifier Docker pour MySQL
+# Créer le dossier public s'il n'existe pas
+if [ ! -d public ]; then
+    echo "📁 Création du dossier public..."
+    mkdir -p public
+    echo "✅ Dossier public créé"
+    echo ""
+else
+    echo "✅ Dossier public existant"
+    echo ""
+fi
 if command -v docker &> /dev/null; then
     echo "🐳 Docker détecté"
     echo ""

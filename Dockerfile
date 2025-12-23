@@ -15,6 +15,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Create public directory if it doesn't exist
+RUN mkdir -p ./public
+
 # Disable telemetry
 ENV NEXT_TELEMETRY_DISABLED 1
 

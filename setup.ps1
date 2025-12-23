@@ -50,6 +50,17 @@ if (-not (Test-Path .env)) {
     Write-Host ""
 }
 
+# Créer le dossier public s'il n'existe pas
+if (-not (Test-Path -Path "public")) {
+    Write-Host "📁 Création du dossier public..." -ForegroundColor Cyan
+    New-Item -ItemType Directory -Path "public" | Out-Null
+    Write-Host "✅ Dossier public créé" -ForegroundColor Green
+    Write-Host ""
+} else {
+    Write-Host "✅ Dossier public existant" -ForegroundColor Green
+    Write-Host ""
+}
+
 # Vérifier Docker pour MySQL
 try {
     docker --version | Out-Null

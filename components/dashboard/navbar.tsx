@@ -31,10 +31,18 @@ export function Navbar({ user, dashboards, currentDashboardId }: NavbarProps) {
               <Link
                 key={dash.id}
                 href={`/dashboard/${dash.slug}`}
+                style={
+                  dash.id === currentDashboardId
+                    ? {
+                        backgroundColor: "hsl(var(--selected))",
+                        color: "hsl(var(--selected-foreground))",
+                      }
+                    : undefined
+                }
                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                   dash.id === currentDashboardId
-                    ? "bg-primary text-black dark:text-black shadow-sm ring-1 ring-primary"
-                    : "text-black dark:text-black/90 hover:bg-accent hover:text-black"
+                    ? "shadow-sm ring-1 ring-primary"
+                    : "text-foreground hover:bg-accent hover:text-accent-foreground"
                 }`}
               >
                 {dash.name}

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Nexus Dashboard - Script de déploiement Docker
+# Nexus Dashboard - Script de déploiement Docker (automatisation dev/prod)
 # Usage: ./deploy.sh [dev|prod]
 
 set -e
@@ -28,14 +28,32 @@ echo "✅ Docker $(docker --version) détecté"
 echo "✅ Docker Compose $(docker-compose --version) détecté"
 echo ""
 
-# Vérifier .env
+# Préparer l'environnement (crée .env et public si besoin)
 if [ ! -f .env ]; then
-    echo "❌ Fichier .env manquant"
-    echo "   Créez un fichier .env depuis .env.example"
-    exit 1
+    echo "⚙️  Création du fichier .env (depuis .env.example)..."
+    if [ -f .env.example ]; then
+        cp .env.example .env
+    else
+        echo "DATABASE_HOST=localhost"       > .env
+        echo "DATABASE_PORT=3307"            >> .env
+        echo "DATABASE_USER=nexus"           >> .env
+        echo "DATABASE_PASSWORD=nexus_password_2025" >> .env
+        echo "DATABASE_NAME=nexus_dashboard" >> .env
+        echo "NEXTAUTH_URL=http://localhost:3000"    >> .env
+        echo "NEXTAUTH_SECRET=super_secret_key_change_in_production_12345" >> .env
+        echo "NODE_ENV=development"          >> .env
+    fi
+    echo "✅ Fichier .env créé"
+else
+    echo "✅ Fichier .env existant"
 fi
 
-echo "✅ Fichier .env trouvé"
+# Créer le dossier public s'il n'existe pas
+if [ ! -d public ]; then
+    echo "📁 Création du dossier public..."
+    mkdir -p public
+    echo "✅ Dossier public créé"
+fi
 echo ""
 
 # Choisir le fichier docker-compose
@@ -48,7 +66,7 @@ else
 fi
 echo ""
 
-# Arrêter les conteneurs existants
+ # Arrêter les conteneurs existants
 echo "🛑 Arrêt des conteneurs existants..."
 docker-compose -f $COMPOSE_FILE down
 
@@ -84,18 +102,38 @@ fi
 echo "✅ Services démarrés"
 echo ""
 
-# Attendre MySQL
-echo "⏳ Attente de MySQL (30 secondes)..."
-sleep 30
+ # Attendre MySQL (jusqu'à healthy)
+echo "⏳ Attente de MySQL (healthcheck)..."
+for i in {1..30}; do
+    STATUS=$(docker inspect -f '{{json .State.Health.Status}}' nexus-mysql 2>/dev/null || echo "\"unknown\"")
+    if [ "$STATUS" = '"healthy"' ]; then
+        echo "✅ MySQL ready"
+        break
+    fi
+    sleep 2
+done
+echo ""
 
-# Migrations
-echo "🗄️  Exécution des migrations..."
-docker-compose -f $COMPOSE_FILE exec -T app npm run db:push
+ # Migrations depuis l'hôte (drizzle-kit en devDependencies)
+echo "🗄️  Exécution des migrations (host)..."
+npm run db:push || {
+    echo "⚠️  Les migrations ont échoué (host). Essayez: npm run db:push";
+}
 
-if [ $? -ne 0 ]; then
-    echo "⚠️  Les migrations ont échoué"
-    echo "   Vous pouvez les exécuter manuellement:"
-    echo "   docker-compose -f $COMPOSE_FILE exec app npm run db:push"
+# Seed admin si absent (local dev)
+if [ "$MODE" = "dev" ]; then
+    echo "🌱 Vérification utilisateur admin..."
+    COUNT=$(docker exec nexus-mysql mysql -unexus -pnexus_password_2025 -N -e "SELECT COUNT(*) FROM nexus_dashboard.users WHERE email='admin@nexus.local';" 2>/dev/null || echo 0)
+    if [ "$COUNT" = "0" ]; then
+        echo "🌱 Seeding admin user..."
+        if npm run seed; then
+            echo "✅ Admin seed OK (admin@nexus.local / admin123)"
+        else
+            echo "⚠️ Seed a échoué (peut-être déjà présent)"
+        fi
+    else
+        echo "✅ Admin déjà présent"
+    fi
 fi
 
 echo ""
@@ -104,6 +142,9 @@ echo ""
 echo "📝 Informations:"
 echo "   - Application: http://localhost:3000"
 echo "   - MySQL: localhost:3307"
+if [ "$MODE" = "dev" ]; then
+    echo "   - Admin par défaut: admin@nexus.local / admin123"
+fi
 echo ""
 echo "🔍 Commandes utiles:"
 echo "   - Logs: docker-compose -f $COMPOSE_FILE logs -f app"

@@ -29,8 +29,12 @@
     --muted-foreground: 0 0% 45.1%;
     
     /* Accent */
-    --accent: 0 0% 96.1%;
+    --accent: 0 0% 93%;
     --accent-foreground: 0 0% 9%;
+    
+    /* Selection/Active State */
+    --selected: 221 83% 53%;
+    --selected-foreground: 0 0% 100%;
     
     /* Destructive */
     --destructive: 0 84.2% 60.2%;
@@ -61,9 +65,9 @@
     --popover: 0 0% 12%;
     --popover-foreground: 0 0% 98%;
     
-    /* Primary Action - Neutre pour éviter le bleu */
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
+    /* Primary Action - Accent bleu visible */
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
     
     /* Secondary Elements */
     --secondary: 0 0% 14.9%;
@@ -71,11 +75,15 @@
     
     /* Muted Elements */
     --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
+    --muted-foreground: 0 0% 70%;
     
-    /* Accent */
-    --accent: 0 0% 18%;
+    /* Accent - Surface interactive */
+    --accent: 0 0% 20%;
     --accent-foreground: 0 0% 98%;
+    
+    /* Selection/Active State */
+    --selected: 217 91% 60%;
+    --selected-foreground: 0 0% 100%;
     
     /* Destructive */
     --destructive: 0 62.8% 30.6%;
@@ -105,9 +113,9 @@
     --popover: 0 0% 5%;
     --popover-foreground: 0 0% 98%;
     
-    /* Primary Action - Neutre pour éviter le bleu */
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 0%;
+    /* Primary Action - Accent bleu visible */
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
     
     /* Secondary Elements */
     --secondary: 0 0% 10%;
@@ -115,11 +123,15 @@
     
     /* Muted Elements */
     --muted: 0 0% 10%;
-    --muted-foreground: 0 0% 63.9%;
+    --muted-foreground: 0 0% 75%;
     
-    /* Accent */
-    --accent: 0 0% 12%;
+    /* Accent - Surface interactive */
+    --accent: 0 0% 15%;
     --accent-foreground: 0 0% 98%;
+    
+    /* Selection/Active State */
+    --selected: 217 91% 60%;
+    --selected-foreground: 0 0% 100%;
     
     /* Destructive */
     --destructive: 0 62.8% 30.6%;
@@ -248,6 +260,15 @@
     opacity: 0.6;
   }
   
+  /* Explicit textarea styling to override browser defaults */
+  :root textarea,
+  .dark textarea,
+  .oled textarea {
+    background: hsl(var(--input)) !important;
+    color: hsl(var(--foreground)) !important;
+    border-color: hsl(var(--border)) !important;
+  }
+  
   [role="dialog"] input,
   [role="dialog"] textarea,
   [role="dialog"] select {
@@ -275,6 +296,47 @@
   .oled button[data-state="active"]:not(.cyber button) {
     background: hsl(var(--accent));
     color: hsl(var(--accent-foreground));
+  }
+  
+  /* OLED-specific overrides for better contrast */
+  .oled .bg-yellow-50 {
+    background-color: rgba(202, 138, 4, 0.3) !important;
+  }
+  
+  .oled .bg-yellow-500\/10 {
+    background-color: rgba(234, 179, 8, 0.15) !important;
+  }
+  
+  .oled .bg-red-50 {
+    background-color: rgba(220, 38, 38, 0.3) !important;
+  }
+  
+  .oled .border-yellow-200 {
+    border-color: rgba(202, 138, 4, 0.5) !important;
+  }
+  
+  .oled .border-yellow-500\/30 {
+    border-color: rgba(234, 179, 8, 0.3) !important;
+  }
+  
+  .oled .border-red-200 {
+    border-color: rgba(220, 38, 38, 0.5) !important;
+  }
+  
+  .oled .text-yellow-800 {
+    color: rgb(254, 243, 199) !important;
+  }
+  
+  .oled .text-yellow-900 {
+    color: rgb(254, 243, 199) !important;
+  }
+  
+  .oled .text-red-600 {
+    color: rgb(252, 165, 165) !important;
+  }
+  
+  .oled .text-red-700 {
+    color: rgb(254, 202, 202) !important;
   }
   
   /* Better hover states for light theme */

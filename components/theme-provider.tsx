@@ -36,9 +36,9 @@ const gradientPresets: Record<GradientPreset, string> = {
 };
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("light");
+  const [theme, setThemeState] = useState<Theme>("dark");
   const [primaryColor, setPrimaryColor] = useState("#3b82f6");
-  const [backgroundColor, setBackgroundColor] = useState("#ffffff");
+  const [backgroundColor, setBackgroundColor] = useState("#171717");
   const [borderRadius, setBorderRadius] = useState(8);
   const [backgroundImage, setBackgroundImage] = useState("");
   const [gradientPreset, setGradientPresetState] = useState<GradientPreset>("none");

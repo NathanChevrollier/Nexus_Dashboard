@@ -21,6 +21,7 @@ Dashboard auto-hébergé moderne et personnalisable avec widgets interactifs, ca
 ## 🛠️ Stack Technique
 
 ### Frontend
+
 - **Framework**: Next.js 15.5.9 (App Router)
 - **Language**: TypeScript (Strict Mode)
 - **UI**: shadcn/ui + Tailwind CSS v4
@@ -30,6 +31,7 @@ Dashboard auto-hébergé moderne et personnalisable avec widgets interactifs, ca
 - **Markdown**: react-markdown + remark-gfm
 
 ### Backend
+
 - **Database**: MySQL 8.0
 - **ORM**: Drizzle ORM v0.45
 - **Auth**: NextAuth.js v5 (Auth.js)
@@ -37,10 +39,12 @@ Dashboard auto-hébergé moderne et personnalisable avec widgets interactifs, ca
 - **Validation**: Zod v4
 
 ### APIs Externes
+
 - **TMDb API v3**: Films, séries TV, tendances
 - **AniList GraphQL**: Anime, manga, planning de sortie
 
 ### DevOps
+
 - **Container**: Docker + Docker Compose
 - **Node**: v20-alpine
 - **Multi-stage build**: Optimisé pour production
@@ -50,6 +54,7 @@ Dashboard auto-hébergé moderne et personnalisable avec widgets interactifs, ca
 ## 🌟 Fonctionnalités
 
 ### 📊 Dashboard
+
 - ✅ **Multi-dashboards** par utilisateur avec slugs uniques
 - ✅ **Grille magnétique** responsive et redimensionnable
 - ✅ **Drag & Drop** des widgets avec sauvegarde automatique
@@ -59,6 +64,7 @@ Dashboard auto-hébergé moderne et personnalisable avec widgets interactifs, ca
 - ✅ **Templates** prédéfinis (Gaming, Productivity, Monitoring)
 
 ### 🎨 Personnalisation
+
 - ✅ **7 thèmes** : Light, Dark, OLED + 4 variantes Cyber (Blue, Matrix, Synthwave, Arctic)
 - ✅ **Glassmorphism** avec effets de blur et particules animées
 - ✅ **7 gradients animés** : Aurora, Sunset, Ocean, Forest, Fire, Purple Haze, Space
@@ -67,6 +73,7 @@ Dashboard auto-hébergé moderne et personnalisable avec widgets interactifs, ca
 - ✅ **3 niveaux CSS** : GUI (users), Scoped (VIP), Global (admin)
 
 ### 🎭 Widgets (16 types)
+
 - 📎 **Link** - Liens rapides avec icônes
 - 📡 **Ping** - Monitoring serveurs
 - 🖼️ **Iframe** - Intégration sites externes
@@ -85,11 +92,13 @@ Dashboard auto-hébergé moderne et personnalisable avec widgets interactifs, ca
 - 🗓️ **Universal Calendar** - Calendrier complet 5 sources (Anime/Manga/Films/Séries/Personnel)
 
 ### 👥 Système de Rôles
+
 - **USER** : Accès widgets de base + personnalisation GUI
 - **VIP** : + Scoped CSS + Widgets premium (Calendar, Charts)
 - **ADMIN** : + Global CSS + Gestion utilisateurs + Import/Export
 
 ### 🔐 Sécurité
+
 - ✅ **NextAuth.js v5** avec Credentials provider
 - ✅ **Bcrypt** pour hash des mots de passe
 - ✅ **JWT sessions** avec tokens sécurisés
@@ -102,7 +111,25 @@ Dashboard auto-hébergé moderne et personnalisable avec widgets interactifs, ca
 
 ## 📦 Installation
 
+### ⚡️ Quick Start (local)
+
+Sur Windows ou macOS/Linux, tout peut être automatisé:
+
+```bash
+# Dev (crée .env par défaut, créer public/, lance Docker, migrations, seed admin)
+./deploy.sh
+
+# Production
+./deploy.sh prod
+```
+
+Alternatives locales:
+
+- Windows: exécuter [setup.ps1](setup.ps1) (vérifs, création .env/public, Docker MySQL, migrations)
+- Linux/macOS: exécuter [setup.sh](setup.sh)
+
 ### Prérequis
+
 - Node.js v20+ (LTS recommandé)
 - MySQL 8.0+
 - npm ou yarn
@@ -146,11 +173,13 @@ NEXT_PUBLIC_TMDB_API_KEY=your_tmdb_api_key_here
 ### 4. Base de Données
 
 **Option A : Via Docker (Recommandé)**
+
 ```bash
 docker-compose up -d db
 ```
 
 **Option B : MySQL Local**
+
 ```sql
 CREATE DATABASE nexus_dashboard CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'nexus'@'localhost' IDENTIFIED BY 'nexus_password_2025';
@@ -165,6 +194,7 @@ npm run db:push
 ```
 
 Cela créera automatiquement toutes les tables :
+
 - `users` (id, name, email, password, role, status)
 - `dashboards` (id, userId, name, slug, isPublic, themeConfig)
 - `widgets` (id, dashboardId, type, x, y, w, h, options)
@@ -173,15 +203,16 @@ Cela créera automatiquement toutes les tables :
 
 ### 6. Seed (Optionnel)
 
-Créer un utilisateur admin de test :
+Créer l'utilisateur admin de test :
 
 ```bash
-npx tsx seed.ts
+npm run seed
 ```
 
 Credentials par défaut :
-- **Email**: `admin@example.com`
-- **Password**: `password123`
+
+- **Email**: `admin@nexus.local`
+- **Password**: `admin123`
 - **Role**: ADMIN
 
 ### 7. Lancer en Développement
@@ -201,6 +232,7 @@ Ouvrir [http://localhost:3000](http://localhost:3000)
 Les widgets **Movies & TV** et **Universal Calendar** nécessitent une clé API TMDb.
 
 **Obtenir la clé (gratuit)** :
+
 1. Créer un compte sur [themoviedb.org](https://www.themoviedb.org/signup)
 2. Aller dans [Settings > API](https://www.themoviedb.org/settings/api)
 3. Demander une clé "Developer" (gratuit, 2 minutes)
@@ -211,28 +243,30 @@ Les widgets **Movies & TV** et **Universal Calendar** nécessitent une clé API 
    ```
 
 **Sans clé TMDb** :
+
 - ❌ Widget "Movies & TV" → Ne charge aucune donnée
 - ❌ Films/Séries dans "Universal Calendar" → Vides
 - ✅ Anime/Manga/Événements personnels → Fonctionnent
 
 ### Variables d'Environnement
 
-| Variable | Requis | Description | Défaut |
-|----------|--------|-------------|--------|
-| `DATABASE_HOST` | ✅ | Hôte MySQL | localhost |
-| `DATABASE_PORT` | ✅ | Port MySQL | 3307 |
-| `DATABASE_USER` | ✅ | Utilisateur DB | nexus |
-| `DATABASE_PASSWORD` | ✅ | Mot de passe DB | - |
-| `DATABASE_NAME` | ✅ | Nom de la DB | nexus_dashboard |
-| `NEXTAUTH_URL` | ✅ | URL de l'app | http://localhost:3000 |
-| `NEXTAUTH_SECRET` | ✅ | Secret JWT (32+ chars) | - |
-| `NEXT_PUBLIC_TMDB_API_KEY` | ⚠️ | Clé TMDb (films/séries) | - |
+| Variable                   | Requis | Description             | Défaut                |
+| -------------------------- | ------ | ----------------------- | --------------------- |
+| `DATABASE_HOST`            | ✅     | Hôte MySQL              | localhost             |
+| `DATABASE_PORT`            | ✅     | Port MySQL              | 3307                  |
+| `DATABASE_USER`            | ✅     | Utilisateur DB          | nexus                 |
+| `DATABASE_PASSWORD`        | ✅     | Mot de passe DB         | -                     |
+| `DATABASE_NAME`            | ✅     | Nom de la DB            | nexus_dashboard       |
+| `NEXTAUTH_URL`             | ✅     | URL de l'app            | http://localhost:3000 |
+| `NEXTAUTH_SECRET`          | ✅     | Secret JWT (32+ chars)  | -                     |
+| `NEXT_PUBLIC_TMDB_API_KEY` | ⚠️     | Clé TMDb (films/séries) | -                     |
 
 ---
 
 ## 🎨 Widgets Disponibles
 
 ### 📎 Link Widget
+
 ```json
 {
   "type": "link",
@@ -246,6 +280,7 @@ Les widgets **Movies & TV** et **Universal Calendar** nécessitent une clé API 
 ```
 
 ### 🎬 Movies & TV Calendar Widget
+
 ```json
 {
   "type": "movies-tv-calendar",
@@ -256,11 +291,13 @@ Les widgets **Movies & TV** et **Universal Calendar** nécessitent une clé API 
   }
 }
 ```
+
 - **Sources** : TMDb uniquement
 - **Fonctionnalités** : Films à venir, séries en cours, tendances
 - **Filtres** : Aujourd'hui / Cette semaine
 
 ### 🗓️ Universal Calendar Widget
+
 ```json
 {
   "type": "universal-calendar",
@@ -284,11 +321,13 @@ Les widgets **Movies & TV** et **Universal Calendar** nécessitent une clé API 
   }
 }
 ```
+
 - **Sources** : AniList (anime/manga) + TMDb (films/séries) + Base de données (personnel)
 - **Vues** : Mois, Semaine, Liste
 - **CRUD** : Ajouter/Modifier/Supprimer événements personnels
 
 ### 📅 Anime Calendar Widget
+
 ```json
 {
   "type": "anime-calendar",
@@ -314,10 +353,11 @@ cp .env.example .env
 # Éditer .env avec vos vraies valeurs
 ```
 
-**2. Construire et lancer**
+**2. Construire et lancer (automatisé)**
 
 ```bash
-docker-compose up -d --build
+./deploy.sh            # dev
+./deploy.sh prod       # production
 ```
 
 **3. Vérifier les logs**
@@ -332,6 +372,7 @@ docker-compose logs -f app
 - MySQL : `localhost:3307`
 
 **Services inclus** :
+
 - `db` : MySQL 8.0 avec healthcheck
 - `app` : Next.js avec dépendances auto-installées
 
@@ -363,13 +404,15 @@ NODE_ENV=production
 **3. Utiliser docker-compose.production.yml**
 
 ```bash
-docker-compose -f docker-compose.production.yml up -d --build
+./deploy.sh prod
 ```
 
 **4. Migrations**
 
+Le script `deploy.sh` exécute les migrations automatiquement. Pour les relancer manuellement:
+
 ```bash
-docker-compose -f docker-compose.production.yml exec app npm run db:push
+npm run db:push
 ```
 
 **5. Nginx Reverse Proxy (optionnel)**
@@ -399,16 +442,19 @@ sudo certbot --nginx -d votre-domaine.com
 ### Optimisations Production
 
 **Dockerfile multi-stage** :
+
 - Stage 1 (`deps`) : Installation dépendances seules
 - Stage 2 (`builder`) : Build Next.js avec optimisations
 - Stage 3 (`runner`) : Image finale minimale (Node Alpine)
 
 **Résultat** :
+
 - Image finale : ~300 MB (vs 1.5 GB sans optimisation)
 - Build time : 3-5 minutes
 - Démarrage : <2 secondes
 
 **Variables Build** :
+
 - `NEXT_TELEMETRY_DISABLED=1` : Désactive télémétrie
 - `NODE_ENV=production` : Mode production
 - `output: 'standalone'` : Bundle minimal
@@ -547,12 +593,14 @@ calendar_events (
 ### APIs Externes
 
 **TMDb API v3** :
+
 - Endpoint : `https://api.themoviedb.org/3`
 - Fonctions : 15+ (films, séries, tendances, genres)
 - Rate limit : 40 requêtes/10 secondes
 - Images : `https://image.tmdb.org/t/p/{size}/{path}`
 
 **AniList GraphQL** :
+
 - Endpoint : `https://graphql.anilist.co`
 - Pas d'authentification requise
 - Fonctions : Schedule anime/manga, search, trending
@@ -565,16 +613,19 @@ calendar_events (
 ### Implémenté ✅
 
 1. **Authentification** :
+
    - NextAuth.js v5 avec JWT sessions
    - Bcrypt pour hash des mots de passe (salt rounds: 10)
    - Validation des comptes par admin
 
 2. **Protection Routes** :
+
    - Middleware pour routes protégées
    - Vérification ownership des dashboards/widgets
    - Server Actions avec auth checks
 
 3. **Validation** :
+
    - Zod pour validation des inputs
    - Sanitization des données utilisateur
    - Protection contre injections SQL (Drizzle ORM)
@@ -587,36 +638,41 @@ calendar_events (
 ### Recommandations Production 🔐
 
 1. **Variables d'Environnement** :
+
    ```bash
    # Générer secret fort (32+ chars)
    openssl rand -base64 32
-   
+
    # Changer TOUS les mots de passe par défaut
    # Ne JAMAIS commit les .env
    ```
 
 2. **Content Security Policy** :
+
    ```tsx
    // next.config.ts
    headers: [
      {
-       source: '/:path*',
+       source: "/:path*",
        headers: [
          {
-           key: 'Content-Security-Policy',
-           value: "default-src 'self'; img-src 'self' https://image.tmdb.org https://s4.anilist.co;"
-         }
-       ]
-     }
-   ]
+           key: "Content-Security-Policy",
+           value:
+             "default-src 'self'; img-src 'self' https://image.tmdb.org https://s4.anilist.co;",
+         },
+       ],
+     },
+   ];
    ```
 
 3. **Rate Limiting** :
+
    ```bash
    npm install @upstash/ratelimit @upstash/redis
    ```
 
 4. **HTTPS** :
+
    - Utiliser Certbot pour SSL gratuit
    - Forcer HTTPS via Nginx
    - HSTS header recommandé
@@ -634,6 +690,7 @@ calendar_events (
 ### Problème : Build échoue avec erreur TypeScript
 
 **Symptôme** :
+
 ```
 Type error: Adapter types incompatible
 ./lib/auth.ts:31:3
@@ -641,6 +698,7 @@ Type error: Adapter types incompatible
 
 **Solution** :
 Le commentaire `@ts-ignore` est déjà présent dans `lib/auth.ts`. Si l'erreur persiste :
+
 ```bash
 rm -rf .next node_modules
 npm install --legacy-peer-deps
@@ -654,6 +712,7 @@ npm run build
 **Cause** : Clé API TMDb manquante
 
 **Solution** :
+
 1. Vérifier `.env` :
    ```bash
    cat .env | grep TMDB
@@ -670,11 +729,13 @@ npm run build
 ### Problème : Base de données connexion refusée
 
 **Symptôme** :
+
 ```
 Error: connect ECONNREFUSED 127.0.0.1:3307
 ```
 
 **Solutions** :
+
 1. Vérifier MySQL :
    ```bash
    docker-compose ps
@@ -697,6 +758,7 @@ Error: connect ECONNREFUSED 127.0.0.1:3307
 **Cause** : Next.js `remotePatterns` restrictif
 
 **Solution** : Vérifier `next.config.ts` :
+
 ```ts
 images: {
   remotePatterns: [
@@ -717,6 +779,7 @@ images: {
 **Cause** : Conflit CSS ou état non synchronisé
 
 **Solution** :
+
 1. Effacer cache navigateur
 2. Vérifier console pour erreurs
 3. Recharger page (Cmd+R)
@@ -724,12 +787,14 @@ images: {
 ### Problème : Docker build échoue
 
 **Symptôme** :
+
 ```
 npm ERR! peer dependency conflicts
 ```
 
 **Solution** :
 Le Dockerfile utilise déjà `npm ci` (plus strict). Si erreur, modifier `Dockerfile` ligne 11 :
+
 ```dockerfile
 RUN npm ci --legacy-peer-deps
 ```
@@ -739,6 +804,7 @@ RUN npm ci --legacy-peer-deps
 ## 📚 Documentation Complète
 
 ### Liens Utiles
+
 - **TMDb API Docs** : https://developers.themoviedb.org/3
 - **AniList GraphQL** : https://anilist.github.io/ApiV2-GraphQL-Docs/
 - **Next.js 15** : https://nextjs.org/docs
@@ -791,6 +857,7 @@ docker system prune -a             # Nettoyer images/containers orphelins
 ### Ajouter un Nouveau Widget
 
 1. **Créer le composant** :
+
    ```tsx
    // components/widgets/mon-widget.tsx
    interface MonWidgetProps {
@@ -800,23 +867,23 @@ docker system prune -a             # Nettoyer images/containers orphelins
      };
      onUpdateOptions: (options: any) => void;
    }
-   
+
    export function MonWidget({ options, onUpdateOptions }: MonWidgetProps) {
      return <div>Mon Widget</div>;
    }
    ```
 
 2. **Enregistrer dans widget-component.tsx** :
+
    ```tsx
    case 'mon-widget':
      return <MonWidget {...props} />;
    ```
 
 3. **Ajouter dans add-widget-dialog.tsx** :
+
    ```tsx
-   <Button onClick={() => handleAdd('mon-widget')}>
-     Mon Widget
-   </Button>
+   <Button onClick={() => handleAdd("mon-widget")}>Mon Widget</Button>
    ```
 
 4. **Étendre le type dans schema.ts** :
