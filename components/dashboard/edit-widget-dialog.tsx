@@ -84,10 +84,7 @@ export function EditWidgetDialog({ widget, categories, open, onOpenChange, onWid
           {/* Category */}
           <div className="space-y-2">
             <Label htmlFor="category" className="flex items-center gap-2">
-              Catégorie
-              <span className="text-xs text-muted-foreground font-normal">
-                (le widget se repositionnera automatiquement)
-              </span>
+              📦 Catégorie
             </Label>
             <Select value={categoryId || "none"} onValueChange={(v) => setCategoryId(v === "none" ? null : v)}>
               <SelectTrigger id="category">
@@ -96,8 +93,8 @@ export function EditWidgetDialog({ widget, categories, open, onOpenChange, onWid
               <SelectContent>
                 <SelectItem value="none">
                   <span className="flex items-center gap-2">
-                    <span>🚫</span>
-                    <span>Aucune catégorie</span>
+                    <span>🏠</span>
+                    <span>Grille principale (sans catégorie)</span>
                   </span>
                 </SelectItem>
                 {categories.map((cat) => (
@@ -105,19 +102,26 @@ export function EditWidgetDialog({ widget, categories, open, onOpenChange, onWid
                     <span className="flex items-center gap-2">
                       <span>{cat.icon || '📁'}</span>
                       <span>{cat.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        ({getWidgetCount(cat.id)} widgets)
-                      </span>
                     </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {categoryId && categoryId !== initialCategoryId && (
-              <p className="text-xs text-primary flex items-center gap-1">
-                <span>✨</span>
-                <span>Le widget sera repositionné près de cette catégorie</span>
-              </p>
+              <div className="p-2 bg-primary/10 border border-primary/30 rounded-lg">
+                <p className="text-xs text-primary flex items-center gap-1.5">
+                  <span>✨</span>
+                  <span className="font-medium">Le widget sera déplacé dans cette catégorie</span>
+                </p>
+              </div>
+            )}
+            {!categoryId && initialCategoryId && (
+              <div className="p-2 bg-primary/10 border border-primary/30 rounded-lg">
+                <p className="text-xs text-primary flex items-center gap-1.5">
+                  <span>🔄</span>
+                  <span className="font-medium">Le widget sera déplacé vers la grille principale</span>
+                </p>
+              </div>
             )}
           </div>
 

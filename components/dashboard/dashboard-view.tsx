@@ -12,6 +12,7 @@ import { AddCategoryDialog } from "@/components/dashboard/add-category-dialog";
 import { EditWidgetDialog } from "@/components/dashboard/edit-widget-dialog";
 import { updateWidgetPositions, deleteWidget } from "@/lib/actions/widgets";
 import { updateCategoryPositions, deleteCategory } from "@/lib/actions/categories";
+import { CrossGridDragProvider, useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-v2";
 
 interface DashboardViewProps {
   dashboard: Dashboard;
@@ -26,6 +27,25 @@ export function DashboardView({
   initialWidgets = [], 
   initialCategories = [] 
 }: DashboardViewProps) {
+  return (
+    <CrossGridDragProvider>
+      <DashboardViewInner
+        dashboard={dashboard}
+        isOwner={isOwner}
+        initialWidgets={initialWidgets}
+        initialCategories={initialCategories}
+      />
+    </CrossGridDragProvider>
+  );
+}
+
+function DashboardViewInner({ 
+  dashboard, 
+  isOwner, 
+  initialWidgets = [], 
+  initialCategories = [] 
+}: DashboardViewProps) {
+  const { isDragging, draggedWidget, cancelDrag } = useCrossGridDrag();
   const [isEditMode, setIsEditMode] = useState(false);
   const [widgets, setWidgets] = useState<Widget[]>(initialWidgets);
   const [categories, setCategories] = useState<Category[]>(initialCategories);
@@ -37,6 +57,42 @@ export function DashboardView({
   const [saving, setSaving] = useState(false);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+  // Suivre la position de la souris pendant le drag cross-grid
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePosition({ x: e.clientX, y: e.clientY });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, [isDragging]);
+
+  // Annuler le drag cross-grid avec Échap
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        cancelDrag();
+        // Réinitialiser l'état visuel des éléments en drag
+        const draggedElements = document.querySelectorAll('[data-cross-grid-drag="true"]');
+        draggedElements.forEach((el) => {
+          if (el instanceof HTMLElement) {
+            el.dataset.crossGridDrag = 'false';
+            el.style.transform = '';
+            el.style.boxShadow = '';
+          }
+        });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isDragging, cancelDrag]);
 
   useEffect(() => {
     const updateWidth = () => {
@@ -321,13 +377,148 @@ export function DashboardView({
   };
 
   const handleWidgetUpdated = (widgetId: string, newCategoryId: string | null, oldCategoryId: string | null) => {
-    // Si la catégorie a changé, repositionner le widget
-    if (newCategoryId !== oldCategoryId && newCategoryId) {
-      repositionWidgetNearCategory(widgetId, newCategoryId);
-    }
-    // Recharger pour avoir les données à jour
-    window.location.reload();
+    // Mettre à jour localement le widget
+    setWidgets((prevWidgets) => {
+      const widget = prevWidgets.find(w => w.id === widgetId);
+      if (!widget) return prevWidgets;
+
+      return prevWidgets.map((w) => {
+        if (w.id === widgetId) {
+          // Si on déplace vers une catégorie
+          if (newCategoryId) {
+            // Trouver tous les widgets déjà dans cette catégorie
+            const categoryWidgets = prevWidgets.filter(cw => cw.categoryId === newCategoryId && cw.id !== widgetId);
+            
+            // Fonction pour trouver une position libre
+            const findFreeCategoryPosition = (ww: number, hh: number): { x: number; y: number } => {
+              const COLS = 6;
+              
+              const isPositionFree = (x: number, y: number) => {
+                return !categoryWidgets.some(cw => {
+                  return !(
+                    x + ww <= (cw.categoryX || 0) ||
+                    x >= (cw.categoryX || 0) + cw.w ||
+                    y + hh <= (cw.categoryY || 0) ||
+                    y >= (cw.categoryY || 0) + cw.h
+                  );
+                });
+              };
+
+              for (let y = 0; y < 20; y++) {
+                for (let x = 0; x <= COLS - ww; x++) {
+                  if (isPositionFree(x, y)) {
+                    return { x, y };
+                  }
+                }
+              }
+
+              const maxY = Math.max(0, ...categoryWidgets.map(cw => (cw.categoryY || 0) + cw.h));
+              return { x: 0, y: maxY };
+            };
+
+            const freePos = findFreeCategoryPosition(widget.w, widget.h);
+
+            return {
+              ...w,
+              categoryId: newCategoryId,
+              categoryX: freePos.x,
+              categoryY: freePos.y,
+            };
+          }
+          // Si on retire d'une catégorie (vers la grille principale)
+          else if (oldCategoryId && !newCategoryId) {
+            // Trouver une position libre sur la grille principale
+            const pos = findFreePosition(0, 0, widget.w, widget.h);
+            return {
+              ...w,
+              categoryId: null,
+              categoryX: null,
+              categoryY: null,
+              x: pos.x,
+              y: pos.y,
+            };
+          }
+        }
+        return w;
+      });
+    });
   };
+
+  // Gérer le drop d'un widget dans une catégorie (via Ctrl+drag)
+  const handleWidgetDropInCategory = useCallback((widgetId: string, categoryId: string) => {
+    setWidgets((prevWidgets) => {
+      const widget = prevWidgets.find(w => w.id === widgetId);
+      if (!widget) return prevWidgets;
+
+      // Trouver tous les widgets déjà dans cette catégorie
+      const categoryWidgets = prevWidgets.filter(w => w.categoryId === categoryId && w.id !== widgetId);
+      
+      // Fonction pour trouver une position libre dans la catégorie (grille 6 colonnes)
+      const findFreeCategoryPosition = (w: number, h: number): { x: number; y: number } => {
+        const COLS = 6;
+        
+        // Vérifier si une position est libre
+        const isPositionFree = (x: number, y: number) => {
+          return !categoryWidgets.some(cw => {
+            return !(
+              x + w <= (cw.categoryX || 0) ||
+              x >= (cw.categoryX || 0) + cw.w ||
+              y + h <= (cw.categoryY || 0) ||
+              y >= (cw.categoryY || 0) + cw.h
+            );
+          });
+        };
+
+        // Essayer de trouver une position libre
+        for (let y = 0; y < 20; y++) {
+          for (let x = 0; x <= COLS - w; x++) {
+            if (isPositionFree(x, y)) {
+              return { x, y };
+            }
+          }
+        }
+
+        // Si rien n'est libre, mettre à la fin
+        const maxY = Math.max(0, ...categoryWidgets.map(w => (w.categoryY || 0) + w.h));
+        return { x: 0, y: maxY };
+      };
+
+      const freePos = findFreeCategoryPosition(widget.w, widget.h);
+
+      return prevWidgets.map((w) => {
+        if (w.id === widgetId) {
+          return {
+            ...w,
+            categoryId: categoryId,
+            categoryX: freePos.x,
+            categoryY: freePos.y,
+          };
+        }
+        return w;
+      });
+    });
+  }, []);
+
+  // Gérer le drop d'un widget hors d'une catégorie (vers grille principale)
+  const handleWidgetDropOutCategory = useCallback((widgetId: string) => {
+    setWidgets((prevWidgets) =>
+      prevWidgets.map((widget) => {
+        if (widget.id === widgetId) {
+          // Trouver une position libre sur la grille principale
+          const pos = findFreePosition(0, 0, widget.w, widget.h);
+          return {
+            ...widget,
+            categoryId: null,
+            categoryX: null,
+            categoryY: null,
+            x: pos.x,
+            y: pos.y,
+          };
+        }
+        return widget;
+      })
+    );
+  }, [findFreePosition]);
 
   const handleCategoryAdded = () => {
     window.location.reload();
@@ -352,7 +543,24 @@ export function DashboardView({
   };
 
   return (
-    <div className="h-[calc(100vh-64px)] flex flex-col overflow-hidden">
+    <div className="h-[calc(100vh-64px)] flex flex-col overflow-hidden relative">
+      {/* Widget miniature qui suit la souris pendant le cross-grid drag */}
+      {isDragging && draggedWidget && (
+        <div 
+          className="fixed pointer-events-none z-50 animate-in fade-in duration-150"
+          style={{
+            left: `${mousePosition.x + 15}px`,
+            top: `${mousePosition.y + 15}px`,
+          }}
+        >
+          {/* Petit badge compact */}
+          <div className="bg-primary/90 text-primary-foreground rounded-md shadow-lg px-2 py-1 text-xs font-medium flex items-center gap-1.5 border border-primary-foreground/20">
+            <span className="text-sm">🔄</span>
+            <span className="truncate max-w-[100px]">{draggedWidget.options?.title || draggedWidget.type}</span>
+          </div>
+        </div>
+      )}
+      
       {isOwner && (
         <div className="border-b bg-gradient-to-br from-card/40 via-background to-card/20 backdrop-blur-xl shadow-md px-8 py-4 relative overflow-hidden">
           {/* Effet de fond décoratif */}
@@ -502,15 +710,17 @@ export function DashboardView({
                       <span className="text-primary">🎨</span> Widgets
                     </p>
                     <ul className="text-muted-foreground space-y-1 text-xs">
-                      <li>• <strong>Dans catégorie:</strong> Glisse-les sur leur grille interne !</li>
-                      <li>• <strong>Changer de catégorie:</strong> ✏️ → Sélectionne une catégorie</li>
-                      <li>• <strong>Sans catégorie:</strong> Librement déplaçables sur la grille</li>
+                      <li>• <strong>Déplacer:</strong> Glisse-dépose directement sur la grille</li>
+                      <li>• <strong>Changer de catégorie:</strong> Ctrl+Clic sur la poignée ⋮⋮ puis dépose sur 📥</li>
+                      <li>• <strong>Annuler:</strong> Appuie sur <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Échap</kbd> pour annuler</li>
+                      <li>• <strong>Ou via menu:</strong> Clique sur ✏️ puis choisis une catégorie</li>
+                      <li>• <strong>Redimensionner:</strong> Tire le coin en bas à droite</li>
                     </ul>
                   </div>
                 </div>
-                <div className="mt-3 p-2 bg-primary/5 border border-primary/20 rounded-lg">
+                <div className="mt-3 p-2.5 bg-primary/5 border border-primary/20 rounded-lg">
                   <p className="text-xs text-muted-foreground">
-                    <strong className="text-primary">💡 Astuce Pro:</strong> Les widgets <strong>à l'intérieur</strong> des catégories ont leur propre grille indépendante. Utilise la poignée ⋮⋮ du widget pour le déplacer, pas celle de la catégorie !
+                    <strong className="text-primary">💡 Astuce Pro:</strong> Maintiens <kbd className="px-1 py-0.5 bg-primary/10 rounded text-primary font-mono text-[10px]">Ctrl</kbd> en cliquant sur la poignée ⋮⋮ d'un widget pour activer le mode cross-grid. Les zones de drop 📥 apparaissent dans les headers de catégories. Appuie sur <kbd className="px-1 py-0.5 bg-primary/10 rounded text-primary font-mono text-[10px]">Échap</kbd> pour annuler !
                   </p>
                 </div>
               </div>
@@ -563,6 +773,8 @@ export function DashboardView({
                     onWidgetEdit={handleEditWidget}
                     onWidgetDelete={handleDeleteWidget}
                     onWidgetLayoutChange={handleCategoryWidgetLayoutChange}
+                    onWidgetDropIn={handleWidgetDropInCategory}
+                    onWidgetDropOut={handleWidgetDropOutCategory}
                   />
                 </div>
               );
@@ -581,6 +793,7 @@ export function DashboardView({
                   <WidgetComponent
                     widget={widget}
                     isEditMode={isEditMode}
+                    sourceType="main"
                     onEdit={() => handleEditWidget(widget)}
                     onDelete={() => handleDeleteWidget(widget.id)}
                   />

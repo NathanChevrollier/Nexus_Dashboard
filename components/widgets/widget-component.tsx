@@ -22,18 +22,55 @@ import { MonitoringWidget } from "./monitoring-widget";
 import { MediaLibraryWidget } from "./media-library-widget";
 import { Button } from "@/components/ui/button";
 import { Settings, Trash2, GripVertical } from "lucide-react";
+import { useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-v2";
 
 interface WidgetComponentProps {
   widget: Widget;
   isEditMode: boolean;
   onEdit?: () => void;
   onDelete?: () => void;
+  sourceType?: 'main' | 'category';
+  sourceCategoryId?: string;
 }
 
-export const WidgetComponent = memo(function WidgetComponent({ widget, isEditMode, onEdit, onDelete }: WidgetComponentProps) {
+export const WidgetComponent = memo(function WidgetComponent({ 
+  widget, 
+  isEditMode, 
+  onEdit, 
+  onDelete,
+  sourceType = 'main',
+  sourceCategoryId
+}: WidgetComponentProps) {
+  const { startDrag, isDragging, draggedWidget } = useCrossGridDrag();
+  const isThisWidgetDragging = isDragging && draggedWidget?.id === widget.id;
+
   const handleActionMouseDown = (event: React.MouseEvent) => {
-    // Empêche react-grid-layout de capturer le mousedown et de déclencher un drag
+    // Empêche le drag de capturer le mousedown
     event.stopPropagation();
+  };
+
+  // Gérer le Ctrl+Drag pour le cross-grid drag avec animation
+  const handleDragHandlePointerDown = (event: React.PointerEvent) => {
+    if (isEditMode && event.ctrlKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      
+      // Ajouter une classe d'animation temporaire
+      const widgetElement = event.currentTarget.closest('.h-full.w-full.flex.flex-col') as HTMLElement;
+      if (widgetElement) {
+        widgetElement.style.transform = 'scale(1.05)';
+        widgetElement.style.transition = 'transform 0.2s ease-out';
+        widgetElement.style.boxShadow = '0 10px 40px rgba(var(--primary-rgb, 59, 130, 246), 0.4)';
+        
+        setTimeout(() => {
+          widgetElement.style.transform = 'scale(1)';
+          widgetElement.style.boxShadow = 'none';
+        }, 200);
+      }
+      
+      startDrag(widget, sourceType, sourceCategoryId);
+    }
+    // Sinon, laisser le drag normal se produire (géré par CustomGridLayout)
   };
   const renderWidget = () => {
     switch (widget.type) {
@@ -87,12 +124,17 @@ export const WidgetComponent = memo(function WidgetComponent({ widget, isEditMod
   };
 
   return (
-    <div className="h-full w-full flex flex-col">
+    <div className={`h-full w-full flex flex-col transition-all duration-200 ${isThisWidgetDragging ? 'opacity-70 scale-95 ring-2 ring-primary ring-offset-2' : ''}`}>
       {isEditMode && (
         <div className="px-3 py-2 border-b bg-muted/50 text-xs text-muted-foreground flex items-center justify-between gap-2">
-          <div className="widget-drag-handle cursor-move select-none flex items-center gap-1">
+          <div 
+            className="widget-drag-handle cursor-move select-none flex items-center gap-1 hover:text-primary transition-colors"
+            onPointerDown={handleDragHandlePointerDown}
+            title="Glisser pour déplacer | Ctrl+Glisser pour changer de catégorie"
+          >
             <GripVertical className="h-3 w-3 opacity-60" />
             <span>{widget.type}</span>
+            <span className="text-[10px] opacity-50 ml-1">(Ctrl = 🔄)</span>
           </div>
           {(onEdit || onDelete) && (
             <div className="flex gap-1 widget-no-drag">

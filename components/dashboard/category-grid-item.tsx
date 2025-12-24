@@ -5,7 +5,8 @@ import { ChevronDown, ChevronUp, Trash2, Folder, GripVertical } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { WidgetComponent } from "@/components/widgets/widget-component";
 import { CustomGridLayout, GridItem } from "@/components/ui/custom-grid-layout";
-import { useState, useEffect } from "react";
+import { useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-v2";
+import { useState, useEffect, useRef } from "react";
 
 interface CategoryGridItemProps {
   category: Category;
@@ -17,6 +18,8 @@ interface CategoryGridItemProps {
   onWidgetEdit: (widget: Widget) => void;
   onWidgetDelete: (widgetId: string) => void;
   onWidgetLayoutChange?: (categoryId: string, layouts: Array<{id: string, x: number, y: number, w: number, h: number}>) => void;
+  onWidgetDropIn?: (widgetId: string, categoryId: string) => void;
+  onWidgetDropOut?: (widgetId: string) => void;
 }
 
 export function CategoryGridItem({
@@ -29,8 +32,13 @@ export function CategoryGridItem({
   onWidgetEdit,
   onWidgetDelete,
   onWidgetLayoutChange,
+  onWidgetDropIn,
+  onWidgetDropOut,
 }: CategoryGridItemProps) {
   const [containerWidth, setContainerWidth] = useState(400);
+  const { isDragging, draggedWidget, sourceType, sourceCategoryId, endDrag, cancelDrag } = useCrossGridDrag();
+  const [isDropZoneHovered, setIsDropZoneHovered] = useState(false);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
 
   const COLS = 6;
   const ROW_HEIGHT = 60;
@@ -73,6 +81,37 @@ export function CategoryGridItem({
     }));
     
     onWidgetLayoutChange(category.id, updates);
+  };
+
+  // Gérer le drop dans la zone de drop
+  const handleDrop = () => {
+    if (!isDragging || !draggedWidget) return;
+
+    const result = endDrag();
+    if (!result) return;
+
+    // Widget depuis la grille principale vers cette catégorie
+    if (result.sourceType === 'main') {
+      onWidgetDropIn?.(result.widget.id, category.id);
+    }
+    // Widget depuis une autre catégorie vers cette catégorie
+    else if (result.sourceCategoryId && result.sourceCategoryId !== category.id) {
+      onWidgetDropIn?.(result.widget.id, category.id);
+    }
+    // Widget depuis cette même catégorie -> sortir vers grille principale
+    else if (result.sourceCategoryId === category.id) {
+      onWidgetDropOut?.(result.widget.id);
+    }
+
+    setIsDropZoneHovered(false);
+  };
+
+  const handleDropZoneEnter = () => {
+    if (isDragging) setIsDropZoneHovered(true);
+  };
+
+  const handleDropZoneLeave = () => {
+    setIsDropZoneHovered(false);
   };
 
   return (
@@ -118,6 +157,32 @@ export function CategoryGridItem({
             >
               <GripVertical className="h-4 w-4 pointer-events-none" style={{ color: category.color || 'hsl(var(--primary))' }} />
             </button>
+          )}
+
+          {/* Zone de drop pour Ctrl+drag cross-grid */}
+          {isEditMode && isDragging && (
+            <div
+              ref={dropZoneRef}
+              className={`h-8 px-3 rounded-lg border-2 border-dashed transition-all duration-300 flex items-center gap-1.5 cursor-pointer animate-in fade-in slide-in-from-left-4 ${
+                isDropZoneHovered 
+                  ? 'border-primary bg-primary/20 scale-110 shadow-lg shadow-primary/30' 
+                  : 'border-primary/60 bg-primary/10 scale-100'
+              }`}
+              title={sourceCategoryId === category.id 
+                ? "Déposer ici pour sortir le widget vers la grille principale" 
+                : "Déposer ici pour ajouter le widget à cette catégorie"}
+              onPointerEnter={handleDropZoneEnter}
+              onPointerLeave={handleDropZoneLeave}
+              onPointerUp={handleDrop}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className={`text-xs font-medium text-primary transition-transform ${isDropZoneHovered ? 'scale-125' : ''}`}>
+                {isDropZoneHovered ? '✓' : '📥'}
+              </span>
+              <span className="text-[10px] text-primary font-medium">
+                {sourceCategoryId === category.id ? 'Sortir' : 'Déposer'}
+              </span>
+            </div>
           )}
           
           {/* Icône de la catégorie - Plus large et stylée */}
@@ -216,6 +281,8 @@ export function CategoryGridItem({
                 <WidgetComponent
                   widget={widget}
                   isEditMode={isEditMode}
+                  sourceType="category"
+                  sourceCategoryId={category.id}
                   onEdit={() => onWidgetEdit(widget)}
                   onDelete={() => onWidgetDelete(widget.id)}
                 />

@@ -138,6 +138,19 @@ export function CustomGridLayout({
     const item = internalLayout.find(l => l.i === itemId);
     if (!item || item.static) return;
 
+    // IMPORTANT : Seulement permettre le drag si on clique sur la poignée de drag
+    const target = e.target as HTMLElement;
+    const isDragHandle = target.closest('.widget-drag-handle') || target.closest('.category-drag-handle');
+    
+    if (!isDragHandle) return; // Ignorer si ce n'est pas la poignée
+
+    // Si Ctrl est pressé, déclencher le cross-grid drag via un attribut data
+    if (e.ctrlKey) {
+      const widgetElement = e.currentTarget as HTMLElement;
+      widgetElement.dataset.crossGridDrag = 'true';
+      return; // Empêcher le drag normal
+    }
+
     e.preventDefault();
     e.stopPropagation();
 
@@ -173,12 +186,34 @@ export function CustomGridLayout({
 
     const newItem = { ...item, x: gridPos.x, y: gridPos.y };
 
-    // Vérifier les collisions si nécessaire
+    // Vérifier les collisions et déplacer les autres widgets dynamiquement
     if (preventCollision) {
       const otherItems = internalLayout.filter(l => l.i !== draggingItem);
       if (checkCollision(newItem, otherItems)) {
-        return;
+        // Trouver la position libre la plus proche
+        let testY = gridPos.y;
+        let found = false;
+        
+        // Essayer de déplacer vers le bas
+        while (testY < 100 && !found) {
+          const testItem = { ...newItem, y: testY };
+          if (!checkCollision(testItem, otherItems)) {
+            newItem.y = testY;
+            found = true;
+            break;
+          }
+          testY++;
+        }
+        
+        if (!found) {
+          return; // Pas de position valide trouvée
+        }
       }
+
+      // Mettre à jour temporairement le layout pour pousser les autres widgets
+      const tempLayout = internalLayout.map(l => l.i === draggingItem ? newItem : l);
+      const compactedLayout = compactLayout(tempLayout);
+      setInternalLayout(compactedLayout);
     }
 
     setPlaceholder(newItem);
