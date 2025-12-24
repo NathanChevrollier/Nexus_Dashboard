@@ -99,6 +99,9 @@ export const widgets = mysqlTable('widgets', {
   y: int('y').notNull(),
   w: int('w').notNull(),
   h: int('h').notNull(),
+  // Position dans la grille de la catégorie (si dans une catégorie)
+  categoryX: int('category_x').default(0),
+  categoryY: int('category_y').default(0),
   options: json('options').$type<WidgetOptions>().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),

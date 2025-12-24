@@ -155,7 +155,16 @@ export async function deleteWidget(widgetId: string) {
 }
 
 export async function updateWidgetPositions(
-  updates: Array<{ id: string; x: number; y: number; w: number; h: number; categoryId?: string | null }>
+  updates: Array<{ 
+    id: string; 
+    x: number; 
+    y: number; 
+    w: number; 
+    h: number; 
+    categoryId?: string | null;
+    categoryX?: number;
+    categoryY?: number;
+  }>
 ) {
   const session = await auth();
   
@@ -194,7 +203,9 @@ export async function updateWidgetPositions(
         y: update.y, 
         w: update.w, 
         h: update.h,
-        categoryId: update.categoryId !== undefined ? update.categoryId : undefined
+        categoryId: update.categoryId !== undefined ? update.categoryId : undefined,
+        categoryX: update.categoryX !== undefined ? update.categoryX : undefined,
+        categoryY: update.categoryY !== undefined ? update.categoryY : undefined,
       })
       .where(eq(widgets.id, update.id));
   }

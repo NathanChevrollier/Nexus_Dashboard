@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import GridLayout from "@/components/ui/grid-layout";
-import type { Layout } from "react-grid-layout";
+import { CustomGridLayout, GridItem } from "@/components/ui/custom-grid-layout";
 import { Dashboard, Widget, Category } from "@/lib/db/schema";
 import { Button } from "@/components/ui/button";
 import { Edit, Save, Plus, Folder, Calendar, BarChart3, Layers } from "lucide-react";
@@ -140,21 +139,20 @@ export function DashboardView({
     const categoryWidgets = widgets.filter((w) => w.categoryId === cat.id);
     const isCollapsed = collapsedCategories.has(cat.id);
     
-    // Hauteur: 1 ligne pour header + (nombre de widgets * taille) si ouvert
-    const headerHeight = 1;
-    const widgetHeight = isCollapsed ? 0 : categoryWidgets.reduce((sum, w) => sum + w.h, 0);
-    const totalHeight = headerHeight + (isCollapsed ? 0 : Math.max(widgetHeight, categoryWidgets.length > 0 ? 2 : 1));
+    // Hauteur fixe basée sur la configuration de la catégorie
+    const totalHeight = isCollapsed ? 1 : (cat.h || 4);
     
     return {
       i: `cat-${cat.id}`,
       x: cat.x,
       y: cat.y,
-      w: Math.min(cat.w || 4, 6), // Max 6 colonnes pour les catégories
+      w: Math.min(cat.w || 4, 6),
       h: totalHeight,
       static: !isEditMode,
       minW: 3,
       maxW: 6,
       minH: 1,
+      maxH: isCollapsed ? 1 : 10, // Max 10 lignes pour une catégorie
     };
   });
 
@@ -171,16 +169,16 @@ export function DashboardView({
     minH: 2,
   }));
 
-  const mainLayout = [...categoryLayout, ...widgetLayout];
+  const mainLayout: GridItem[] = [...categoryLayout, ...widgetLayout];
 
   // Gérer les changements de layout (drag & drop / resize)
-  const handleLayoutChange = (newLayout: any[]) => {
+  const handleLayoutChange = (newLayout: GridItem[]) => {
     if (!isEditMode) return;
 
     const updatedCategories = categories.map((cat) => {
       const layoutItem = newLayout.find((l) => l.i === `cat-${cat.id}`);
       if (layoutItem) {
-        return { ...cat, x: layoutItem.x, y: layoutItem.y, w: layoutItem.w };
+        return { ...cat, x: layoutItem.x, y: layoutItem.y, w: layoutItem.w, h: layoutItem.h };
       }
       return cat;
     });
@@ -210,6 +208,8 @@ export function DashboardView({
         w: w.w,
         h: w.h,
         categoryId: w.categoryId,
+        categoryX: w.categoryX ?? undefined,
+        categoryY: w.categoryY ?? undefined,
       }));
       await updateWidgetPositions(widgetUpdates);
 
@@ -230,6 +230,63 @@ export function DashboardView({
       setSaving(false);
     }
   };
+
+  // Gérer les changements de layout interne des catégories
+  const handleCategoryWidgetLayoutChange = useCallback((categoryId: string, layouts: Array<{id: string, x: number, y: number, w: number, h: number}>) => {
+    setWidgets((prevWidgets) =>
+      prevWidgets.map((widget) => {
+        const layout = layouts.find((l) => l.id === widget.id);
+        if (layout && widget.categoryId === categoryId) {
+          return {
+            ...widget,
+            categoryX: layout.x,
+            categoryY: layout.y,
+            w: layout.w,
+            h: layout.h,
+          };
+        }
+        return widget;
+      })
+    );
+  }, []);
+
+  // Gérer le drop d'un widget DANS une catégorie
+  const handleWidgetDropIn = useCallback((widgetId: string, categoryId: string) => {
+    setWidgets((prevWidgets) =>
+      prevWidgets.map((widget) => {
+        if (widget.id === widgetId) {
+          return {
+            ...widget,
+            categoryId: categoryId,
+            categoryX: 0,
+            categoryY: 0,
+          };
+        }
+        return widget;
+      })
+    );
+  }, []);
+
+  // Gérer le drop d'un widget HORS d'une catégorie
+  const handleWidgetDropOut = useCallback((widgetId: string) => {
+    setWidgets((prevWidgets) =>
+      prevWidgets.map((widget) => {
+        if (widget.id === widgetId) {
+          // Trouver une position libre sur la grille principale
+          const pos = findFreePosition(0, 0, widget.w, widget.h);
+          return {
+            ...widget,
+            categoryId: null,
+            categoryX: null,
+            categoryY: null,
+            x: pos.x,
+            y: pos.y,
+          };
+        }
+        return widget;
+      })
+    );
+  }, [findFreePosition]);
 
   const handleDeleteWidget = async (widgetId: string) => {
     if (confirm("Voulez-vous vraiment supprimer ce widget ?")) {
@@ -417,23 +474,45 @@ export function DashboardView({
         </div>
       )}
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-6 max-w-full">
         {/* Message d'aide en mode édition */}
         {isEditMode && mainLayout.length > 0 && (
-          <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-lg backdrop-blur-sm">
+          <div className="mb-4 p-4 bg-gradient-to-br from-primary/8 via-primary/5 to-primary/8 border border-primary/20 rounded-xl backdrop-blur-sm shadow-lg">
             <div className="flex items-start gap-3">
               <div className="flex-shrink-0 mt-0.5">
-                <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center">
-                  <span className="text-xs">💡</span>
+                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary/30 to-primary/50 flex items-center justify-center shadow-lg">
+                  <span className="text-base">💡</span>
                 </div>
               </div>
-              <div className="flex-1 text-sm space-y-1">
-                <p className="font-medium text-foreground">Comment organiser ton dashboard:</p>
-                <ul className="text-muted-foreground space-y-0.5 text-xs">
-                  <li>• <strong>Déplacer/Redimensionner:</strong> Glisse les catégories (dossiers) sur la grille</li>
-                  <li>• <strong>Assigner à une catégorie:</strong> Clique sur ✏️ d'un widget → Choisis une catégorie → Il apparaît DANS le dossier</li>
-                  <li>• <strong>Fermer/Ouvrir:</strong> Clique sur le chevron d'une catégorie pour masquer/afficher son contenu (la grille se réorganise)</li>
-                </ul>
+              <div className="flex-1 text-sm space-y-2">
+                <p className="font-bold text-foreground text-base">🎯 Guide d'organisation du dashboard</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                  <div className="space-y-1.5 bg-background/40 p-3 rounded-lg border border-border/50">
+                    <p className="font-semibold text-foreground flex items-center gap-2">
+                      <span className="text-primary">📦</span> Catégories
+                    </p>
+                    <ul className="text-muted-foreground space-y-1 text-xs">
+                      <li>• <strong>Déplacer:</strong> Utilise la poignée ⋮⋮ dans le header</li>
+                      <li>• <strong>Redimensionner:</strong> Tire les coins de la catégorie</li>
+                      <li>• <strong>Replier/Déplier:</strong> Clique sur le chevron (˅/˄)</li>
+                    </ul>
+                  </div>
+                  <div className="space-y-1.5 bg-background/40 p-3 rounded-lg border border-border/50">
+                    <p className="font-semibold text-foreground flex items-center gap-2">
+                      <span className="text-primary">🎨</span> Widgets
+                    </p>
+                    <ul className="text-muted-foreground space-y-1 text-xs">
+                      <li>• <strong>Dans catégorie:</strong> Glisse-les sur leur grille interne !</li>
+                      <li>• <strong>Changer de catégorie:</strong> ✏️ → Sélectionne une catégorie</li>
+                      <li>• <strong>Sans catégorie:</strong> Librement déplaçables sur la grille</li>
+                    </ul>
+                  </div>
+                </div>
+                <div className="mt-3 p-2 bg-primary/5 border border-primary/20 rounded-lg">
+                  <p className="text-xs text-muted-foreground">
+                    <strong className="text-primary">💡 Astuce Pro:</strong> Les widgets <strong>à l'intérieur</strong> des catégories ont leur propre grille indépendante. Utilise la poignée ⋮⋮ du widget pour le déplacer, pas celle de la catégorie !
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -452,28 +531,28 @@ export function DashboardView({
             </div>
           </div>
         ) : (
-          <GridLayout
-            className="layout"
-            layout={mainLayout as Layout}
+          <CustomGridLayout
+            className="layout main-dashboard-grid"
+            layout={mainLayout}
             cols={12}
             rowHeight={80}
             width={containerWidth}
             isDraggable={isEditMode}
             isResizable={isEditMode}
             compactType={null}
-            preventCollision={false}
+            preventCollision={true}
             onLayoutChange={handleLayoutChange}
-            draggableHandle=".widget-drag-handle"
-            draggableCancel=".widget-no-drag, input, textarea, button, select, a, [role='button']"
             margin={[16, 16]}
             containerPadding={[0, 0]}
-            {...({} as any)}
           >
             {categories.map((category) => {
               const categoryWidgets = widgets.filter((w) => w.categoryId === category.id);
               
               return (
-                <div key={`cat-${category.id}`} className="overflow-hidden">
+                <div 
+                  key={`cat-${category.id}`} 
+                  className="overflow-hidden category-grid-wrapper h-full w-full"
+                >
                   <CategoryGridItem
                     category={category}
                     widgets={categoryWidgets}
@@ -483,6 +562,7 @@ export function DashboardView({
                     onCategoryDelete={handleDeleteCategory}
                     onWidgetEdit={handleEditWidget}
                     onWidgetDelete={handleDeleteWidget}
+                    onWidgetLayoutChange={handleCategoryWidgetLayoutChange}
                   />
                 </div>
               );
@@ -493,7 +573,7 @@ export function DashboardView({
               return (
                 <div
                   key={`widget-${widget.id}`}
-                  className="bg-card border-2 rounded-lg shadow-sm relative overflow-hidden"
+                  className="bg-card border-2 rounded-lg shadow-sm relative overflow-hidden h-full w-full"
                   style={{
                     borderColor: 'hsl(var(--border))',
                   }}
@@ -507,7 +587,7 @@ export function DashboardView({
                 </div>
               );
             })}
-          </GridLayout>
+          </CustomGridLayout>
         )}
       </div>
 

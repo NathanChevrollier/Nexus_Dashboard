@@ -5,6 +5,16 @@
 @import './grid-layout.css';
 
 @layer base {
+  html,
+  body {
+    height: 100%;
+    overflow-x: hidden;
+  }
+  
+  body {
+    margin: 0;
+    padding: 0;
+  }
   :root {
     /* Backgrounds */
     --background: 0 0% 100%;
@@ -440,5 +450,193 @@
   .cyber input:not(.cyber.matrix input):not(.cyber.synthwave input):not(.cyber.arctic input)::placeholder,
   .cyber textarea:not(.cyber.matrix textarea):not(.cyber.synthwave textarea):not(.cyber.arctic textarea)::placeholder {
     color: rgba(255, 255, 255, 0.52) !important;
+  }
+
+  /* ====================================
+     CATÉGORIES - Améliorations visuelles
+     ==================================== */
+  
+  /* Animation smooth lors du collapse/expand */
+  .category-content {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Effet hover sur zone de drag de catégorie - ISOLÉ */
+  .category-drag-handle {
+    transition: all 0.2s ease;
+    z-index: 10;
+  }
+  
+  .category-drag-handle:hover {
+    transform: scale(1.05);
+  }
+  
+  .category-drag-handle:active {
+    transform: scale(0.95);
+  }
+
+  /* IMPORTANT: Empêcher la propagation du drag de la catégorie aux widgets */
+  .category-grid .react-grid-item {
+    pointer-events: auto;
+  }
+
+  .category-grid .widget-drag-handle {
+    z-index: 20; /* Plus élevé que category-drag-handle */
+    position: relative;
+  }
+
+  /* Isoler complètement les zones de drag */
+  .react-grid-item.react-dragging .widget-drag-handle {
+    cursor: grabbing !important;
+  }
+
+  /* Empêcher le parent de capturer les events du child */
+  .category-grid .react-grid-item:hover {
+    z-index: 10;
+  }
+
+  /* CRITIQUE: Zone interne de catégorie ne doit JAMAIS être draggable par le parent */
+  .category-inner-zone {
+    pointer-events: auto !important;
+    touch-action: auto !important;
+  }
+
+  /* Les widgets dans une catégorie ne doivent pas trigger le drag de la catégorie */
+  .category-widget-item {
+    pointer-events: auto !important;
+  }
+
+  /* La poignée de catégorie doit être la SEULE chose qui drag la catégorie */
+  .category-drag-handle {
+    pointer-events: auto !important;
+    touch-action: none !important;
+    z-index: 15;
+  }
+
+  /* Empêcher absolument le drag sur tout sauf les handles */
+  .react-grid-item > div:not(.category-drag-handle) {
+    user-select: none;
+  }
+
+  /* Le conteneur de catégorie ne doit PAS être draggable sauf via sa poignée */
+  .category-container {
+    pointer-events: none;
+  }
+
+  /* Réactiver les pointer-events pour les éléments internes */
+  .category-container > * {
+    pointer-events: auto;
+  }
+
+  /* Header de catégorie: seulement la poignée est draggable */
+  .category-container .category-drag-handle {
+    pointer-events: auto !important;
+    cursor: grab;
+  }
+
+  .category-container .category-drag-handle:active {
+    cursor: grabbing;
+  }
+
+  /* CRITIQUE: La zone interne de la catégorie NE DOIT PAS être capturée par le parent */
+  .category-inner-zone,
+  .category-content {
+    pointer-events: auto !important;
+    touch-action: auto !important;
+  }
+
+  /* Les widgets dans une catégorie sont complètement isolés du parent */
+  .category-grid .react-grid-item {
+    pointer-events: auto !important;
+  }
+
+  .category-grid .widget-drag-handle {
+    cursor: grab !important;
+    z-index: 20;
+    pointer-events: auto !important;
+  }
+
+  .category-grid .widget-drag-handle:active {
+    cursor: grabbing !important;
+  }
+
+  /* Empêcher la grille principale de capturer les events dans les catégories */
+  .main-dashboard-grid > .react-grid-item > .category-grid-wrapper {
+    isolation: isolate;
+  }
+
+  .main-dashboard-grid > .react-grid-item > .category-grid-wrapper * {
+    pointer-events: auto;
+  }
+  
+  /* Zone de drop pour widgets */
+  .widget-drop-zone {
+    position: relative;
+  }
+  
+  /* Amélioration visuelle en mode édition */
+  .react-grid-item.react-grid-placeholder {
+    background: hsl(var(--primary) / 0.15) !important;
+    border: 2px dashed hsl(var(--primary) / 0.5) !important;
+    border-radius: 0.75rem;
+    transition: all 0.2s ease;
+  }
+  
+  /* Animation lors du drag */
+  .react-grid-item.react-dragging {
+    opacity: 0.8;
+    z-index: 100;
+    transition: none;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  }
+  
+  /* Scroll smooth dans les catégories */
+  .widget-drop-zone {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.2) transparent;
+  }
+  
+  .widget-drop-zone::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .widget-drop-zone::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .widget-drop-zone::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.2);
+    border-radius: 3px;
+  }
+  
+  .widget-drop-zone::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.3);
+  }
+
+  /* Grille imbriquée dans les catégories */
+  .category-grid {
+    min-height: 120px;
+  }
+
+  .category-grid .react-grid-item {
+    transition: all 0.2s ease;
+  }
+
+  .category-grid .react-grid-item.react-grid-placeholder {
+    background: hsl(var(--primary) / 0.1) !important;
+    border: 2px dashed hsl(var(--primary) / 0.4) !important;
+    border-radius: 0.5rem;
+  }
+
+  /* Animation plus fluide pour les grilles imbriquées */
+  .category-content {
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Effet grille décoratif */
+  .bg-grid-white {
+    background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 20px 20px;
   }
 }
