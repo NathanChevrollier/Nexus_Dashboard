@@ -114,6 +114,11 @@ export const categories = mysqlTable('categories', {
   name: varchar('name', { length: 255 }).notNull(),
   icon: varchar('icon', { length: 50 }),
   color: varchar('color', { length: 50 }),
+  // Position et dimensions sur la grille (comme les widgets)
+  x: int('x').default(0).notNull(),
+  y: int('y').default(0).notNull(),
+  w: int('w').default(4).notNull(), // Largeur par défaut: 4 colonnes
+  h: int('h').default(4).notNull(), // Hauteur par défaut: 4 rangées
   order: int('order').default(0).notNull(),
   isCollapsed: boolean('is_collapsed').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),

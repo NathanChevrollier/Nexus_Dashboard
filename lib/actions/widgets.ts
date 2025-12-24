@@ -155,7 +155,7 @@ export async function deleteWidget(widgetId: string) {
 }
 
 export async function updateWidgetPositions(
-  updates: Array<{ id: string; x: number; y: number; w: number; h: number }>
+  updates: Array<{ id: string; x: number; y: number; w: number; h: number; categoryId?: string | null }>
 ) {
   const session = await auth();
   
@@ -189,7 +189,13 @@ export async function updateWidgetPositions(
   for (const update of updates) {
     await db
       .update(widgets)
-      .set({ x: update.x, y: update.y, w: update.w, h: update.h })
+      .set({ 
+        x: update.x, 
+        y: update.y, 
+        w: update.w, 
+        h: update.h,
+        categoryId: update.categoryId !== undefined ? update.categoryId : undefined
+      })
       .where(eq(widgets.id, update.id));
   }
 

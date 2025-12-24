@@ -15,22 +15,28 @@ interface EditWidgetDialogProps {
   categories: Category[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onWidgetUpdated?: () => void;
+  onWidgetUpdated?: (widgetId: string, newCategoryId: string | null, oldCategoryId: string | null) => void;
 }
 
 export function EditWidgetDialog({ widget, categories, open, onOpenChange, onWidgetUpdated }: EditWidgetDialogProps) {
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [initialCategoryId, setInitialCategoryId] = useState<string | null>(null);
   const [options, setOptions] = useState<any>({});
 
   useEffect(() => {
     if (widget) {
       setTitle(widget.options?.title || "");
       setCategoryId(widget.categoryId || null);
+      setInitialCategoryId(widget.categoryId || null);
       setOptions(widget.options || {});
     }
   }, [widget]);
+
+  const getWidgetCount = (catId: string) => {
+    return categories.find(c => c.id === catId)?.widgets?.length || 0;
+  };
 
   const handleSubmit = async () => {
     if (!widget) return;
@@ -39,9 +45,9 @@ export function EditWidgetDialog({ widget, categories, open, onOpenChange, onWid
     try {
       await updateWidget(widget.id, {
         options: { ...options, title },
-        ...(categoryId ? { categoryId } : {}),
+        categoryId: categoryId,
       });
-      onWidgetUpdated?.();
+      onWidgetUpdated?.(widget.id, categoryId, initialCategoryId);
       onOpenChange(false);
     } catch (error) {
       console.error("Erreur lors de la mise à jour:", error);
@@ -77,23 +83,42 @@ export function EditWidgetDialog({ widget, categories, open, onOpenChange, onWid
 
           {/* Category */}
           <div className="space-y-2">
-            <Label htmlFor="category">Catégorie</Label>
+            <Label htmlFor="category" className="flex items-center gap-2">
+              Catégorie
+              <span className="text-xs text-muted-foreground font-normal">
+                (le widget se repositionnera automatiquement)
+              </span>
+            </Label>
             <Select value={categoryId || "none"} onValueChange={(v) => setCategoryId(v === "none" ? null : v)}>
               <SelectTrigger id="category">
                 <SelectValue placeholder="Aucune catégorie" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Aucune catégorie</SelectItem>
+                <SelectItem value="none">
+                  <span className="flex items-center gap-2">
+                    <span>🚫</span>
+                    <span>Aucune catégorie</span>
+                  </span>
+                </SelectItem>
                 {categories.map((cat) => (
                   <SelectItem key={cat.id} value={cat.id}>
                     <span className="flex items-center gap-2">
-                      <span>{cat.icon}</span>
+                      <span>{cat.icon || '📁'}</span>
                       <span>{cat.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        ({getWidgetCount(cat.id)} widgets)
+                      </span>
                     </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {categoryId && categoryId !== initialCategoryId && (
+              <p className="text-xs text-primary flex items-center gap-1">
+                <span>✨</span>
+                <span>Le widget sera repositionné près de cette catégorie</span>
+              </p>
+            )}
           </div>
 
           {/* Widget-specific options */}

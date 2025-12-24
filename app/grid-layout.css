@@ -35,6 +35,31 @@
   display: none;
 }
 
+/* Cacher les poign\u00e9es et bordures pour les items static */
+.react-grid-item.static > .react-resizable-handle {
+  display: none !important;
+}
+
+.react-grid-item.static {
+  cursor: default !important;
+}
+
+.react-grid-item.react-draggable-dragging {
+  transition: none;
+  z-index: 100;
+  opacity: 0.8;
+}
+
+/* Placeholder uniquement visible en mode \u00e9dition */
+.react-grid-item.react-grid-placeholder {
+  background: hsl(var(--primary) / 0.15);
+  opacity: 0.3;
+  transition-duration: 100ms;
+  z-index: 2;
+  border-radius: 12px;
+  border: 2px dashed hsl(var(--primary));
+}
+
 .react-grid-item > .react-resizable-handle.react-resizable-handle-sw {
   bottom: 0;
   left: 0;
@@ -96,31 +121,30 @@
   transform: rotate(45deg);
 }
 
+/* Ne montrer le placeholder qu'en mode édition (quand l'item n'est pas static) */
 .react-grid-item.react-grid-placeholder {
-  background: hsl(var(--primary) / 0.2);
-  opacity: 0.2;
+  background: hsl(var(--primary) / 0.15);
+  opacity: 0.3;
   transition-duration: 100ms;
   z-index: 2;
+  border-radius: 12px;
+  border: 2px dashed hsl(var(--primary));
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
-  -o-user-select: none;
   user-select: none;
-  border-radius: 0.5rem;
+}
+
+/* Cacher complètement le placeholder pour les items static */
+.react-grid-item.static.react-grid-placeholder {
+  display: none !important;
+  opacity: 0 !important;
+  border: none !important;
 }
 
 .react-grid-item.react-dragging {
   transition: none;
-  z-index: 3;
+  z-index: 100;
   will-change: transform;
   opacity: 0.8;
-}
-
-.react-grid-item.react-grid-placeholder {
-  background: hsl(var(--primary) / 0.3);
-  border: 2px dashed hsl(var(--primary));
-  opacity: 0.5;
-  transition-duration: 100ms;
-  z-index: 2;
-  border-radius: 0.5rem;
 }
