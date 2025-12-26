@@ -34,6 +34,7 @@ services:
       start_period: 30s
 
   app:
+    command: ["sh", "-c", "export DATABASE_PASSWORD=$(cat /run/secrets/db_password) && export NEXTAUTH_SECRET=$(cat /run/secrets/nextauth_secret) && node server.js"]
     build:
       context: .
       dockerfile: Dockerfile
