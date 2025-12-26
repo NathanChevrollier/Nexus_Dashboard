@@ -40,6 +40,8 @@ services:
       target: runner
     container_name: nexus-app-prod
     restart: always
+    ports:
+      - "3000:3000"
     secrets:
       - db_password
       - nextauth_secret
@@ -79,8 +81,8 @@ services:
     container_name: nexus-nginx
     restart: always
     ports:
-      - "80:80"
-      - "17:17"
+      - "2022:2022"
+      - "1717:1717"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
