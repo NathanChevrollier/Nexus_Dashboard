@@ -104,8 +104,8 @@ export function TorrentOverviewWidget({ widget }: TorrentOverviewWidgetProps) {
     return `${m} min`;
   };
 
-  const renderStateIcon = (state: string) => {
-    const s = state.toLowerCase();
+  const renderStateIcon = (state: unknown) => {
+    const s = typeof state === 'string' ? state.toLowerCase() : String(state || '').toLowerCase();
     if (s.includes('down') || s.includes('stalled')) {
       return <ArrowDownToLine className="h-3 w-3 text-emerald-500" />;
     }

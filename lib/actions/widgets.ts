@@ -40,13 +40,26 @@ export async function createWidget(
   const widgetId = generateId();
   const now = new Date();
 
+  // Si la position fournie est 0,0 ou non définie, calculer une position dynamique
+  let x = widgetData.x ?? 0;
+  let y = widgetData.y ?? 0;
+
+  if ((x === 0 && y === 0) || (widgetData.x === undefined && widgetData.y === undefined)) {
+    // Récupérer le bas maximal des widgets existants sur ce dashboard
+    const existing = await db.select({ y: widgets.y, h: widgets.h }).from(widgets).where(eq(widgets.dashboardId, dashboardId));
+    const bottoms = existing.map((w: any) => (Number(w.y || 0) + Number(w.h || 0)));
+    const maxBottom = bottoms.length ? Math.max(...bottoms) : 0;
+    y = maxBottom;
+    x = 0;
+  }
+
   await db.insert(widgets).values({
     id: widgetId,
     dashboardId,
     categoryId: widgetData.categoryId || null,
     type: widgetData.type,
-    x: widgetData.x,
-    y: widgetData.y,
+    x,
+    y,
     w: widgetData.w,
     h: widgetData.h,
     options: widgetData.options,

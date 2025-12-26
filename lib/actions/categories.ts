@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { categories, dashboards } from "@/lib/db/schema";
+import { categories, dashboards, widgets } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { generateId } from "@/lib/utils";
@@ -38,14 +38,30 @@ export async function createCategory(data: {
   const categoryId = generateId();
   const now = new Date();
 
+  // Si position non fournie, placer la catégorie sous les éléments existants
+  let x = data.x ?? 0;
+  let y = data.y ?? 0;
+
+  if ((x === 0 && y === 0) || (data.x === undefined && data.y === undefined)) {
+    const existingWidgets = await db.select({ y: widgets.y, h: widgets.h }).from(widgets).where(eq(widgets.dashboardId, data.dashboardId));
+    const existingCategories = await db.select({ y: categories.y, h: categories.h }).from(categories).where(eq(categories.dashboardId, data.dashboardId));
+    const bottoms = [
+      ...existingWidgets.map((w: any) => Number(w.y || 0) + Number(w.h || 0)),
+      ...existingCategories.map((c: any) => Number(c.y || 0) + Number(c.h || 0)),
+    ];
+    const maxBottom = bottoms.length ? Math.max(...bottoms) : 0;
+    y = maxBottom;
+    x = 0;
+  }
+
   await db.insert(categories).values({
     id: categoryId,
     dashboardId: data.dashboardId,
     name: data.name,
     icon: data.icon || "📁",
     color: data.color || "#3b82f6",
-    x: data.x || 0,
-    y: data.y || 0,
+    x,
+    y,
     w: data.w || 4,
     h: data.h || 4,
     order: 0,

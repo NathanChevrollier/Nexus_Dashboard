@@ -18,11 +18,13 @@ export function NotesWidget({ widget }: NotesWidgetProps) {
   const [content, setContent] = useState(options.content || "");
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [textColor, setTextColor] = useState<string>((options as any).textColor || "#000000");
   const [view, setView] = useState<"edit" | "preview">("edit");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setContent(options.content || "");
+    setTextColor((options as any).textColor || "#000000");
   }, [options.content]);
 
   const handleSave = async () => {
@@ -32,6 +34,7 @@ export function NotesWidget({ widget }: NotesWidgetProps) {
         options: {
           ...(widget.options || {}),
           content,
+          textColor,
         },
       });
       setIsEditing(false);
@@ -127,6 +130,17 @@ Tableau :
 |-------|-------|
 | A     | B     |"
             />
+            <div className="mt-2 flex items-center gap-2">
+              <div className="text-xs text-muted-foreground">Couleur du texte :</div>
+              {["#000000","#ffffff","#ef4444","#f59e0b","#10b981","#3b82f6","#8b5cf6"].map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setTextColor(c)}
+                  className={`w-6 h-6 rounded-full border ${textColor === c ? 'ring-2 ring-offset-1 ring-primary' : ''}`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
             <div className="mt-2 text-xs text-muted-foreground">
               💡 Supporte Markdown : **gras**, _italique_, listes, liens, code, etc.
             </div>
@@ -135,9 +149,11 @@ Tableau :
           <TabsContent value="preview" className="flex-1 mt-0 overflow-auto">
             <div className="prose prose-sm dark:prose-invert max-w-none p-3 border rounded-md bg-accent/20">
               {content ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {content}
-                </ReactMarkdown>
+                <div style={{ color: textColor }}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {content}
+                  </ReactMarkdown>
+                </div>
               ) : (
                 <p className="text-muted-foreground italic">Aucun contenu à prévisualiser</p>
               )}
@@ -147,7 +163,7 @@ Tableau :
       ) : (
         <div className="flex-1 overflow-auto">
           {content ? (
-            <div className="prose prose-sm dark:prose-invert max-w-none">
+            <div className="prose prose-sm dark:prose-invert max-w-none" style={{ color: textColor }}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {content}
               </ReactMarkdown>

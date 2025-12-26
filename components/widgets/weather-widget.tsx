@@ -36,38 +36,91 @@ export function WeatherWidget({ widget }: WeatherWidgetProps) {
   const city = options.city || "Paris";
 
   useEffect(() => {
-    // Simuler des données météo (dans la vraie app, utiliser une API comme OpenWeatherMap)
     const fetchWeather = async () => {
       setLoading(true);
       try {
-        // Simulation de données actuelles
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const conditions = ["Ensoleillé", "Nuageux", "Pluvieux", "Venteux", "Neigeux"];
-        const currentCondition = conditions[Math.floor(Math.random() * conditions.length)];
-        const currentTemp = Math.round(Math.random() * 20 + 10);
-        
-        setWeather({
-          temp: currentTemp,
-          condition: currentCondition,
-          humidity: Math.round(Math.random() * 40 + 40),
-          windSpeed: Math.round(Math.random() * 20 + 5),
-          city,
-          feelsLike: currentTemp + Math.round(Math.random() * 4 - 2),
-        });
+        const apiKey = (options as any).apiKey || process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
 
-        // Simulation forecast 5 jours
-        const days = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
-        const forecastData = days.map((day, index) => {
-          const temp = Math.round(Math.random() * 15 + 10 + index);
-          return {
-            date: day,
-            temp,
-            condition: conditions[Math.floor(Math.random() * conditions.length)],
-            tempMin: temp - Math.round(Math.random() * 5),
-            tempMax: temp + Math.round(Math.random() * 5),
+        if (apiKey) {
+          // Récupérer les données actuelles
+          const currentRes = await fetch(
+            `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&units=metric&lang=fr&appid=${apiKey}`
+          );
+
+          if (!currentRes.ok) throw new Error("OpenWeather current failed");
+          const currentJson = await currentRes.json();
+
+          const w: WeatherData = {
+            temp: Math.round(currentJson.main.temp),
+            condition: currentJson.weather?.[0]?.description || "",
+            humidity: Math.round(currentJson.main.humidity),
+            windSpeed: Math.round(currentJson.wind?.speed || 0),
+            city: currentJson.name || city,
+            feelsLike: Math.round(currentJson.main.feels_like),
           };
-        });
-        setForecast(forecastData);
+
+          setWeather(w);
+
+          // Forecast (5 jours) via 3h forecast -> regrouper par jour
+          const forecastRes = await fetch(
+            `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&units=metric&lang=fr&appid=${apiKey}`
+          );
+
+          if (!forecastRes.ok) throw new Error("OpenWeather forecast failed");
+          const forecastJson = await forecastRes.json();
+
+          const dailyMap: Record<string, { tempMin: number; tempMax: number; condition: string }> = {};
+
+          (forecastJson.list || []).forEach((entry: any) => {
+            const date = new Date(entry.dt * 1000);
+            const day = date.toLocaleDateString('fr-FR', { weekday: 'short' });
+            const t = Math.round(entry.main.temp);
+            if (!dailyMap[day]) {
+              dailyMap[day] = { tempMin: t, tempMax: t, condition: entry.weather?.[0]?.description || '' };
+            } else {
+              dailyMap[day].tempMin = Math.min(dailyMap[day].tempMin, t);
+              dailyMap[day].tempMax = Math.max(dailyMap[day].tempMax, t);
+            }
+          });
+
+          const forecastData: ForecastDay[] = Object.keys(dailyMap)
+            .slice(0, 5)
+            .map((d) => ({
+              date: d,
+              temp: Math.round((dailyMap[d].tempMin + dailyMap[d].tempMax) / 2),
+              condition: dailyMap[d].condition,
+              tempMin: dailyMap[d].tempMin,
+              tempMax: dailyMap[d].tempMax,
+            }));
+
+          setForecast(forecastData);
+        } else {
+          // Fallback: conserver simulation si pas de clé API
+          await new Promise((r) => setTimeout(r, 300));
+          const conditions = ["Ensoleillé", "Nuageux", "Pluvieux", "Venteux", "Neigeux"];
+          const currentCondition = conditions[Math.floor(Math.random() * conditions.length)];
+          const currentTemp = Math.round(Math.random() * 20 + 10);
+          setWeather({
+            temp: currentTemp,
+            condition: currentCondition,
+            humidity: Math.round(Math.random() * 40 + 40),
+            windSpeed: Math.round(Math.random() * 20 + 5),
+            city,
+            feelsLike: currentTemp + Math.round(Math.random() * 4 - 2),
+          });
+          const days = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
+          const forecastData = days.map((day, index) => {
+            const temp = Math.round(Math.random() * 15 + 10 + index);
+            return {
+              date: day,
+              temp,
+              condition: conditions[Math.floor(Math.random() * conditions.length)],
+              tempMin: temp - Math.round(Math.random() * 5),
+              tempMax: temp + Math.round(Math.random() * 5),
+            };
+          });
+          setForecast(forecastData);
+        }
       } catch (error) {
         console.error("Erreur météo:", error);
       } finally {
@@ -78,7 +131,7 @@ export function WeatherWidget({ widget }: WeatherWidgetProps) {
     fetchWeather();
     const interval = setInterval(fetchWeather, 300000); // Refresh toutes les 5 min
     return () => clearInterval(interval);
-  }, [city]);
+  }, [city, options]);
 
   const getWeatherIcon = (condition: string, size: "sm" | "lg" = "lg") => {
     const className = size === "lg" ? "h-12 w-12" : "h-6 w-6";

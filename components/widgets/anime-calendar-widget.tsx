@@ -47,6 +47,11 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
     loadData();
   }, []);
 
+  // Recharger quand on change de jour ou onglet (rafraîchissement automatique demandé)
+  useEffect(() => {
+    loadData();
+  }, [selectedDay, activeTab]);
+
   async function loadData() {
     setLoading(true);
     setError(null);
@@ -162,7 +167,7 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
           )}
 
           {/* Anime List */}
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             <div className="space-y-3">
               {sortedAnime.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
