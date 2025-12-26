@@ -821,6 +821,7 @@ function DashboardViewInner({
       <EditWidgetDialog
         widget={editingWidget}
         categories={categories}
+        widgets={widgets}
         open={showEditDialog}
         onOpenChange={setShowEditDialog}
         onWidgetUpdated={handleWidgetUpdated}

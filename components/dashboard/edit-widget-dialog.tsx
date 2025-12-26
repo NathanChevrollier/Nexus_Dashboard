@@ -13,12 +13,13 @@ import { Loader2 } from "lucide-react";
 interface EditWidgetDialogProps {
   widget: Widget | null;
   categories: Category[];
+  widgets: Widget[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onWidgetUpdated?: (widgetId: string, newCategoryId: string | null, oldCategoryId: string | null) => void;
 }
 
-export function EditWidgetDialog({ widget, categories, open, onOpenChange, onWidgetUpdated }: EditWidgetDialogProps) {
+export function EditWidgetDialog({ widget, categories, widgets, open, onOpenChange, onWidgetUpdated }: EditWidgetDialogProps) {
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -35,8 +36,9 @@ export function EditWidgetDialog({ widget, categories, open, onOpenChange, onWid
   }, [widget]);
 
   const getWidgetCount = (catId: string) => {
-    return categories.find(c => c.id === catId)?.widgets?.length || 0;
+    return widgets.filter((w) => w.categoryId === catId).length;
   };
+
 
   const handleSubmit = async () => {
     if (!widget) return;
