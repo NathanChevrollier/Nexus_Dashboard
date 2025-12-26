@@ -12,14 +12,14 @@ export const metadata: Metadata = {
   description: "Dashboard auto-hébergé moderne avec personnalisation avancée",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   // Lire le nonce CSP depuis le cookie injecté par le middleware
-  const cookieStore = cookies();
-  const nonce = cookieStore.get('csp-nonce')?.value ?? '';
+  const cookieStore = await cookies();
+  const nonce = cookieStore.get?.('csp-nonce')?.value ?? '';
   return (
     <html lang="fr" suppressHydrationWarning>
       <head>
