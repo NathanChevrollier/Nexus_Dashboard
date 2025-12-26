@@ -401,7 +401,9 @@ export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidge
       if (newWidget && onWidgetAdded) {
         onWidgetAdded({
           ...newWidget,
-          categoryId: null,
+          categoryId: newWidget.categoryId ?? null,
+          categoryX: (newWidget as any).categoryX ?? 0,
+          categoryY: (newWidget as any).categoryY ?? 0,
         });
       }
 
