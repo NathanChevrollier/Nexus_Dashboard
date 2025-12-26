@@ -354,10 +354,10 @@ export function IntegrationsSettings() {
                           <div className="flex items-center gap-2 mb-1">
                             <h4 className="font-semibold text-sm truncate">{integration.name}</h4>
                             {testSt?.ok === true && (
-                              <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0" title="Connexion OK" />
+                              <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0" aria-label="Connexion OK" role="img" />
                             )}
                             {testSt?.ok === false && (
-                              <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" title={testSt.msg} />
+                              <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" aria-label={testSt.msg} role="img" />
                             )}
                             {testSt?.loading && (
                               <Clock className="h-4 w-4 text-amber-500 flex-shrink-0 animate-spin" />

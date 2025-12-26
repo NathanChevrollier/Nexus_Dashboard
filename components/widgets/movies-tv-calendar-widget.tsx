@@ -74,7 +74,7 @@ export function MoviesAndTVCalendarWidget({ options }: MoviesAndTVCalendarWidget
         body: JSON.stringify({
           integrationId: radarrIntegration.id,
           tmdbId: movie.id,
-          title: movie.title || movie.name,
+          title: movie.title || (movie as any).name,
         }),
       });
 
@@ -83,7 +83,7 @@ export function MoviesAndTVCalendarWidget({ options }: MoviesAndTVCalendarWidget
       if (!res.ok) {
         alert(`Error: ${json.error || 'Failed to add to Radarr'}`);
       } else {
-        alert(`${movie.title || movie.name} added to Radarr!`);
+        alert(`${movie.title || (movie as any).name} added to Radarr!`);
       }
     } catch (error) {
       console.error('Error adding to Radarr:', error);
@@ -200,6 +200,9 @@ export function MoviesAndTVCalendarWidget({ options }: MoviesAndTVCalendarWidget
               upcomingMovies={upcomingMovies}
               trendingMovies={trendingMovies}
               showTrending={options?.showTrending !== false}
+              radarrIntegration={radarrIntegration}
+              addingToRadarr={addingToRadarr}
+              onAddToRadarr={handleAddToRadarr}
             />
           </TabsContent>
 
@@ -209,6 +212,9 @@ export function MoviesAndTVCalendarWidget({ options }: MoviesAndTVCalendarWidget
               tvOnTheAir={tvOnTheAir}
               trendingTV={trendingTV}
               showTrending={options?.showTrending !== false}
+              sonarrIntegration={sonarrIntegration}
+              addingToSonarr={addingToSonarr}
+              onAddToSonarr={handleAddToSonarr}
             />
           </TabsContent>
         </Tabs>
@@ -217,6 +223,9 @@ export function MoviesAndTVCalendarWidget({ options }: MoviesAndTVCalendarWidget
           upcomingMovies={upcomingMovies}
           trendingMovies={trendingMovies}
           showTrending={options?.showTrending !== false}
+          radarrIntegration={radarrIntegration}
+          addingToRadarr={addingToRadarr}
+          onAddToRadarr={handleAddToRadarr}
         />
       ) : (
         <TVSection
@@ -224,6 +233,9 @@ export function MoviesAndTVCalendarWidget({ options }: MoviesAndTVCalendarWidget
           tvOnTheAir={tvOnTheAir}
           trendingTV={trendingTV}
           showTrending={options?.showTrending !== false}
+          sonarrIntegration={sonarrIntegration}
+          addingToSonarr={addingToSonarr}
+          onAddToSonarr={handleAddToSonarr}
         />
       )}
     </div>
@@ -237,10 +249,16 @@ function MoviesSection({
   upcomingMovies,
   trendingMovies,
   showTrending,
+  radarrIntegration,
+  addingToRadarr,
+  onAddToRadarr,
 }: {
   upcomingMovies: TMDbMovie[];
   trendingMovies: TMDbMovie[];
   showTrending: boolean;
+  radarrIntegration?: any;
+  addingToRadarr?: Record<string, boolean>;
+  onAddToRadarr?: (movie: TMDbMovie) => void;
 }) {
   return (
     <ScrollArea className="h-[400px]">
@@ -257,8 +275,8 @@ function MoviesSection({
                 key={`upcoming-${movie.id}-${index}`} 
                 movie={movie}
                 radarrIntegration={radarrIntegration}
-                isAdding={addingToRadarr[movie.id]}
-                onAddToRadarr={handleAddToRadarr}
+                isAdding={addingToRadarr?.[movie.id]}
+                onAddToRadarr={onAddToRadarr}
               />
             ))}
           </div>
@@ -277,8 +295,8 @@ function MoviesSection({
                   key={`trending-movie-${movie.id}-${index}`} 
                   movie={movie}
                   radarrIntegration={radarrIntegration}
-                  isAdding={addingToRadarr[movie.id]}
-                  onAddToRadarr={handleAddToRadarr}
+                  isAdding={addingToRadarr?.[movie.id]}
+                  onAddToRadarr={onAddToRadarr}
                 />
               ))}
             </div>
@@ -297,11 +315,17 @@ function TVSection({
   tvOnTheAir,
   trendingTV,
   showTrending,
+  sonarrIntegration,
+  addingToSonarr,
+  onAddToSonarr,
 }: {
   tvAiringToday: TMDbTVShow[];
   tvOnTheAir: TMDbTVShow[];
   trendingTV: TMDbTVShow[];
   showTrending: boolean;
+  sonarrIntegration?: any;
+  addingToSonarr?: Record<string, boolean>;
+  onAddToSonarr?: (show: TMDbTVShow) => void;
 }) {
   return (
     <ScrollArea className="h-[400px]">
@@ -319,8 +343,8 @@ function TVSection({
                   key={`airing-${show.id}-${index}`} 
                   show={show}
                   sonarrIntegration={sonarrIntegration}
-                  isAdding={addingToSonarr[show.id]}
-                  onAddToSonarr={handleAddToSonarr}
+                  isAdding={addingToSonarr?.[show.id]}
+                  onAddToSonarr={onAddToSonarr}
                 />
               ))}
             </div>
@@ -340,8 +364,8 @@ function TVSection({
                   key={`onair-${show.id}-${index}`} 
                   show={show}
                   sonarrIntegration={sonarrIntegration}
-                  isAdding={addingToSonarr[show.id]}
-                  onAddToSonarr={handleAddToSonarr}
+                  isAdding={addingToSonarr?.[show.id]}
+                  onAddToSonarr={onAddToSonarr}
                 />
               ))}
             </div>
@@ -361,8 +385,8 @@ function TVSection({
                   key={`trending-tv-${show.id}-${index}`} 
                   show={show}
                   sonarrIntegration={sonarrIntegration}
-                  isAdding={addingToSonarr[show.id]}
-                  onAddToSonarr={handleAddToSonarr}
+                  isAdding={addingToSonarr?.[show.id]}
+                  onAddToSonarr={onAddToSonarr}
                 />
               ))}
             </div>

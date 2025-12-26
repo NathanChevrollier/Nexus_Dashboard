@@ -102,10 +102,10 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          integrationId: sonarrIntegration.id,
-          tvdbId: anime.tvdbId,
-          title: anime.title,
-        }),
+            integrationId: sonarrIntegration.id,
+            tvdbId: (anime as any).tvdbId,
+            title: anime.title,
+          }),
       });
 
       const json = await res.json();
@@ -232,7 +232,7 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
                     anime={anime} 
                     isCompact={isCompact}
                     sonarrIntegration={sonarrIntegration}
-                    isAdding={addingToSonarr[anime.id]}
+                    isAdding={addingToSonarr?.[anime.id]}
                     onAddToSonarr={handleAddToSonarr}
                   />
                 ))

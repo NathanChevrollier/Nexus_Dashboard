@@ -46,8 +46,8 @@ export function EditWidgetDialog({ widget, categories, widgets, open, onOpenChan
       setOptions(widget.options || {});
       
       // Pour le widget météo, détecter la région de la ville actuelle
-      if (widget.type === "weather" && widget.options?.city) {
-        const cityData = getCityByName(widget.options.city);
+      if (widget.type === "weather" && (widget.options as any)?.city) {
+        const cityData = getCityByName((widget.options as any).city);
         if (cityData) {
           setSelectedRegion(cityData.region);
           setAvailableCities(getCitiesByRegion(cityData.region));
@@ -56,7 +56,7 @@ export function EditWidgetDialog({ widget, categories, widgets, open, onOpenChan
 
       // Pour le widget ping, si la config ancienne utilisait `targetUrl`, essayer d'en extraire host/port
       if (widget.type === "ping") {
-        const opts = widget.options || {};
+        const opts = (widget.options || {}) as any;
         if (!opts.host && opts.targetUrl) {
           try {
             const parsed = new URL(opts.targetUrl);
