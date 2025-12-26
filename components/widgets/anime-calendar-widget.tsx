@@ -150,18 +150,8 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
     );
   }
 
-  if (error) {
-    return (
-      <Card className="w-full h-full p-6 flex flex-col items-center justify-center gap-3">
-        <Calendar className="h-12 w-12 text-destructive" />
-        <p className="text-sm text-muted-foreground">{error}</p>
-        <Button onClick={loadData} variant="outline" size="sm">
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Retry
-        </Button>
-      </Card>
-    );
-  }
+  // Don't completely replace the UI on error — show a banner so user can still switch tabs
+  // and retry without being forced into a single-action view.
 
   return (
     <Card className="w-full h-full flex flex-col overflow-hidden">
@@ -175,6 +165,18 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
           <RefreshCw className="h-4 w-4" />
         </Button>
       </div>
+
+      {error && (
+        <div className="p-3 bg-red-500/10 border border-red-500/20 text-sm text-red-700 flex items-center justify-between gap-4">
+          <div>{error}</div>
+          <div className="flex-shrink-0">
+            <Button size="sm" variant="outline" onClick={loadData}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Retry
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col">
