@@ -55,7 +55,24 @@ services:
       NEXTAUTH_SECRET_FILE: /run/secrets/nextauth_secret
       NODE_ENV: production
       NEXT_PUBLIC_TMDB_API_KEY: ${NEXT_PUBLIC_TMDB_API_KEY}
-    command: ["sh", "-c", "export DATABASE_PASSWORD=$$(cat /run/secrets/db_password) && export NEXTAUTH_SECRET=$$(cat /run/secrets/nextauth_secret) && node server.js"]
+    command: 
+      - sh
+      - -c
+      - |
+        export DATABASE_PASSWORD=$$(cat /run/secrets/db_password)
+        export NEXTAUTH_SECRET=$$(cat /run/secrets/nextauth_secret)
+        
+        # Run migrations
+        echo "🗄️ Running database migrations..."
+        npx drizzle-kit push --config=./drizzle.config.ts || true
+        
+        # Run seed if needed
+        echo "🌱 Seeding database..."
+        npx tsx seed.ts || true
+        
+        # Start the application
+        echo "🚀 Starting application..."
+        node server.js
     depends_on:
       db:
         condition: service_healthy
