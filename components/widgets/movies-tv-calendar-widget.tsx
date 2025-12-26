@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar, Film, Tv, TrendingUp, Clock, Star } from 'lucide-react';
+import { Calendar, Film, Tv, TrendingUp, Clock, Star, Plus, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getIntegrations } from '@/lib/actions/integrations';
 import {
   getUpcomingMovies,
   getTrendingMovies,
@@ -36,10 +37,95 @@ export function MoviesAndTVCalendarWidget({ options }: MoviesAndTVCalendarWidget
     options?.view === 'tv' ? 'tv' : 'movies'
   );
   const [timeWindow, setTimeWindow] = useState<'day' | 'week'>(options?.timeWindow || 'day');
+  const [radarrIntegration, setRadarrIntegration] = useState<any>(null);
+  const [sonarrIntegration, setSonarrIntegration] = useState<any>(null);
+  const [addingToRadarr, setAddingToRadarr] = useState<Record<string, boolean>>({});
+  const [addingToSonarr, setAddingToSonarr] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     loadData();
+    loadIntegrations();
   }, [timeWindow]);
+
+  const loadIntegrations = async () => {
+    try {
+      const integrationsData = await getIntegrations();
+      const radarr = integrationsData?.find((i: any) => i.type === 'radarr');
+      const sonarr = integrationsData?.find((i: any) => i.type === 'sonarr');
+      setRadarrIntegration(radarr || null);
+      setSonarrIntegration(sonarr || null);
+    } catch (error) {
+      console.error('Failed to load integrations:', error);
+    }
+  };
+
+  const handleAddToRadarr = async (movie: TMDbMovie) => {
+    if (!radarrIntegration) {
+      alert('Radarr not configured');
+      return;
+    }
+
+    setAddingToRadarr((prev) => ({ ...prev, [movie.id]: true }));
+
+    try {
+      const res = await fetch('/api/integrations/radarr/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          integrationId: radarrIntegration.id,
+          tmdbId: movie.id,
+          title: movie.title || movie.name,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        alert(`Error: ${json.error || 'Failed to add to Radarr'}`);
+      } else {
+        alert(`${movie.title || movie.name} added to Radarr!`);
+      }
+    } catch (error) {
+      console.error('Error adding to Radarr:', error);
+      alert('Failed to add to Radarr');
+    } finally {
+      setAddingToRadarr((prev) => ({ ...prev, [movie.id]: false }));
+    }
+  };
+
+  const handleAddToSonarr = async (tvShow: TMDbTVShow) => {
+    if (!sonarrIntegration) {
+      alert('Sonarr not configured');
+      return;
+    }
+
+    setAddingToSonarr((prev) => ({ ...prev, [tvShow.id]: true }));
+
+    try {
+      const res = await fetch('/api/integrations/sonarr/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          integrationId: sonarrIntegration.id,
+          tvdbId: tvShow.id,
+          title: tvShow.name,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        alert(`Error: ${json.error || 'Failed to add to Sonarr'}`);
+      } else {
+        alert(`${tvShow.name} added to Sonarr!`);
+      }
+    } catch (error) {
+      console.error('Error adding to Sonarr:', error);
+      alert('Failed to add to Sonarr');
+    } finally {
+      setAddingToSonarr((prev) => ({ ...prev, [tvShow.id]: false }));
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -167,7 +253,13 @@ function MoviesSection({
           </h4>
           <div className="space-y-3">
             {upcomingMovies.map((movie, index) => (
-              <MovieCard key={`upcoming-${movie.id}-${index}`} movie={movie} />
+              <MovieCard 
+                key={`upcoming-${movie.id}-${index}`} 
+                movie={movie}
+                radarrIntegration={radarrIntegration}
+                isAdding={addingToRadarr[movie.id]}
+                onAddToRadarr={handleAddToRadarr}
+              />
             ))}
           </div>
         </div>
@@ -181,7 +273,13 @@ function MoviesSection({
             </h4>
             <div className="space-y-3">
               {trendingMovies.map((movie, index) => (
-                <MovieCard key={`trending-movie-${movie.id}-${index}`} movie={movie} />
+                <MovieCard 
+                  key={`trending-movie-${movie.id}-${index}`} 
+                  movie={movie}
+                  radarrIntegration={radarrIntegration}
+                  isAdding={addingToRadarr[movie.id]}
+                  onAddToRadarr={handleAddToRadarr}
+                />
               ))}
             </div>
           </div>
@@ -217,7 +315,13 @@ function TVSection({
             </h4>
             <div className="space-y-3">
               {tvAiringToday.map((show, index) => (
-                <TVShowCard key={`airing-${show.id}-${index}`} show={show} />
+                <TVShowCard 
+                  key={`airing-${show.id}-${index}`} 
+                  show={show}
+                  sonarrIntegration={sonarrIntegration}
+                  isAdding={addingToSonarr[show.id]}
+                  onAddToSonarr={handleAddToSonarr}
+                />
               ))}
             </div>
           </div>
@@ -232,7 +336,13 @@ function TVSection({
             </h4>
             <div className="space-y-3">
               {tvOnTheAir.map((show, index) => (
-                <TVShowCard key={`onair-${show.id}-${index}`} show={show} />
+                <TVShowCard 
+                  key={`onair-${show.id}-${index}`} 
+                  show={show}
+                  sonarrIntegration={sonarrIntegration}
+                  isAdding={addingToSonarr[show.id]}
+                  onAddToSonarr={handleAddToSonarr}
+                />
               ))}
             </div>
           </div>
@@ -247,7 +357,13 @@ function TVSection({
             </h4>
             <div className="space-y-3">
               {trendingTV.map((show, index) => (
-                <TVShowCard key={`trending-tv-${show.id}-${index}`} show={show} />
+                <TVShowCard 
+                  key={`trending-tv-${show.id}-${index}`} 
+                  show={show}
+                  sonarrIntegration={sonarrIntegration}
+                  isAdding={addingToSonarr[show.id]}
+                  onAddToSonarr={handleAddToSonarr}
+                />
               ))}
             </div>
           </div>
@@ -260,89 +376,153 @@ function TVSection({
 /**
  * Carte Film
  */
-function MovieCard({ movie }: { movie: TMDbMovie }) {
+function MovieCard({ 
+  movie, 
+  radarrIntegration, 
+  isAdding, 
+  onAddToRadarr 
+}: { 
+  movie: TMDbMovie;
+  radarrIntegration?: any;
+  isAdding?: boolean;
+  onAddToRadarr?: (movie: TMDbMovie) => void;
+}) {
   const tmdbUrl = `https://www.themoviedb.org/movie/${movie.id}`;
 
   return (
-    <a
-      href={tmdbUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex gap-3 p-2 rounded-lg border hover:bg-accent transition-colors group"
-    >
-      {movie.posterUrl && (
-        <img
-          src={movie.posterUrl}
-          alt={movie.title}
-          className="w-16 h-24 object-cover rounded shadow-sm"
-        />
-      )}
-      <div className="flex-1 min-w-0">
-        <h5 className="font-medium line-clamp-2 group-hover:text-primary transition-colors">
-          {movie.title}
-        </h5>
-        <div className="flex items-center gap-2 mt-1">
-          <Badge variant="outline" className="text-xs">
-            {movie.releaseDate}
-          </Badge>
-          {movie.voteAverage && movie.voteAverage > 0 && (
-            <span className="text-xs text-yellow-500 flex items-center gap-1">
-              <Star className="h-3 w-3 fill-current" />
-              {movie.voteAverage.toFixed(1)}
-            </span>
+    <div className="flex gap-3 p-2 rounded-lg border hover:bg-accent/50 transition-colors group">
+      <a
+        href={tmdbUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex gap-3 flex-1 hover:text-primary transition-colors"
+      >
+        {movie.posterUrl && (
+          <img
+            src={movie.posterUrl}
+            alt={movie.title}
+            className="w-16 h-24 object-cover rounded shadow-sm"
+          />
+        )}
+        <div className="flex-1 min-w-0">
+          <h5 className="font-medium line-clamp-2 group-hover:text-primary transition-colors">
+            {movie.title}
+          </h5>
+          <div className="flex items-center gap-2 mt-1">
+            <Badge variant="outline" className="text-xs">
+              {movie.releaseDate}
+            </Badge>
+            {movie.voteAverage && movie.voteAverage > 0 && (
+              <span className="text-xs text-yellow-500 flex items-center gap-1">
+                <Star className="h-3 w-3 fill-current" />
+                {movie.voteAverage.toFixed(1)}
+              </span>
+            )}
+          </div>
+          {movie.genres && movie.genres.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+              {movie.genres.join(', ')}
+            </p>
           )}
         </div>
-        {movie.genres && movie.genres.length > 0 && (
-          <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-            {movie.genres.join(', ')}
-          </p>
-        )}
-      </div>
-    </a>
+      </a>
+      {radarrIntegration && onAddToRadarr && (
+        <div className="flex items-center">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 w-8 p-0"
+            onClick={(e) => {
+              e.preventDefault();
+              onAddToRadarr(movie);
+            }}
+            disabled={isAdding}
+          >
+            {isAdding ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 
 /**
  * Carte Série TV
  */
-function TVShowCard({ show }: { show: TMDbTVShow }) {
+function TVShowCard({ 
+  show, 
+  sonarrIntegration, 
+  isAdding, 
+  onAddToSonarr 
+}: { 
+  show: TMDbTVShow;
+  sonarrIntegration?: any;
+  isAdding?: boolean;
+  onAddToSonarr?: (show: TMDbTVShow) => void;
+}) {
   const tmdbUrl = `https://www.themoviedb.org/tv/${show.id}`;
 
   return (
-    <a
-      href={tmdbUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex gap-3 p-2 rounded-lg border hover:bg-accent transition-colors group"
-    >
-      {show.posterUrl && (
-        <img
-          src={show.posterUrl}
-          alt={show.name}
-          className="w-16 h-24 object-cover rounded shadow-sm"
-        />
-      )}
-      <div className="flex-1 min-w-0">
-        <h5 className="font-medium line-clamp-2 group-hover:text-primary transition-colors">
-          {show.name}
-        </h5>
-        <div className="flex items-center gap-2 mt-1">
-          <Badge variant="outline" className="text-xs">
-            {show.firstAirDate}
-          </Badge>
-          {show.voteAverage && show.voteAverage > 0 && (
-            <span className="text-xs text-yellow-500 flex items-center gap-1">
-              <Star className="h-3 w-3 fill-current" />
-              {show.voteAverage.toFixed(1)}
-            </span>
+    <div className="flex gap-3 p-2 rounded-lg border hover:bg-accent/50 transition-colors group">
+      <a
+        href={tmdbUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex gap-3 flex-1 hover:text-primary transition-colors"
+      >
+        {show.posterUrl && (
+          <img
+            src={show.posterUrl}
+            alt={show.name}
+            className="w-16 h-24 object-cover rounded shadow-sm"
+          />
+        )}
+        <div className="flex-1 min-w-0">
+          <h5 className="font-medium line-clamp-2 group-hover:text-primary transition-colors">
+            {show.name}
+          </h5>
+          <div className="flex items-center gap-2 mt-1">
+            <Badge variant="outline" className="text-xs">
+              {show.firstAirDate}
+            </Badge>
+            {show.voteAverage && show.voteAverage > 0 && (
+              <span className="text-xs text-yellow-500 flex items-center gap-1">
+                <Star className="h-3 w-3 fill-current" />
+                {show.voteAverage.toFixed(1)}
+              </span>
+            )}
+          </div>
+          {show.genres && show.genres.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+              {show.genres.join(', ')}
+            </p>
           )}
         </div>
-        {show.genres && show.genres.length > 0 && (
-          <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-            {show.genres.join(', ')}
-          </p>
-        )}
-      </div>
-    </a>
+      </a>
+      {sonarrIntegration && onAddToSonarr && (
+        <div className="flex items-center">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 w-8 p-0"
+            onClick={(e) => {
+              e.preventDefault();
+              onAddToSonarr(show);
+            }}
+            disabled={isAdding}
+          >
+            {isAdding ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }

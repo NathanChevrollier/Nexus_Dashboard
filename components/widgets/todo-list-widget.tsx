@@ -44,6 +44,26 @@ export function TodoListWidget({ widget }: TodoListWidgetProps) {
     }
   }, [widget.options]);
 
+  // Auto-save todos
+  useEffect(() => {
+    const saveTodos = async () => {
+      try {
+        const { updateWidget } = await import('@/lib/actions/widgets');
+        await updateWidget(widget.id, {
+          options: {
+            ...widget.options,
+            todos,
+          },
+        });
+      } catch (error) {
+        console.error('Error saving todos:', error);
+      }
+    };
+
+    const timer = setTimeout(saveTodos, 1000); // Debounce saves
+    return () => clearTimeout(timer);
+  }, [todos]);
+
   const addTodo = () => {
     if (!newTodo.trim()) return;
 
@@ -58,7 +78,6 @@ export function TodoListWidget({ widget }: TodoListWidgetProps) {
     const updatedTodos = [...todos, todo];
     setTodos(updatedTodos);
     setNewTodo('');
-    // TODO: Save to database via server action
   };
 
   const toggleTodo = (id: string) => {

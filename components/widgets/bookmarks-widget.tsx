@@ -49,13 +49,39 @@ export function BookmarksWidget({ widget }: BookmarksWidgetProps) {
     }
   }, [widget.options]);
 
+  // Auto-save bookmarks
+  useEffect(() => {
+    const saveBookmarks = async () => {
+      try {
+        const { updateWidget } = await import('@/lib/actions/widgets');
+        await updateWidget(widget.id, {
+          options: {
+            ...widget.options,
+            bookmarks,
+          },
+        });
+      } catch (error) {
+        console.error('Error saving bookmarks:', error);
+      }
+    };
+
+    const timer = setTimeout(saveBookmarks, 1000); // Debounce saves
+    return () => clearTimeout(timer);
+  }, [bookmarks]);
+
   const addBookmark = () => {
     if (!newTitle.trim() || !newUrl.trim()) return;
+
+    // Basic URL validation
+    let validUrl = newUrl;
+    if (!validUrl.startsWith('http://') && !validUrl.startsWith('https://') && !validUrl.startsWith('/')) {
+      validUrl = 'https://' + validUrl;
+    }
 
     const bookmark: BookmarkItem = {
       id: Date.now().toString(),
       title: newTitle,
-      url: newUrl,
+      url: validUrl,
       category: selectedCategory,
       favorite: false,
       addedAt: Date.now(),
@@ -65,7 +91,6 @@ export function BookmarksWidget({ widget }: BookmarksWidgetProps) {
     setBookmarks(updatedBookmarks);
     setNewTitle('');
     setNewUrl('');
-    // TODO: Save to database
   };
 
   const toggleFavorite = (id: string) => {

@@ -279,6 +279,7 @@ export function CategoryGridItem({
                 className="bg-card/90 backdrop-blur-sm border rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all hover:border-primary/40 hover:scale-[1.02] h-full w-full"
               >
                 <WidgetComponent
+                  key={`${widget.id}-${JSON.stringify(widget.options)}`}
                   widget={widget}
                   isEditMode={isEditMode}
                   sourceType="category"

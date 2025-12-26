@@ -15,6 +15,7 @@ import {
   type AnimeSchedule,
   type MangaRelease,
 } from '@/lib/api/anilist';
+import { getIntegrations } from '@/lib/actions/integrations';
 import {
   Calendar,
   Clock,
@@ -25,6 +26,9 @@ import {
   RefreshCw,
   Star,
   Play,
+  Plus,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 
 interface AnimeCalendarWidgetProps {
@@ -39,12 +43,15 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'anime' | 'manga'>('anime');
   const [selectedDay, setSelectedDay] = useState<string>('All');
+  const [sonarrIntegration, setSonarrIntegration] = useState<any>(null);
+  const [addingToSonarr, setAddingToSonarr] = useState<Record<string, boolean>>({});
 
   const isCompact = width <= 2 && height <= 2;
   const isLarge = width >= 3 || height >= 3;
 
   useEffect(() => {
     loadData();
+    loadSonarrIntegration();
   }, []);
 
   // Recharger quand on change de jour ou onglet (rafraîchissement automatique demandé)
@@ -69,6 +76,50 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadSonarrIntegration() {
+    try {
+      const integrations = await getIntegrations();
+      const sonarr = integrations?.find((i: any) => i.type === 'sonarr');
+      setSonarrIntegration(sonarr || null);
+    } catch (error) {
+      console.error('Failed to load Sonarr integration:', error);
+    }
+  }
+
+  async function handleAddToSonarr(anime: AnimeSchedule) {
+    if (!sonarrIntegration) {
+      alert('Sonarr not configured');
+      return;
+    }
+
+    setAddingToSonarr((prev) => ({ ...prev, [anime.id]: true }));
+
+    try {
+      const res = await fetch('/api/integrations/sonarr/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          integrationId: sonarrIntegration.id,
+          tvdbId: anime.tvdbId,
+          title: anime.title,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        alert(`Error: ${json.error || 'Failed to add to Sonarr'}`);
+      } else {
+        alert(`${anime.title} added to Sonarr!`);
+      }
+    } catch (error) {
+      console.error('Error adding to Sonarr:', error);
+      alert('Failed to add to Sonarr');
+    } finally {
+      setAddingToSonarr((prev) => ({ ...prev, [anime.id]: false }));
     }
   }
 
@@ -167,8 +218,8 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
           )}
 
           {/* Anime List */}
-          <ScrollArea className="flex-1 min-h-0">
-            <div className="space-y-3">
+          <ScrollArea className="flex-1 min-h-0 border rounded-md">
+            <div className="space-y-3 pr-4">
               {sortedAnime.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
@@ -176,7 +227,14 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
                 </div>
               ) : (
                 sortedAnime.map((anime) => (
-                  <AnimeCard key={anime.id} anime={anime} isCompact={isCompact} />
+                  <AnimeCard 
+                    key={anime.id} 
+                    anime={anime} 
+                    isCompact={isCompact}
+                    sonarrIntegration={sonarrIntegration}
+                    isAdding={addingToSonarr[anime.id]}
+                    onAddToSonarr={handleAddToSonarr}
+                  />
                 ))
               )}
             </div>
@@ -185,8 +243,8 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
 
         {/* Manga Tab */}
         <TabsContent value="manga" className="flex-1 flex flex-col px-4 pb-4 mt-2">
-          <ScrollArea className="flex-1">
-            <div className="space-y-3">
+          <ScrollArea className="flex-1 min-h-0 border rounded-md">
+            <div className="space-y-3 pr-4">
               {mangaReleases.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <BookOpen className="h-12 w-12 mx-auto mb-2 opacity-50" />
@@ -205,7 +263,19 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
   );
 }
 
-function AnimeCard({ anime, isCompact }: { anime: AnimeSchedule; isCompact: boolean }) {
+function AnimeCard({ 
+  anime, 
+  isCompact,
+  sonarrIntegration,
+  isAdding,
+  onAddToSonarr,
+}: { 
+  anime: AnimeSchedule; 
+  isCompact: boolean;
+  sonarrIntegration?: any;
+  isAdding?: boolean;
+  onAddToSonarr?: (anime: AnimeSchedule) => void;
+}) {
   const airingDate = anime.nextAiringEpisode
     ? new Date(anime.nextAiringEpisode.airingAt * 1000)
     : null;
@@ -287,6 +357,34 @@ function AnimeCard({ anime, isCompact }: { anime: AnimeSchedule; isCompact: bool
                 {genre}
               </Badge>
             ))}
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        {!isCompact && sonarrIntegration && (
+          <div className="flex gap-1 mt-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddToSonarr?.(anime);
+              }}
+              disabled={isAdding}
+            >
+              {isAdding ? (
+                <>
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-3 w-3 mr-1" />
+                  Sonarr
+                </>
+              )}
+            </Button>
           </div>
         )}
       </div>

@@ -105,17 +105,21 @@ export function TorrentOverviewWidget({ widget }: TorrentOverviewWidgetProps) {
   };
 
   const renderStateIcon = (state: unknown) => {
-    const s = typeof state === 'string' ? state.toLowerCase() : String(state || '').toLowerCase();
-    if (s.includes('down') || s.includes('stalled')) {
-      return <ArrowDownToLine className="h-3 w-3 text-emerald-500" />;
+    try {
+      const s = String(state || '').toLowerCase();
+      if (s.includes('down') || s.includes('stalled')) {
+        return <ArrowDownToLine className="h-3 w-3 text-emerald-500" />;
+      }
+      if (s.includes('paused')) {
+        return <PauseCircle className="h-3 w-3 text-yellow-500" />;
+      }
+      if (s.includes('upload')) {
+        return <ArrowUpToLine className="h-3 w-3 text-blue-500" />;
+      }
+      return <PlayCircle className="h-3 w-3 text-muted-foreground" />;
+    } catch {
+      return <PlayCircle className="h-3 w-3 text-muted-foreground" />;
     }
-    if (s.includes('paused')) {
-      return <PauseCircle className="h-3 w-3 text-yellow-500" />;
-    }
-    if (s.includes('upload')) {
-      return <ArrowUpToLine className="h-3 w-3 text-blue-500" />;
-    }
-    return <PlayCircle className="h-3 w-3 text-muted-foreground" />;
   };
 
   return (

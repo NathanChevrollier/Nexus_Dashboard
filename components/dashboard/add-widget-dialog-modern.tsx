@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import EmojiPicker from "@/components/ui/emoji-picker";
+import AssetPicker from "@/components/ui/asset-picker";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { createWidget } from "@/lib/actions/widgets";
 import { 
@@ -213,7 +215,7 @@ export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidge
   const [loadingIntegrations, setLoadingIntegrations] = useState(false);
 
   // Formulaires pour chaque type
-  const [linkForm, setLinkForm] = useState({ title: "", url: "", icon: "🔗", openInNewTab: true });
+  const [linkForm, setLinkForm] = useState({ title: "", url: "", icon: "🔗", iconUrl: "", openInNewTab: true });
   const [pingForm, setPingForm] = useState({ title: "", host: "", port: 80 });
   const [iframeForm, setIframeForm] = useState({ title: "", iframeUrl: "" });
   const [weatherForm, setWeatherForm] = useState({ city: "Paris" });
@@ -293,6 +295,13 @@ export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidge
       loadIntegrations();
     }
   };
+
+  useEffect(() => {
+    // Preload integrations when dialog opens
+    if (open && availableIntegrations.length === 0) {
+      loadIntegrations();
+    }
+  }, [open]);
 
   const handleBack = () => {
     setStep("select");
@@ -453,23 +462,41 @@ export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidge
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {widgetDefinitions.map((widget) => {
                 const Icon = widget.icon;
+                // Check if widget requires an integration
+                const requiresIntegration = ["media-requests", "torrent-overview", "monitoring"].includes(widget.type);
+                const hasRequiredIntegration = requiresIntegration && availableIntegrations.length > 0;
+                const isDisabled = requiresIntegration && !hasRequiredIntegration;
+                
                 return (
-                  <button
-                    key={widget.type}
-                    onClick={() => handleWidgetSelect(widget.type)}
-                    className="group relative overflow-hidden rounded-xl border-2 border-transparent hover:border-primary/50 transition-all duration-200 hover:scale-105 hover:shadow-lg"
-                  >
-                    <div className={`absolute inset-0 bg-gradient-to-br ${widget.color} opacity-10 group-hover:opacity-20 transition-opacity`} />
-                    <div className="relative p-4 flex flex-col items-center text-center space-y-3">
-                      <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${widget.color} flex items-center justify-center shadow-md`}>
-                        <Icon className="h-6 w-6 text-white" />
+                  <div key={widget.type} className="relative group">
+                    <button
+                      onClick={() => handleWidgetSelect(widget.type)}
+                      disabled={isDisabled}
+                      className={`w-full group relative overflow-hidden rounded-xl border-2 transition-all duration-200 ${
+                        isDisabled 
+                          ? 'border-transparent opacity-50 cursor-not-allowed' 
+                          : 'border-transparent hover:border-primary/50 hover:scale-105 hover:shadow-lg'
+                      }`}
+                    >
+                      <div className={`absolute inset-0 bg-gradient-to-br ${widget.color} opacity-10 ${!isDisabled && 'group-hover:opacity-20'} transition-opacity`} />
+                      <div className="relative p-4 flex flex-col items-center text-center space-y-3">
+                        <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${widget.color} flex items-center justify-center shadow-md`}>
+                          <Icon className="h-6 w-6 text-white" />
+                        </div>
+                        <div className="space-y-1">
+                          <h3 className="font-semibold text-sm">{widget.name}</h3>
+                          <p className="text-xs text-muted-foreground line-clamp-2">{widget.description}</p>
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        <h3 className="font-semibold text-sm">{widget.name}</h3>
-                        <p className="text-xs text-muted-foreground line-clamp-2">{widget.description}</p>
+                    </button>
+                    {isDisabled && (
+                      <div className="absolute inset-0 rounded-xl flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-xs">
+                        <div className="text-xs font-medium text-white text-center px-2">
+                          Créez une intégration<br />pour utiliser ce widget
+                        </div>
                       </div>
-                    </div>
-                  </button>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -497,12 +524,42 @@ export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidge
                   </div>
                   <div className="space-y-2">
                     <Label>Icône (emoji)</Label>
-                    <Input
-                      value={linkForm.icon}
-                      onChange={(e) => setLinkForm({ ...linkForm, icon: e.target.value })}
-                      placeholder="🔗"
-                      maxLength={2}
-                    />
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        value={linkForm.icon}
+                        onChange={(e) => setLinkForm({ ...linkForm, icon: e.target.value })}
+                        placeholder="🔗"
+                        maxLength={2}
+                        className="h-9 w-24"
+                      />
+                      <div className="flex-1">
+                        <EmojiPicker value={linkForm.icon} onSelect={(e) => setLinkForm({ ...linkForm, icon: e })} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Icône (URL externe)</Label>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={(linkForm as any).iconUrl || ""}
+                          onChange={(e) => setLinkForm({ ...linkForm, iconUrl: e.target.value })}
+                          placeholder="https://raw.githubusercontent.com/homarr-labs/dashboard-icons/main/png/overseerr.png"
+                          className="h-9 flex-1"
+                        />
+                        {(linkForm as any).iconUrl ? (
+                          <div className="h-9 w-9 flex items-center justify-center bg-muted/30 rounded ml-2">
+                            <img src={(linkForm as any).iconUrl} alt="preview" className="max-h-6 max-w-full object-contain" />
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="mt-2">
+                        <AssetPicker inline onSelect={(url) => setLinkForm({ ...linkForm, iconUrl: url })} />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      💡 Parcourez la bibliothèque d'icônes publique <a href="https://github.com/homarr-labs/dashboard-icons" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">homarr-labs/dashboard-icons</a> ou collez directement une URL d'image.
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <input

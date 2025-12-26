@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, GripVertical, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-provider";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -25,6 +26,7 @@ export function CategorySection({ category, widgets, isEditMode, onWidgetDelete,
   const [editName, setEditName] = useState(category.name);
   const [editIcon, setEditIcon] = useState(category.icon || "📁");
   const [editColor, setEditColor] = useState(category.color || "#3b82f6");
+  const confirm = useConfirm();
 
   const toggleCollapse = async () => {
     const newState = !isCollapsed;
@@ -42,7 +44,7 @@ export function CategorySection({ category, widgets, isEditMode, onWidgetDelete,
   };
 
   const handleDelete = async () => {
-    if (confirm(`Supprimer la catégorie "${category.name}" et tous ses widgets ?`)) {
+    if (await confirm(`Supprimer la catégorie "${category.name}" et tous ses widgets ?`)) {
       await deleteCategory(category.id);
     }
   };

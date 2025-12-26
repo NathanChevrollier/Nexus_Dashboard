@@ -13,6 +13,7 @@ import { EditWidgetDialog } from "@/components/dashboard/edit-widget-dialog";
 import { updateWidgetPositions, deleteWidget } from "@/lib/actions/widgets";
 import { updateCategoryPositions, deleteCategory } from "@/lib/actions/categories";
 import { CrossGridDragProvider, useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-v2";
+import { useConfirm } from "@/components/ui/confirm-provider";
 
 interface DashboardViewProps {
   dashboard: Dashboard;
@@ -202,11 +203,12 @@ function DashboardViewInner({
       i: `cat-${cat.id}`,
       x: cat.x,
       y: cat.y,
-      w: Math.min(cat.w || 4, 6),
+      // Laisser la catégorie occuper sa largeur configurée
+      w: cat.w || 12,
       h: totalHeight,
       static: !isEditMode,
       minW: 3,
-      maxW: 6,
+      maxW: 12,
       minH: 1,
       maxH: isCollapsed ? 1 : 10, // Max 10 lignes pour une catégorie
     };
@@ -344,8 +346,10 @@ function DashboardViewInner({
     );
   }, [findFreePosition]);
 
+  const confirm = useConfirm();
+
   const handleDeleteWidget = async (widgetId: string) => {
-    if (confirm("Voulez-vous vraiment supprimer ce widget ?")) {
+    if (await confirm("Voulez-vous vraiment supprimer ce widget ?")) {
       try {
         await deleteWidget(widgetId);
         setWidgets(widgets.filter((w) => w.id !== widgetId));
@@ -357,7 +361,7 @@ function DashboardViewInner({
   };
 
   const handleDeleteCategory = async (categoryId: string) => {
-    if (confirm("Supprimer cette catégorie ? Les widgets seront déplacés hors catégorie.")) {
+    if (await confirm("Supprimer cette catégorie ? Les widgets seront déplacés hors catégorie.")) {
       try {
         await deleteCategory(categoryId);
         setCategories(categories.filter((c) => c.id !== categoryId));
@@ -376,7 +380,12 @@ function DashboardViewInner({
     setShowEditDialog(true);
   };
 
-  const handleWidgetUpdated = (widgetId: string, newCategoryId: string | null, oldCategoryId: string | null) => {
+  const handleWidgetUpdated = (
+    widgetId: string,
+    newCategoryId: string | null,
+    oldCategoryId: string | null,
+    updatedOptions?: any
+  ) => {
     // Mettre à jour localement le widget
     setWidgets((prevWidgets) => {
       const widget = prevWidgets.find(w => w.id === widgetId);
@@ -384,6 +393,8 @@ function DashboardViewInner({
 
       return prevWidgets.map((w) => {
         if (w.id === widgetId) {
+          // Appliquer les options mises à jour tout de suite pour refléter l'UI
+          const withOptions = updatedOptions ? { ...w, options: updatedOptions } : w;
           // Si on déplace vers une catégorie
           if (newCategoryId) {
             // Trouver tous les widgets déjà dans cette catégorie
@@ -419,7 +430,7 @@ function DashboardViewInner({
             const freePos = findFreeCategoryPosition(widget.w, widget.h);
 
             return {
-              ...w,
+              ...withOptions,
               categoryId: newCategoryId,
               categoryX: freePos.x,
               categoryY: freePos.y,
@@ -430,7 +441,7 @@ function DashboardViewInner({
             // Trouver une position libre sur la grille principale
             const pos = findFreePosition(0, 0, widget.w, widget.h);
             return {
-              ...w,
+              ...withOptions,
               categoryId: null,
               categoryX: null,
               categoryY: null,
@@ -438,6 +449,8 @@ function DashboardViewInner({
               y: pos.y,
             };
           }
+          // Pas de changement de catégorie: juste mettre à jour les options localement
+          return withOptions;
         }
         return w;
       });
@@ -749,7 +762,7 @@ function DashboardViewInner({
             width={containerWidth}
             isDraggable={isEditMode}
             isResizable={isEditMode}
-            compactType={null}
+            compactType="vertical"
             preventCollision={true}
             onLayoutChange={handleLayoutChange}
             margin={[16, 16]}
@@ -791,6 +804,7 @@ function DashboardViewInner({
                   }}
                 >
                   <WidgetComponent
+                    key={`${widget.id}-${JSON.stringify(widget.options)}`}
                     widget={widget}
                     isEditMode={isEditMode}
                     sourceType="main"

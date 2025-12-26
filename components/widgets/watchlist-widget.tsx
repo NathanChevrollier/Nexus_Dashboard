@@ -49,6 +49,26 @@ export function WatchlistWidget({ widget }: WatchlistWidgetProps) {
     }
   }, [widget.options]);
 
+  // Auto-save watchlist
+  useEffect(() => {
+    const saveWatchlist = async () => {
+      try {
+        const { updateWidget } = await import('@/lib/actions/widgets');
+        await updateWidget(widget.id, {
+          options: {
+            ...widget.options,
+            watchlist: items,
+          },
+        });
+      } catch (error) {
+        console.error('Error saving watchlist:', error);
+      }
+    };
+
+    const timer = setTimeout(saveWatchlist, 1000); // Debounce saves
+    return () => clearTimeout(timer);
+  }, [items]);
+
   const addItem = () => {
     if (!newTitle.trim()) return;
 
@@ -63,7 +83,6 @@ export function WatchlistWidget({ widget }: WatchlistWidgetProps) {
     const updatedItems = [...items, item];
     setItems(updatedItems);
     setNewTitle('');
-    // TODO: Save to database
   };
 
   const updateStatus = (id: string, status: WatchItem['status']) => {

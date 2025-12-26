@@ -7,14 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getIntegrations, upsertIntegration, deleteIntegration } from "@/lib/actions/integrations";
-import { Loader2, Plug, Trash2 } from "lucide-react";
+import { Loader2, Plug, Trash2, CheckCircle2, AlertCircle, Clock } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useConfirm } from "@/components/ui/confirm-provider";
 
 const INTEGRATION_TYPES = [
   { id: "overseerr", label: "Overseerr / Jellyseerr" },
   { id: "torrent-client", label: "Client Torrent (qBittorrent, Transmission...)" },
   { id: "monitoring", label: "Monitoring (Glances, Prometheus...)" },
   { id: "jellyfin", label: "Jellyfin / Emby (Médiathèque)" },
+  { id: "sonarr", label: "Sonarr (Gestion Séries TV)" },
+  { id: "radarr", label: "Radarr (Gestion Films)" },
 ] as const;
 
 interface IntegrationFormState {
@@ -28,11 +31,13 @@ interface IntegrationFormState {
 }
 
 export function IntegrationsSettings() {
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [integrations, setIntegrations] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [testStatus, setTestStatus] = useState<Record<string, { loading?: boolean; ok?: boolean; msg?: string }>>({});
   const [form, setForm] = useState<IntegrationFormState>({
     name: "",
     type: "overseerr",
@@ -83,7 +88,7 @@ export function IntegrationsSettings() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Supprimer cette intégration ?")) return;
+    if (!(await confirm("Supprimer cette intégration ?"))) return;
 
     try {
       await deleteIntegration(id);
@@ -122,6 +127,39 @@ export function IntegrationsSettings() {
       setError("Erreur lors de l'enregistrement de l'intégration.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTest = async (integrationId?: string) => {
+    const testId = integrationId || 'form';
+    setTestStatus(p => ({ ...p, [testId]: { loading: true } }));
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch('/api/integrations/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: integrationId || form.id,
+          type: integrationId ? undefined : form.type,
+          baseUrl: integrationId ? undefined : form.baseUrl,
+          apiKey: integrationId ? undefined : form.apiKey,
+          username: integrationId ? undefined : form.username,
+          password: integrationId ? undefined : form.password,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setTestStatus(p => ({ ...p, [testId]: { ok: false, msg: json.error || 'Connexion échouée' } }));
+        if (!integrationId) setError(json.error || 'Test de connexion échoué');
+      } else {
+        setTestStatus(p => ({ ...p, [testId]: { ok: true, msg: json.message || 'Connexion réussie' } }));
+        if (!integrationId) setSuccess(json.message || 'Connexion réussie');
+      }
+    } catch (err) {
+      console.error('Test intégration error', err);
+      setTestStatus(p => ({ ...p, [testId]: { ok: false, msg: 'Erreur de connexion' } }));
+      if (!integrationId) setError('Test de connexion échoué');
     }
   };
 
@@ -192,90 +230,186 @@ export function IntegrationsSettings() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label>Clé API (si applicable)</Label>
-                <Input
-                  value={form.apiKey}
-                  onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
-                  placeholder="Clé API secrète (Overseerr...)"
-                />
-              </div>
+              {form.type === 'overseerr' && (
+                <div className="space-y-2">
+                  <Label>Clé API</Label>
+                  <Input
+                    value={form.apiKey}
+                    onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
+                    placeholder="Clé API Overseerr/Jellyseerr"
+                    required
+                  />
+                </div>
+              )}
 
-              <div className="space-y-2">
-                <Label>Nom d'utilisateur (optionnel)</Label>
-                <Input
-                  value={form.username}
-                  onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
-                  placeholder="Pour clients torrent nécessitant une connexion"
-                />
-              </div>
+              {form.type === 'torrent-client' && (
+                <div className="space-y-2">
+                  <Label>Nom d'utilisateur</Label>
+                  <Input
+                    value={form.username}
+                    onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+                    placeholder="Compte qBittorrent/Transmission"
+                    required
+                  />
+                </div>
+              )}
 
-              <div className="space-y-2">
-                <Label>Mot de passe (optionnel)</Label>
-                <Input
-                  type="password"
-                  value={form.password}
-                  onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                  placeholder="Ne sera enregistré que côté serveur"
-                />
-              </div>
+              {form.type === 'torrent-client' && (
+                <div className="space-y-2">
+                  <Label>Mot de passe</Label>
+                  <Input
+                    type="password"
+                    value={form.password}
+                    onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                    placeholder="Mot de passe qBittorrent/Transmission"
+                    required
+                  />
+                </div>
+              )}
 
-              <div className="md:col-span-2 flex justify-end gap-2">
-                {form.id && (
-                  <Button type="button" variant="outline" onClick={resetForm}>
-                    Annuler la modification
+              {(form.type === 'sonarr' || form.type === 'radarr') && (
+                <div className="space-y-2">
+                  <Label>Clé API</Label>
+                  <Input
+                    value={form.apiKey}
+                    onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
+                    placeholder={`Clé API ${form.type}`}
+                    required
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Trouvez votre clé API dans Settings &gt; General &gt; Security
+                  </p>
+                </div>
+              )}
+
+              <div className="md:col-span-2 flex justify-between gap-2">
+                <div>
+                  {testStatus.form?.ok === true && (
+                    <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Connexion OK
+                    </div>
+                  )}
+                  {testStatus.form?.ok === false && (
+                    <div className="flex items-center gap-2 text-xs text-red-600 dark:text-red-400">
+                      <AlertCircle className="h-4 w-4" />
+                      {testStatus.form.msg}
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  {form.id && (
+                    <Button type="button" variant="outline" onClick={resetForm}>
+                      Annuler
+                    </Button>
+                  )}
+                  <Button type="button" variant="outline" onClick={() => handleTest()} disabled={testStatus.form?.loading}>
+                    {testStatus.form?.loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Test...
+                      </>
+                    ) : (
+                      'Tester'
+                    )}
                   </Button>
-                )}
-                <Button type="submit" disabled={saving}>
-                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {form.id ? "Mettre à jour" : "Ajouter l'intégration"}
-                </Button>
+                  <Button type="submit" disabled={saving}>
+                    {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {form.id ? "Mettre à jour" : "Ajouter"}
+                  </Button>
+                </div>
               </div>
             </form>
 
-            <div>
-              <h3 className="text-sm font-medium mb-2">Intégrations configurées</h3>
-              {loading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Chargement...
-                </div>
-              ) : integrations.length === 0 ? (
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <Plug className="h-4 w-4" />
+              Intégrations configurées
+            </h3>
+            {loading ? (
+              <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Chargement...
+              </div>
+            ) : integrations.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-muted-foreground/30 p-6 text-center">
+                <Plug className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                 <p className="text-sm text-muted-foreground">
                   Aucune intégration configurée pour l'instant.
                 </p>
-              ) : (
-                <ul className="space-y-2">
-                  {integrations.map((integration) => (
-                    <li
+                <p className="text-xs text-muted-foreground/70 mt-1">
+                  Créez-en une ci-dessus pour commencer.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {integrations.map((integration) => {
+                  const testSt = testStatus[integration.id];
+                  return (
+                    <div
                       key={integration.id}
-                      className="flex items-center justify-between rounded border px-3 py-2 text-sm"
+                      className="rounded-lg border bg-card/50 backdrop-blur-sm p-3 hover:bg-card/70 transition-colors"
                     >
-                      <div>
-                        <div className="font-medium">{integration.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {INTEGRATION_TYPES.find((t) => t.id === integration.type)?.label || integration.type}
-                          {integration.baseUrl ? ` • ${integration.baseUrl}` : ""}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-semibold text-sm truncate">{integration.name}</h4>
+                            {testSt?.ok === true && (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0" title="Connexion OK" />
+                            )}
+                            {testSt?.ok === false && (
+                              <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" title={testSt.msg} />
+                            )}
+                            {testSt?.loading && (
+                              <Clock className="h-4 w-4 text-amber-500 flex-shrink-0 animate-spin" />
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground space-y-0.5">
+                            <p>{INTEGRATION_TYPES.find((t) => t.id === integration.type)?.label || integration.type}</p>
+                            {integration.baseUrl && (
+                              <p className="truncate" title={integration.baseUrl}>{integration.baseUrl}</p>
+                            )}
+                            {testSt?.msg && (
+                              <p className={testSt.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>
+                                {testSt.msg}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleTest(integration.id)}
+                            disabled={testSt?.loading}
+                            className="h-8 px-2 text-xs"
+                          >
+                            {testSt?.loading ? (
+                              <>
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                Test...
+                              </>
+                            ) : (
+                              'Tester'
+                            )}
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(integration)} className="h-8 px-2 text-xs">
+                            Modifier
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(integration.id)}
+                            className="h-8 px-2 text-xs text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleEdit(integration)}>
-                          Modifier
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDelete(integration.id)}
-                        >
-                          <Trash2 className="h-3 w-3 mr-1" />
-                          Supprimer
-                        </Button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="usage" className="space-y-3 text-sm text-muted-foreground">
@@ -285,7 +419,7 @@ export function IntegrationsSettings() {
             <ul className="list-disc pl-5 space-y-1">
               <li>
                 Les widgets comme <span className="font-medium">Demandes médias</span>,
-                <span className="font-medium"> Torrent / Seedbox</span> ou
+                <span className="font-medium"> Torrent ou Seedbox</span> ou
                 <span className="font-medium"> Monitoring</span> vont automatiquement détecter
                 les intégrations compatibles.
               </li>
@@ -294,7 +428,7 @@ export function IntegrationsSettings() {
                 du widget (par exemple choisir quel Overseerr ou quel client torrent utiliser).
               </li>
               <li>
-                Pour la <span className="font-medium">Médiathèque</span>, l'intégration Jellyfin / Emby
+                Pour la <span className="font-medium">Médiathèque</span>, l'intégration Jellyfin ou Emby
                 est utilisée pour parcourir et lire votre contenu à distance.
               </li>
             </ul>

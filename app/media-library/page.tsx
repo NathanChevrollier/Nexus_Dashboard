@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useConfirm } from "@/components/ui/confirm-provider";
 import { Play, Plus, Trash2, Film, Tv, Music2, MonitorPlay } from "lucide-react";
 
 interface EditableMediaItem {
@@ -31,6 +32,7 @@ export default function MediaLibraryPage() {
   const [editing, setEditing] = useState<EditableMediaItem | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [playingItem, setPlayingItem] = useState<MediaItem | null>(null);
+  const confirm = useConfirm();
 
   useEffect(() => {
     const load = async () => {
@@ -115,7 +117,7 @@ export default function MediaLibraryPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Supprimer ce média ?")) return;
+    if (!(await confirm("Supprimer ce média ?"))) return;
     try {
       await deleteMediaItem(id);
       const data = await getMediaItems();

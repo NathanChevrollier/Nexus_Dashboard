@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Cloud, CloudRain, Sun, Wind, Droplets, CloudSnow, Cloudy } from "lucide-react";
+import { Cloud, CloudRain, Sun, Wind, Droplets, CloudSnow, Cloudy, Eye, Gauge } from "lucide-react";
 import { Widget } from "@/lib/db/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -14,8 +14,12 @@ interface WeatherData {
   condition: string;
   humidity: number;
   windSpeed: number;
+  windDirection: number;
   city: string;
   feelsLike: number;
+  visibility: number;
+  precipitation: number;
+  isDay: boolean;
 }
 
 interface ForecastDay {
@@ -24,6 +28,8 @@ interface ForecastDay {
   condition: string;
   tempMin: number;
   tempMax: number;
+  precipitation: number;
+  uvIndex: number;
 }
 
 export function WeatherWidget({ widget }: WeatherWidgetProps) {
@@ -39,90 +45,98 @@ export function WeatherWidget({ widget }: WeatherWidgetProps) {
     const fetchWeather = async () => {
       setLoading(true);
       try {
-        const apiKey = (options as any).apiKey || process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
+        const res = await fetch(`/api/weather?city=${encodeURIComponent(city)}`);
+        if (!res.ok) throw new Error("Failed to fetch weather");
 
-        if (apiKey) {
-          // Récupérer les données actuelles
-          const currentRes = await fetch(
-            `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&units=metric&lang=fr&appid=${apiKey}`
-          );
+        const data = await res.json();
+        
+        // Open-Meteo retourne "current" (objet avec les données actuelles) 
+        // ET "current_weather" (simple avec temp/windspeed/weathercode)
+        const current = data.current || {};
+        const currentWeather = data.current_weather || {};
+        const hourly = data.hourly || null;
+        const daily = data.daily || null;
+        const resolvedCity = data.city || city;
 
-          if (!currentRes.ok) throw new Error("OpenWeather current failed");
-          const currentJson = await currentRes.json();
-
-          const w: WeatherData = {
-            temp: Math.round(currentJson.main.temp),
-            condition: currentJson.weather?.[0]?.description || "",
-            humidity: Math.round(currentJson.main.humidity),
-            windSpeed: Math.round(currentJson.wind?.speed || 0),
-            city: currentJson.name || city,
-            feelsLike: Math.round(currentJson.main.feels_like),
-          };
-
-          setWeather(w);
-
-          // Forecast (5 jours) via 3h forecast -> regrouper par jour
-          const forecastRes = await fetch(
-            `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&units=metric&lang=fr&appid=${apiKey}`
-          );
-
-          if (!forecastRes.ok) throw new Error("OpenWeather forecast failed");
-          const forecastJson = await forecastRes.json();
-
-          const dailyMap: Record<string, { tempMin: number; tempMax: number; condition: string }> = {};
-
-          (forecastJson.list || []).forEach((entry: any) => {
-            const date = new Date(entry.dt * 1000);
-            const day = date.toLocaleDateString('fr-FR', { weekday: 'short' });
-            const t = Math.round(entry.main.temp);
-            if (!dailyMap[day]) {
-              dailyMap[day] = { tempMin: t, tempMax: t, condition: entry.weather?.[0]?.description || '' };
-            } else {
-              dailyMap[day].tempMin = Math.min(dailyMap[day].tempMin, t);
-              dailyMap[day].tempMax = Math.max(dailyMap[day].tempMax, t);
+        const humidity = (() => {
+          try {
+            if (hourly && current.time) {
+              const times: string[] = hourly.time || [];
+              const rh: number[] = hourly.relativehumidity_2m || [];
+              const idx = times.findIndex((t) => t.startsWith(current.time.substring(0, 13)));
+              if (idx >= 0 && rh[idx] != null) return Math.round(rh[idx]);
+              if (rh.length > 0) return Math.round(rh[0]);
             }
-          });
+          } catch (e) {
+            // ignore
+          }
+          return current.relative_humidity_2m ? Math.round(current.relative_humidity_2m) : 0;
+        })();
 
-          const forecastData: ForecastDay[] = Object.keys(dailyMap)
-            .slice(0, 5)
-            .map((d) => ({
-              date: d,
-              temp: Math.round((dailyMap[d].tempMin + dailyMap[d].tempMax) / 2),
-              condition: dailyMap[d].condition,
-              tempMin: dailyMap[d].tempMin,
-              tempMax: dailyMap[d].tempMax,
-            }));
+        const conditionFromCode = (code: number) => {
+          if (code === 0) return "Ensoleillé";
+          if (code === 1 || code === 2) return "Peu nuageux";
+          if (code === 3) return "Nuageux";
+          if (code === 45 || code === 48) return "Brumeux";
+          if (code >= 51 && code <= 67) return "Pluie";
+          if (code >= 71 && code <= 77 || code === 85 || code === 86)
+            return "Neige";
+          if (code >= 80 && code <= 82) return "Averse";
+          if (code >= 85 && code <= 86) return "Averse de neige";
+          if (code === 95 || code === 96 || code === 99) return "Orage";
+          return "Inconnu";
+        };
 
-          setForecast(forecastData);
-        } else {
-          // Fallback: conserver simulation si pas de clé API
-          await new Promise((r) => setTimeout(r, 300));
-          const conditions = ["Ensoleillé", "Nuageux", "Pluvieux", "Venteux", "Neigeux"];
-          const currentCondition = conditions[Math.floor(Math.random() * conditions.length)];
-          const currentTemp = Math.round(Math.random() * 20 + 10);
-          setWeather({
-            temp: currentTemp,
-            condition: currentCondition,
-            humidity: Math.round(Math.random() * 40 + 40),
-            windSpeed: Math.round(Math.random() * 20 + 5),
-            city,
-            feelsLike: currentTemp + Math.round(Math.random() * 4 - 2),
-          });
-          const days = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
-          const forecastData = days.map((day, index) => {
-            const temp = Math.round(Math.random() * 15 + 10 + index);
-            return {
+        const temp = current.temperature_2m ?? currentWeather.temperature ?? 0;
+        const weatherCode = current.weather_code ?? currentWeather.weathercode ?? 0;
+        const windSpeed = current.wind_speed_10m ?? currentWeather.windspeed ?? 0;
+
+        const w: WeatherData = {
+          temp: Math.round(temp),
+          condition: conditionFromCode(weatherCode),
+          humidity: humidity,
+          windSpeed: Math.round(windSpeed),
+          windDirection: current.wind_direction_10m ? Math.round(current.wind_direction_10m) : (currentWeather.winddirection ? Math.round(currentWeather.winddirection) : 0),
+          city: resolvedCity,
+          feelsLike: Math.round(temp - (windSpeed / 3)),
+          visibility: current.visibility ? Math.round(current.visibility / 1000) : 10,
+          precipitation: current.precipitation ?? 0,
+          isDay: current.is_day === 1 || currentWeather.is_day === 1,
+        };
+
+        setWeather(w);
+
+        const forecastData: ForecastDay[] = [];
+        if (daily) {
+          const times: string[] = daily.time || [];
+          const tmax: number[] = daily.temperature_2m_max || [];
+          const tmin: number[] = daily.temperature_2m_min || [];
+          const codes: number[] = daily.weather_code || [];
+          const precip: number[] = daily.precipitation_sum || [];
+          const uv: number[] = daily.uv_index_max || [];
+
+          for (let i = 0; i < Math.min(times.length, 5); i++) {
+            const d = new Date(times[i]);
+            const day = d.toLocaleDateString("fr-FR", { weekday: "short" });
+            const low = Math.round(tmin[i] ?? 0);
+            const high = Math.round(tmax[i] ?? 0);
+            const avg = Math.round(((low + high) / 2) || 0);
+            const cond = conditionFromCode(codes[i] ?? -1);
+            forecastData.push({
               date: day,
-              temp,
-              condition: conditions[Math.floor(Math.random() * conditions.length)],
-              tempMin: temp - Math.round(Math.random() * 5),
-              tempMax: temp + Math.round(Math.random() * 5),
-            };
-          });
-          setForecast(forecastData);
+              temp: avg,
+              condition: cond,
+              tempMin: low,
+              tempMax: high,
+              precipitation: Math.round((precip[i] ?? 0) * 10) / 10,
+              uvIndex: Math.round((uv[i] ?? 0) * 10) / 10,
+            });
+          }
         }
+
+        setForecast(forecastData);
       } catch (error) {
-        console.error("Erreur météo:", error);
+        console.error('Erreur météo:', error);
       } finally {
         setLoading(false);
       }
@@ -190,50 +204,89 @@ export function WeatherWidget({ widget }: WeatherWidgetProps) {
 
         <TabsContent value="current" className="flex-1 mt-0">
           <div className="text-sm text-muted-foreground mb-2">{weather.city}</div>
-          <div className="flex-1 flex items-center justify-between">
+          <div className="flex-1 flex items-start justify-between mb-4">
             <div>
               <div className="text-5xl font-bold mb-1">{weather.temp}°C</div>
               <div className="text-sm text-muted-foreground">
                 Ressenti {weather.feelsLike}°C
               </div>
-              <div className="text-sm mt-1">{weather.condition}</div>
+              <div className="text-sm mt-1 font-medium">{weather.condition}</div>
             </div>
             <div>{getWeatherIcon(weather.condition, "lg")}</div>
           </div>
-          <div className="flex gap-6 mt-4 text-xs text-muted-foreground border-t pt-3">
-            <div className="flex items-center gap-2">
-              <Droplets className="h-4 w-4" />
-              <div>
-                <div className="font-medium">{weather.humidity}%</div>
-                <div className="text-[10px]">Humidité</div>
+
+          {/* Main metrics grid */}
+          <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
+            <div className="bg-card/50 rounded-lg p-2.5 border border-border/50">
+              <div className="flex items-center gap-2 mb-1">
+                <Droplets className="h-4 w-4 text-blue-500" />
+                <span className="text-muted-foreground">Humidité</span>
               </div>
+              <div className="text-lg font-semibold">{weather.humidity}%</div>
             </div>
-            <div className="flex items-center gap-2">
-              <Wind className="h-4 w-4" />
-              <div>
-                <div className="font-medium">{weather.windSpeed} km/h</div>
-                <div className="text-[10px]">Vent</div>
+            <div className="bg-card/50 rounded-lg p-2.5 border border-border/50">
+              <div className="flex items-center gap-2 mb-1">
+                <Wind className="h-4 w-4 text-cyan-500" />
+                <span className="text-muted-foreground">Vent</span>
               </div>
+              <div className="text-lg font-semibold">{weather.windSpeed} km/h</div>
+              <div className="text-[10px] text-muted-foreground">Direction: {weather.windDirection}°</div>
             </div>
+            <div className="bg-card/50 rounded-lg p-2.5 border border-border/50">
+              <div className="flex items-center gap-2 mb-1">
+                <Eye className="h-4 w-4 text-amber-500" />
+                <span className="text-muted-foreground">Visibilité</span>
+              </div>
+              <div className="text-lg font-semibold">{weather.visibility} km</div>
+            </div>
+            <div className="bg-card/50 rounded-lg p-2.5 border border-border/50">
+              <div className="flex items-center gap-2 mb-1">
+                <Gauge className="h-4 w-4 text-purple-500" />
+                <span className="text-muted-foreground">Précipitation</span>
+              </div>
+              <div className="text-lg font-semibold">{weather.precipitation.toFixed(1)} mm</div>
+            </div>
+          </div>
+
+          {/* Additional info footer */}
+          <div className="text-[10px] text-muted-foreground border-t pt-2">
+            {weather.isDay ? "☀️ Jour" : "🌙 Nuit"}
           </div>
         </TabsContent>
 
-        <TabsContent value="forecast" className="flex-1 mt-0">
+        <TabsContent value="forecast" className="flex-1 mt-0 overflow-y-auto">
           <div className="space-y-2">
             {forecast.map((day, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-accent/50 transition-colors"
+                className="flex flex-col gap-2 p-3 rounded-lg bg-card/50 border border-border/50 hover:bg-accent/50 transition-colors"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium w-8">{day.date}</span>
-                  {getWeatherIcon(day.condition, "sm")}
-                  <span className="text-xs text-muted-foreground">{day.condition}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 flex-1">
+                    <span className="text-sm font-medium w-12">{day.date}</span>
+                    <div className="flex items-center gap-2">
+                      {getWeatherIcon(day.condition, "sm")}
+                      <span className="text-xs text-muted-foreground">{day.condition}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-sm">
+                    <span className="text-muted-foreground">{day.tempMin}°</span>
+                    <div className="w-12 h-1.5 bg-gradient-to-r from-blue-400 to-orange-400 rounded-full"></div>
+                    <span className="font-semibold">{day.tempMax}°</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-muted-foreground">{day.tempMin}°</span>
-                  <div className="w-16 h-1 bg-gradient-to-r from-blue-400 to-orange-400 rounded-full"></div>
-                  <span className="font-semibold">{day.tempMax}°</span>
+                <div className="flex gap-3 text-[10px] text-muted-foreground">
+                  {day.precipitation > 0 && (
+                    <div className="flex items-center gap-1">
+                      <Droplets className="h-3 w-3 text-blue-500" />
+                      {day.precipitation.toFixed(1)} mm
+                    </div>
+                  )}
+                  {day.uvIndex > 0 && (
+                    <div>
+                      UV Index: {day.uvIndex}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

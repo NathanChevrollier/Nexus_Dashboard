@@ -276,7 +276,7 @@ export function ChartWidget({ widget }: ChartWidgetProps) {
         {renderChart()}
       </div>
 
-      {(chartType === "line" || chartType === "area" || chartType === "bar") && (
+      {(chartType === "line" || chartType === "area" || chartType === "bar") && data.length > 0 && (
         <div className="mt-2 flex justify-center gap-4 text-xs text-muted-foreground border-t pt-2">
           <span>Moy: {(data.reduce((acc, d) => acc + d.value, 0) / data.length).toFixed(1)}</span>
           <span>Max: {Math.max(...data.map(d => d.value)).toFixed(1)}</span>

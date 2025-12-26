@@ -70,10 +70,36 @@ export function CountdownWidget({ widget }: CountdownWidgetProps) {
     return () => clearInterval(interval);
   }, [countdown.targetDate]);
 
-  const saveCountdown = () => {
+  const saveCountdown = async () => {
+    // Validate date
+    const selectedDate = new Date(editForm.targetDate);
+    if (isNaN(selectedDate.getTime())) {
+      alert('Invalid date selected');
+      return;
+    }
+
+    if (selectedDate <= new Date()) {
+      alert('Target date must be in the future');
+      return;
+    }
+
     setCountdown(editForm);
     setIsEditing(false);
-    // TODO: Save to database
+
+    // Persist to database
+    try {
+      const { updateWidget } = await import('@/lib/actions/widgets');
+      await updateWidget(widget.id, {
+        options: {
+          ...widget.options,
+          countdownTitle: editForm.title,
+          countdownDate: editForm.targetDate,
+          countdownEmoji: editForm.emoji,
+        },
+      });
+    } catch (error) {
+      console.error('Error saving countdown:', error);
+    }
   };
 
   const formatDate = (dateString: string) => {

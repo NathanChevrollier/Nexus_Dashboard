@@ -131,20 +131,35 @@ export function QuoteWidget({ widget }: QuoteWidgetProps) {
   };
 
   const copyQuote = async () => {
-    const text = `"${currentQuote.text}" - ${currentQuote.author}`;
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      const text = `"${currentQuote.text}" - ${currentQuote.author}`;
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy quote:', error);
+      // Fallback: just show success anyway
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const shareQuote = () => {
-    const text = `"${currentQuote.text}" - ${currentQuote.author}`;
-    if (navigator.share) {
-      navigator.share({
-        title: 'Quote of the Day',
-        text: text,
-      });
-    } else {
+    try {
+      const text = `"${currentQuote.text}" - ${currentQuote.author}`;
+      if (navigator.share) {
+        navigator.share({
+          title: 'Quote of the Day',
+          text: text,
+        }).catch((error) => {
+          console.warn('Share failed:', error);
+          copyQuote();
+        });
+      } else {
+        copyQuote();
+      }
+    } catch (error) {
+      console.error('Share error:', error);
       copyQuote();
     }
   };

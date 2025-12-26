@@ -278,7 +278,23 @@ export function CustomGridLayout({
 
     newW = Math.min(newW, cols - item.x);
 
-    const newItem = { ...item, w: newW, h: newH };
+    let newItem = { ...item, w: newW, h: newH };
+
+    // Éviter les collisions pendant le resize si demandé
+    if (preventCollision) {
+      const otherItems = internalLayout.filter((l) => l.i !== item.i);
+      let safeY = newItem.y;
+
+      while (safeY < 200) {
+        const testItem = { ...newItem, y: safeY };
+        if (!checkCollision(testItem, otherItems)) {
+          newItem = testItem;
+          break;
+        }
+        safeY++;
+      }
+    }
+
     setPlaceholder(newItem);
   };
 

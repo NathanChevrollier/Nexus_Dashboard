@@ -36,6 +36,7 @@ const gradientPresets: Record<GradientPreset, string> = {
 };
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
   const [theme, setThemeState] = useState<Theme>("dark");
   const [primaryColor, setPrimaryColor] = useState("#3b82f6");
   const [backgroundColor, setBackgroundColor] = useState("#171717");
@@ -46,6 +47,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // Load theme from localStorage on mount
   useEffect(() => {
+    setMounted(true);
     const savedTheme = localStorage.getItem("nexus-theme") as Theme;
     const savedPrimaryColor = localStorage.getItem("nexus-primary-color");
     const savedBackgroundColor = localStorage.getItem("nexus-background-color");
@@ -200,6 +202,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setGradientPreset,
     timeBasedTheme,
   ]);
+
+  // Avoid hydration mismatch by not rendering until mounted
+  if (!mounted) {
+    return <>{children}</>;
+  }
 
   return (
     <ThemeContext.Provider value={contextValue}>

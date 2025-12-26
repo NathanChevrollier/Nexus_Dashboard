@@ -71,14 +71,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const cookie = loginRes.headers.get("set-cookie");
+    const rawCookie = loginRes.headers.get("set-cookie");
 
-    if (!cookie) {
+    if (!rawCookie) {
       return NextResponse.json(
         { error: "Réponse de connexion torrent invalide (pas de cookie)" },
         { status: 502 }
       );
     }
+
+    // Extraire le premier cookie (ex: SID=...)
+    const cookie = rawCookie.split(',')[0].split(';')[0];
 
     const torrentsRes = await fetch(`${baseUrl}/api/v2/torrents/info`, {
       headers: {

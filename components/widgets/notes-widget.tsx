@@ -21,6 +21,7 @@ export function NotesWidget({ widget }: NotesWidgetProps) {
   const [textColor, setTextColor] = useState<string>((options as any).textColor || "#000000");
   const [view, setView] = useState<"edit" | "preview">("edit");
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     setContent(options.content || "");
@@ -29,6 +30,7 @@ export function NotesWidget({ widget }: NotesWidgetProps) {
 
   const handleSave = async () => {
     setIsSaving(true);
+    setSaveError(null);
     try {
       await updateWidget(widget.id, {
         options: {
@@ -41,7 +43,8 @@ export function NotesWidget({ widget }: NotesWidgetProps) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (error) {
-      console.error("Erreur:", error);
+      console.error("Erreur lors de la sauvegarde:", error);
+      setSaveError("Erreur lors de la sauvegarde des notes");
     } finally {
       setIsSaving(false);
     }
@@ -87,6 +90,12 @@ export function NotesWidget({ widget }: NotesWidgetProps) {
         </div>
       </div>
       
+      {saveError && (
+        <div className="mb-2 text-xs bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 rounded p-2">
+          {saveError}
+        </div>
+      )}
+
       {isEditing ? (
         <Tabs value={view} onValueChange={(v) => setView(v as any)} className="flex-1 flex flex-col">
           <TabsList className="grid w-full grid-cols-2 mb-2 h-8">

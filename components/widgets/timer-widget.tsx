@@ -80,12 +80,26 @@ export function TimerWidget({ widget }: TimerWidgetProps) {
     setIsRunning(false);
     if (mode === 'pomodoro') {
       setSessions((prev) => prev + 1);
-      // Play notification sound
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('Pomodoro Complete!', {
-          body: 'Time for a break! 🎉',
-          icon: '/favicon.ico',
+      // Play notification sound and show notification
+      try {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('Pomodoro Complete!', {
+            body: 'Time for a break! 🎉',
+            icon: '/favicon.ico',
+          });
+        }
+      } catch (error) {
+        console.warn('Notification failed:', error);
+      }
+      
+      // Play audio notification as fallback
+      try {
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj==');
+        audio.play().catch(() => {
+          // Audio play failed, notification might still work
         });
+      } catch (error) {
+        // Ignore audio errors
       }
     }
   };
