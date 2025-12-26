@@ -191,7 +191,8 @@ export function AddCategoryButton({ dashboardId, onCategoryAdded }: AddCategoryB
 
     setLoading(true);
     try {
-      const newCategory = await createCategory(dashboardId, {
+      const newCategory = await createCategory({
+        dashboardId,
         name: name.trim(),
         icon,
         color,
