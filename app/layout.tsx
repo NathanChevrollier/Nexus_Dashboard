@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import "./themes-glassmorphism.css";
 import { Providers } from "@/components/providers";
+import { cookies } from 'next/headers';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -16,10 +17,14 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Lire le nonce CSP depuis le cookie injecté par le middleware
+  const cookieStore = cookies();
+  const nonce = cookieStore.get('csp-nonce')?.value ?? '';
   return (
     <html lang="fr" suppressHydrationWarning>
       <head>
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
@@ -57,7 +62,7 @@ export default function RootLayout({
                     sunset: 'linear-gradient(135deg, #FF6B6B 0%, #FFD93D 50%, #6BCB77 100%)',
                     ocean: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                     forest: 'linear-gradient(135deg, #134E5E 0%, #71B280 100%)',
-                    fire: 'linear-gradient(135deg, #f12711 0%, #f5af19 100%)',
+                    fire: 'linear-gradient(135deg, #f12711 0%, #f5af19 50%, #6BCB77 100%)',
                     'purple-haze': 'linear-gradient(135deg, #360033 0%, #0b8793 100%)'
                   };
                   

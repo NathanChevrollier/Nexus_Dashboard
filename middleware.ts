@@ -56,6 +56,9 @@ export function middleware(request: NextRequest) {
 
   // Passer le nonce pour l'utiliser dans les scripts
   response.headers.set('x-nonce', nonce);
+  // Exposer le nonce au rendu côté serveur via un cookie non HttpOnly
+  // (le layout server peut lire ce cookie avec `cookies()`)
+  response.cookies.set('csp-nonce', nonce, { httpOnly: false, path: '/' });
 
   return response;
 }
