@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,45 @@ export default function NewDashboardPage() {
   const [isPublic, setIsPublic] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [available, setAvailable] = useState<{ public: any[]; shared: any[] } | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/dashboards/available');
+        if (!mounted) return;
+        const data = await res.json();
+        setAvailable(data);
+      } catch (err) {
+        console.error(err);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const handleClone = async (templateId: string, templateName: string) => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/dashboards/clone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dashboardId: templateId, name: name || `Clone de ${templateName}` }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Erreur lors du clonage');
+      } else {
+        router.push(`/dashboard/${data.slug}`);
+        router.refresh();
+      }
+    } catch (err) {
+      setError('Erreur réseau');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +100,45 @@ export default function NewDashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {available && (
+              <div className="mb-4">
+                <h3 className="text-sm font-medium mb-2">Templates publics ou partagés</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                  {available.public.map((p) => (
+                    <div key={p.id} className="p-3 border rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium">{p.name}</div>
+                          <div className="text-xs text-muted-foreground">Public</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => handleClone(p.id, p.name)} disabled={loading}>
+                            Utiliser ce template
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {available.shared.map((s) => (
+                    <div key={s.shareId} className="p-3 border rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium">{s.name}</div>
+                          <div className="text-xs text-muted-foreground">Partagé par {s.owner?.name || s.owner?.email} • {s.permission}</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => handleClone(s.dashboardId, s.name)} disabled={loading}>
+                            Cloner
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Nom du Dashboard</Label>

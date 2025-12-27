@@ -14,6 +14,7 @@ import {
   Film, CalendarRange 
 } from "lucide-react";
 import type { Widget, Category } from "@/lib/db/schema";
+import { useAlert } from "@/components/ui/confirm-provider";
 
 interface WidgetSelectorDialogProps {
   open: boolean;
@@ -46,6 +47,7 @@ const widgetTypes = [
 ] as const;
 
 export function WidgetSelectorDialog({ open, onOpenChange, dashboardId, categories = [], onWidgetAdded }: WidgetSelectorDialogProps) {
+  const alert = useAlert();
   const [selectedType, setSelectedType] = useState<WidgetType | null>(null);
   const [loading, setLoading] = useState(false);
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -121,7 +123,7 @@ export function WidgetSelectorDialog({ open, onOpenChange, dashboardId, categori
       onOpenChange(false);
     } catch (error) {
       console.error("Erreur lors de la création du widget:", error);
-      alert("Erreur lors de la création du widget");
+      await alert("Erreur lors de la création du widget");
     } finally {
       setLoading(false);
     }

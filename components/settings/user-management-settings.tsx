@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, Check, X, Shield, Crown, User as UserIcon } from "lucide-react";
 import { useConfirm } from "@/components/ui/confirm-provider";
+import { useAlert } from "@/components/ui/confirm-provider";
 
 interface User {
   id: string;
@@ -17,11 +19,14 @@ interface User {
 }
 
 export function UserManagementSettings() {
+  const alert = useAlert();
   const confirm = useConfirm();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { data: session } = useSession();
+  const currentUserId = session?.user?.id;
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -73,11 +78,11 @@ export function UserManagementSettings() {
         setUsers((prev) => prev.filter((u) => u.id !== userId));
       } else {
         console.error('Erreur suppression utilisateur:', body);
-        alert('Erreur lors de la suppression. Voir console.');
+        await alert('Erreur lors de la suppression. Voir console.');
       }
     } catch (e) {
       console.error('Erreur suppression utilisateur:', e);
-      alert('Erreur lors de la suppression. Voir console.');
+      await alert('Erreur lors de la suppression. Voir console.');
     } finally {
       setSavingId(null);
     }
@@ -94,14 +99,14 @@ export function UserManagementSettings() {
       });
       const body = await res.json().catch(() => ({}));
       if (res.ok && body.ok) {
-        alert('Réinitialisation effectuée avec succès.');
+        await alert('Réinitialisation effectuée avec succès.');
       } else {
         console.error('Erreur reset utilisateur:', body);
-        alert('Erreur lors de la réinitialisation. Voir console.');
+        await alert('Erreur lors de la réinitialisation. Voir console.');
       }
     } catch (e) {
       console.error('Erreur reset utilisateur:', e);
-      alert('Erreur lors de la réinitialisation. Voir console.');
+      await alert('Erreur lors de la réinitialisation. Voir console.');
     } finally {
       setSavingId(null);
     }
@@ -212,7 +217,7 @@ export function UserManagementSettings() {
                     <Button
                       size="sm"
                       variant="default"
-                      disabled={savingId === user.id}
+                      disabled={savingId === user.id || user.id === currentUserId}
                       onClick={() => updateUser(user.id, { status: "ACTIVE" })}
                     >
                       <Check className="h-4 w-4 mr-1" />
@@ -221,7 +226,7 @@ export function UserManagementSettings() {
                     <Button
                       size="sm"
                       variant="destructive"
-                      disabled={savingId === user.id}
+                      disabled={savingId === user.id || user.id === currentUserId}
                       onClick={() => updateUser(user.id, { status: "BANNED" })}
                     >
                       <X className="h-4 w-4 mr-1" />
@@ -253,7 +258,7 @@ export function UserManagementSettings() {
                 <div className="flex gap-2">
                   <select
                     value={user.role}
-                    disabled={savingId === user.id}
+                    disabled={savingId === user.id || user.id === currentUserId}
                     onChange={(e) =>
                       updateUser(user.id, { role: e.target.value as User["role"] })
                     }
@@ -266,7 +271,7 @@ export function UserManagementSettings() {
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={savingId === user.id}
+                    disabled={savingId === user.id || user.id === currentUserId}
                     onClick={() => updateUser(user.id, { status: "BANNED" })}
                   >
                     Bannir
@@ -274,7 +279,7 @@ export function UserManagementSettings() {
                   <Button
                     size="sm"
                     variant="destructive"
-                    disabled={savingId === user.id}
+                    disabled={savingId === user.id || user.id === currentUserId}
                     onClick={() => deleteUser(user.id)}
                   >
                     Supprimer
@@ -282,7 +287,7 @@ export function UserManagementSettings() {
                   <Button
                     size="sm"
                     variant="secondary"
-                    disabled={savingId === user.id}
+                    disabled={savingId === user.id || user.id === currentUserId}
                     onClick={() => resetUser(user.id)}
                   >
                     Réinitialiser

@@ -33,6 +33,10 @@ export async function POST(request: Request) {
 
     const { userId } = parsed.data;
 
+    // Prevent admins from deleting their own account
+    if (session.user.id === userId) {
+      return NextResponse.json({ error: "Vous ne pouvez pas supprimer votre propre compte" }, { status: 403 });
+    }
     // Fetch dashboards for user
     const userDashboards = await db.select().from(dashboards).where(eq(dashboards.userId, userId));
 

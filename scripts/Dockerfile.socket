@@ -1,0 +1,21 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install build deps
+RUN apk add --no-cache python3 make g++
+
+# Copy package files to install only production deps
+COPY package.json package-lock.json* ./
+
+# Use `npm install` inside the build to avoid lockfile mismatch during iterative development
+RUN npm install --omit=dev --no-audit --no-fund
+
+# Copy socket server script
+COPY scripts/socket-server.js ./socket-server.js
+
+EXPOSE 4001
+
+ENV PORT 4001
+
+CMD ["node", "socket-server.js"]

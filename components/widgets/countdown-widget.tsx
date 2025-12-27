@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAlert } from '@/components/ui/confirm-provider';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +27,7 @@ interface CountdownData {
 }
 
 export function CountdownWidget({ widget }: CountdownWidgetProps) {
+  const alert = useAlert();
   const [countdown, setCountdown] = useState<CountdownData>({
     title: widget.options.countdownTitle as string || 'My Event',
     targetDate: widget.options.countdownDate as string || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -74,12 +76,12 @@ export function CountdownWidget({ widget }: CountdownWidgetProps) {
     // Validate date
     const selectedDate = new Date(editForm.targetDate);
     if (isNaN(selectedDate.getTime())) {
-      alert('Invalid date selected');
+      await alert('Invalid date selected');
       return;
     }
 
     if (selectedDate <= new Date()) {
-      alert('Target date must be in the future');
+      await alert('Target date must be in the future');
       return;
     }
 

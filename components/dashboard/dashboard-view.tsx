@@ -10,10 +10,12 @@ import { CategoryGridItem } from "@/components/dashboard/category-grid-item";
 import { AddWidgetDialogModern } from "@/components/dashboard/add-widget-dialog-modern";
 import { AddCategoryDialog } from "@/components/dashboard/add-category-dialog";
 import { EditWidgetDialog } from "@/components/dashboard/edit-widget-dialog";
+import { ShareDashboardDialog } from "@/components/dashboard/share-dashboard-dialog";
 import { updateWidgetPositions, deleteWidget } from "@/lib/actions/widgets";
 import { updateCategoryPositions, deleteCategory } from "@/lib/actions/categories";
 import { CrossGridDragProvider, useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-v2";
 import { useConfirm } from "@/components/ui/confirm-provider";
+import { useAlert } from "@/components/ui/confirm-provider";
 
 interface DashboardViewProps {
   dashboard: Dashboard;
@@ -28,6 +30,7 @@ export function DashboardView({
   initialWidgets = [], 
   initialCategories = [] 
 }: DashboardViewProps) {
+  const alert = useAlert();
   return (
     <CrossGridDragProvider>
       <DashboardViewInner
@@ -55,6 +58,7 @@ function DashboardViewInner({
   const [showAddCategoryDialog, setShowAddCategoryDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingWidget, setEditingWidget] = useState<Widget | null>(null);
+  const [showShareDialog, setShowShareDialog] = useState(false);
   const [saving, setSaving] = useState(false);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -95,10 +99,22 @@ function DashboardViewInner({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isDragging, cancelDrag]);
 
+  // Calculate responsive grid columns based on screen width
+  const getResponsiveCols = () => {
+    if (typeof window === 'undefined') return 12;
+    const width = window.innerWidth;
+    if (width < 640) return 4;    // Mobile: 4 columns
+    if (width < 1024) return 8;   // Tablet: 8 columns
+    return 12;                     // Desktop: 12 columns
+  };
+
+  const [responsiveCols, setResponsiveCols] = useState(12);
+
   useEffect(() => {
     const updateWidth = () => {
       const width = window.innerWidth - 48;
       setContainerWidth(width);
+      setResponsiveCols(getResponsiveCols());
     };
     updateWidth();
     window.addEventListener('resize', updateWidth);
@@ -283,7 +299,7 @@ function DashboardViewInner({
       setIsEditMode(false);
     } catch (error) {
       console.error("Erreur lors de la sauvegarde:", error);
-      alert("Erreur lors de la sauvegarde");
+      await alert("Erreur lors de la sauvegarde");
     } finally {
       setSaving(false);
     }
@@ -355,7 +371,7 @@ function DashboardViewInner({
         setWidgets(widgets.filter((w) => w.id !== widgetId));
       } catch (error) {
         console.error("Erreur:", error);
-        alert("Erreur lors de la suppression");
+        await alert("Erreur lors de la suppression");
       }
     }
   };
@@ -370,7 +386,7 @@ function DashboardViewInner({
         );
       } catch (error) {
         console.error("Erreur:", error);
-        alert("Erreur lors de la suppression");
+        await alert("Erreur lors de la suppression");
       }
     }
   };
@@ -575,22 +591,22 @@ function DashboardViewInner({
       )}
       
       {isOwner && (
-        <div className="border-b bg-gradient-to-br from-card/40 via-background to-card/20 backdrop-blur-xl shadow-md px-8 py-4 relative overflow-hidden">
+        <div className="border-b bg-gradient-to-br from-card/40 via-background to-card/20 backdrop-blur-xl shadow-md px-4 sm:px-6 lg:px-8 py-4 relative overflow-hidden">
           {/* Effet de fond décoratif */}
           <div className="absolute inset-0 bg-grid-white/[0.01] pointer-events-none" />
           <div className="absolute top-0 right-0 w-80 h-80 bg-primary/3 rounded-full blur-3xl pointer-events-none" />
           
-          <div className="relative flex items-center justify-between">
+          <div className="relative flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-0">
             {/* Section gauche: Titre + Stats */}
-            <div className="flex items-center gap-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 w-full lg:w-auto">
               {/* Titre Dashboard */}
-              <div className="flex items-center gap-4">
-                <div className="relative">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="relative hidden sm:block">
                   <div className="absolute inset-0 bg-primary/15 blur-lg rounded-full" />
                   <div className="relative h-10 w-1 bg-gradient-to-b from-primary via-primary to-primary/40 rounded-full shadow-md shadow-primary/30" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">
+                  <h2 className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">
                     {dashboard.name}
                   </h2>
                   <p className="text-xs text-muted-foreground/80 mt-0.5">
@@ -600,18 +616,18 @@ function DashboardViewInner({
               </div>
 
               {/* Stats rapides */}
-              <div className="flex items-center gap-3 ml-4">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-card/50 rounded-lg border border-border/30 backdrop-blur-sm">
-                  <Layers className="h-4 w-4 text-primary" />
+              <div className="flex items-center gap-2 sm:gap-3 ml-0 sm:ml-4">
+                <div className="flex items-center gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-card/50 rounded-lg border border-border/30 backdrop-blur-sm">
+                  <Layers className="h-3 sm:h-4 w-3 sm:w-4 text-primary flex-shrink-0" />
                   <div className="flex flex-col">
-                    <span className="text-xs text-muted-foreground leading-none">Widgets</span>
+                    <span className="text-xs text-muted-foreground leading-none hidden xs:inline">Widgets</span>
                     <span className="text-sm font-bold text-foreground">{widgets.length}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-card/50 rounded-lg border border-border/30 backdrop-blur-sm">
-                  <BarChart3 className="h-4 w-4 text-primary" />
+                <div className="flex items-center gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-card/50 rounded-lg border border-border/30 backdrop-blur-sm">
+                  <BarChart3 className="h-3 sm:h-4 w-3 sm:w-4 text-primary flex-shrink-0" />
                   <div className="flex flex-col">
-                    <span className="text-xs text-muted-foreground leading-none">Catégories</span>
+                    <span className="text-xs text-muted-foreground leading-none hidden xs:inline">Catégories</span>
                     <span className="text-sm font-bold text-foreground">{categories.length}</span>
                   </div>
                 </div>
@@ -619,17 +635,17 @@ function DashboardViewInner({
             </div>
 
             {/* Section centre: Date et Heure */}
-            <div className="absolute left-1/2 -translate-x-1/2">
-              <div className="px-5 py-2.5 bg-gradient-to-br from-card/80 to-card/40 rounded-xl border border-primary/10 shadow-lg backdrop-blur-md">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <Calendar className="h-4 w-4 text-primary" />
+            <div className="w-full sm:w-auto lg:absolute lg:left-1/2 lg:-translate-x-1/2">
+              <div className="px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-br from-card/80 to-card/40 rounded-xl border border-primary/10 shadow-lg backdrop-blur-md">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="p-1 sm:p-2 bg-primary/10 rounded-lg">
+                    <Calendar className="h-3 sm:h-4 w-3 sm:w-4 text-primary" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="font-semibold text-xs text-foreground leading-tight">
+                    <span className="font-semibold text-xs leading-tight line-clamp-1">
                       {formatDate()}
                     </span>
-                    <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className="flex items-center gap-1 mt-0.5">
                       <div className="h-1 w-1 rounded-full bg-primary animate-pulse" />
                       <span className="text-xs font-mono font-medium text-primary/90">
                         {formatTime()}
@@ -641,41 +657,46 @@ function DashboardViewInner({
             </div>
 
             {/* Actions */}
-            <div className="flex gap-2.5">
+            <div className="flex gap-2 w-full lg:w-auto flex-wrap">
+              <Button size="sm" variant="outline" onClick={() => setShowShareDialog(true)} className="gap-2 text-xs sm:text-sm">
+                Partager
+              </Button>
+              <ShareDashboardDialog open={showShareDialog} onOpenChange={setShowShareDialog} dashboardId={dashboard.id} />
               {isEditMode ? (
                 <>
                   <Button 
                     onClick={() => setShowAddDialog(true)} 
                     variant="outline" 
                     size="sm" 
-                    className="gap-2 border-primary/20 hover:bg-primary/5 hover:border-primary/40 transition-all"
+                    className="gap-1 sm:gap-2 border-primary/20 hover:bg-primary/5 hover:border-primary/40 transition-all text-xs sm:text-sm"
                   >
-                    <Plus className="h-4 w-4" />
-                    <span className="font-medium">Widget</span>
+                    <Plus className="h-3 sm:h-4 w-3 sm:w-4" />
+                    <span className="font-medium hidden sm:inline">Widget</span>
                   </Button>
                   <Button 
                     onClick={() => setShowAddCategoryDialog(true)}
                     variant="outline" 
                     size="sm"
-                    className="gap-2 border-primary/20 hover:bg-primary/5 hover:border-primary/40 transition-all"
+                    className="gap-1 sm:gap-2 border-primary/20 hover:bg-primary/5 hover:border-primary/40 transition-all text-xs sm:text-sm"
                   >
-                    <Folder className="h-4 w-4" />
-                    <span className="font-medium">Catégorie</span>
+                    <Folder className="h-3 sm:h-4 w-3 sm:w-4" />
+                    <span className="font-medium hidden sm:inline">Catégorie</span>
                   </Button>
                   <Button 
                     onClick={saveLayout} 
                     disabled={saving} 
                     size="sm" 
-                    className="gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 transition-all"
+                    className="gap-1 sm:gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 transition-all text-xs sm:text-sm"
                   >
-                    <Save className="h-4 w-4" />
-                    <span className="font-medium">{saving ? "Enregistrement..." : "Enregistrer"}</span>
+                    <Save className="h-3 sm:h-4 w-3 sm:w-4" />
+                    <span className="font-medium hidden sm:inline">{saving ? "Enregistrement..." : "Enregistrer"}</span>
+                    <span className="font-medium sm:hidden">{saving ? "..." : "OK"}</span>
                   </Button>
                   <Button 
                     onClick={() => setIsEditMode(false)} 
                     variant="ghost" 
                     size="sm"
-                    className="hover:bg-destructive/10 hover:text-destructive"
+                    className="hover:bg-destructive/10 hover:text-destructive text-xs sm:text-sm"
                   >
                     Annuler
                   </Button>
@@ -684,10 +705,11 @@ function DashboardViewInner({
                 <Button 
                   onClick={() => setIsEditMode(true)} 
                   size="sm" 
-                  className="gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 transition-all"
+                  className="gap-1 sm:gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 transition-all text-xs sm:text-sm"
                 >
-                  <Edit className="h-4 w-4" />
-                  <span className="font-medium">Modifier</span>
+                  <Edit className="h-3 sm:h-4 w-3 sm:w-4" />
+                  <span className="font-medium hidden sm:inline">Modifier</span>
+                  <span className="font-medium sm:hidden">Éditer</span>
                 </Button>
               )}
             </div>
@@ -695,7 +717,7 @@ function DashboardViewInner({
         </div>
       )}
 
-      <div className="flex-1 overflow-auto p-6 max-w-full">
+      <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 max-w-full">
         {/* Message d'aide en mode édition */}
         {isEditMode && mainLayout.length > 0 && (
           <div className="mb-4 p-4 bg-gradient-to-br from-primary/8 via-primary/5 to-primary/8 border border-primary/20 rounded-xl backdrop-blur-sm shadow-lg">
@@ -724,7 +746,7 @@ function DashboardViewInner({
                     </p>
                     <ul className="text-muted-foreground space-y-1 text-xs">
                       <li>• <strong>Déplacer:</strong> Glisse-dépose directement sur la grille</li>
-                      <li>• <strong>Changer de catégorie:</strong> Ctrl+Clic sur la poignée ⋮⋮ puis dépose sur 📥</li>
+                      <li>• <strong>Changer de catégorie:</strong> Ctrl/Cmd+Clic sur la poignée ⋮⋮ puis dépose sur 📥</li>
                       <li>• <strong>Annuler:</strong> Appuie sur <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Échap</kbd> pour annuler</li>
                       <li>• <strong>Ou via menu:</strong> Clique sur ✏️ puis choisis une catégorie</li>
                       <li>• <strong>Redimensionner:</strong> Tire le coin en bas à droite</li>
@@ -733,7 +755,7 @@ function DashboardViewInner({
                 </div>
                 <div className="mt-3 p-2.5 bg-primary/5 border border-primary/20 rounded-lg">
                   <p className="text-xs text-muted-foreground">
-                    <strong className="text-primary">💡 Astuce Pro:</strong> Maintiens <kbd className="px-1 py-0.5 bg-primary/10 rounded text-primary font-mono text-[10px]">Ctrl</kbd> en cliquant sur la poignée ⋮⋮ d'un widget pour activer le mode cross-grid. Les zones de drop 📥 apparaissent dans les headers de catégories. Appuie sur <kbd className="px-1 py-0.5 bg-primary/10 rounded text-primary font-mono text-[10px]">Échap</kbd> pour annuler !
+                    <strong className="text-primary">💡 Astuce Pro:</strong> Maintiens <kbd className="px-1 py-0.5 bg-primary/10 rounded text-primary font-mono text-[10px]">Ctrl/Cmd</kbd> en cliquant sur la poignée ⋮⋮ d'un widget pour activer le mode cross-grid. Les zones de drop 📥 apparaissent dans les headers de catégories. Appuie sur <kbd className="px-1 py-0.5 bg-primary/10 rounded text-primary font-mono text-[10px]">Échap</kbd> pour annuler !
                   </p>
                 </div>
               </div>
@@ -757,7 +779,7 @@ function DashboardViewInner({
           <CustomGridLayout
             className="layout main-dashboard-grid"
             layout={mainLayout}
-            cols={12}
+            cols={responsiveCols}
             rowHeight={80}
             width={containerWidth}
             isDraggable={isEditMode}

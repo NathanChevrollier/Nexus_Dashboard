@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAlert } from "@/components/ui/confirm-provider";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -20,6 +21,7 @@ export function DashboardExportImport({
   dashboardName,
   onDashboardCreated,
 }: DashboardExportImportProps) {
+  const alert = useAlert();
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -30,7 +32,7 @@ export function DashboardExportImport({
     try {
       const data = await exportDashboard(dashboardId);
       if (!data) {
-        alert("Erreur lors de l'export");
+        await alert("Erreur lors de l'export");
         return;
       }
 
@@ -52,7 +54,7 @@ export function DashboardExportImport({
       }, 2000);
     } catch (error) {
       console.error("Export error:", error);
-      alert("Erreur lors de l'export du dashboard");
+      await alert("Erreur lors de l'export du dashboard");
     }
   };
 
@@ -74,7 +76,7 @@ export function DashboardExportImport({
       const result = await importDashboard(data);
 
       if (result.success && result.dashboardId) {
-        alert("Dashboard importé avec succès !");
+        await alert("Dashboard importé avec succès !");
         setImportDialogOpen(false);
         if (onDashboardCreated) {
           onDashboardCreated(result.dashboardId);
@@ -82,11 +84,11 @@ export function DashboardExportImport({
         // Redirect to new dashboard
         window.location.href = `/dashboard/${result.dashboardId}`;
       } else {
-        alert(result.error || "Erreur lors de l'import");
+        await alert(result.error || "Erreur lors de l'import");
       }
     } catch (error) {
       console.error("Import error:", error);
-      alert("Fichier invalide ou erreur lors de l'import");
+      await alert("Fichier invalide ou erreur lors de l'import");
     } finally {
       setImporting(false);
     }
@@ -99,18 +101,18 @@ export function DashboardExportImport({
       const result = await duplicateDashboard(dashboardId);
 
       if (result.success && result.dashboardId) {
-        alert("Dashboard dupliqué avec succès !");
+        await alert("Dashboard dupliqué avec succès !");
         if (onDashboardCreated) {
           onDashboardCreated(result.dashboardId);
         }
         // Redirect to new dashboard
         window.location.href = `/dashboard/${result.dashboardId}`;
       } else {
-        alert(result.error || "Erreur lors de la duplication");
+        await alert(result.error || "Erreur lors de la duplication");
       }
     } catch (error) {
       console.error("Duplicate error:", error);
-      alert("Erreur lors de la duplication du dashboard");
+      await alert("Erreur lors de la duplication du dashboard");
     } finally {
       setDuplicating(false);
     }

@@ -52,9 +52,11 @@ export const WidgetComponent = memo(function WidgetComponent({
     event.stopPropagation();
   };
 
-  // Gérer le Ctrl+Drag pour le cross-grid drag avec animation
+  // Gérer le Ctrl/Cmd+Drag pour le cross-grid drag avec animation
   const handleDragHandlePointerDown = (event: React.PointerEvent) => {
-    if (isEditMode && event.ctrlKey) {
+    // Supporter Command (⌘) sur macOS via metaKey
+    const activateCrossGrid = event.ctrlKey || event.metaKey;
+    if (isEditMode && activateCrossGrid) {
       event.preventDefault();
       event.stopPropagation();
       
@@ -137,7 +139,7 @@ export const WidgetComponent = memo(function WidgetComponent({
           >
             <GripVertical className="h-3 w-3 opacity-60" />
             <span>{widget.type}</span>
-            <span className="text-[10px] opacity-50 ml-1">(Ctrl = 🔄)</span>
+            <span className="text-[10px] opacity-50 ml-1">(Ctrl/Cmd = 🔄)</span>
           </div>
           {(onEdit || onDelete) && (
             <div className="flex gap-1 widget-no-drag">

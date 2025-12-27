@@ -5,6 +5,8 @@ import { SessionProvider } from "next-auth/react";
 import { useState } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ConfirmProvider } from "@/components/ui/confirm-provider";
+import { SocketProvider } from "@/components/ui/socket-provider";
+import NotificationBell from "@/components/ui/notification-bell";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -24,7 +26,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <ConfirmProvider>
-            {children}
+            <SocketProvider>
+              {children}
+              <NotificationBell />
+            </SocketProvider>
           </ConfirmProvider>
         </ThemeProvider>
       </QueryClientProvider>

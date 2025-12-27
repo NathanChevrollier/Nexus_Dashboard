@@ -64,6 +64,24 @@ export const sessions = mysqlTable('sessions', {
   expires: timestamp('expires').notNull(),
 });
 
+// ============= SHARED DASHBOARDS TABLE =============
+export const sharePermissionEnum = mysqlEnum('share_permission', ['read', 'edit']);
+export const shareStatusEnum = mysqlEnum('share_status', ['pending', 'accepted']);
+
+export const sharedDashboards = mysqlTable('shared_dashboards', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  dashboardId: varchar('dashboard_id', { length: 255 }).notNull(),
+  ownerId: varchar('owner_id', { length: 255 }).notNull(),
+  targetUserId: varchar('target_user_id', { length: 255 }).notNull(),
+  permission: sharePermissionEnum.notNull(),
+  status: shareStatusEnum.default('pending').notNull(),
+  integrationIds: json('integration_ids').$type<string[]>().default([]),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  dashboardIdIdx: index('shared_dashboard_dashboard_id_idx').on(table.dashboardId),
+  targetUserIdx: index('shared_dashboard_target_user_idx').on(table.targetUserId),
+}));
+
 // ============= VERIFICATION TOKENS TABLE (NextAuth) =============
 export const verificationTokens = mysqlTable('verification_tokens', {
   identifier: varchar('identifier', { length: 255 }).notNull(),
@@ -250,6 +268,9 @@ export type NewIntegration = typeof integrations.$inferInsert;
 
 export type MediaItem = typeof mediaItems.$inferSelect;
 export type NewMediaItem = typeof mediaItems.$inferInsert;
+
+export type SharedDashboard = typeof sharedDashboards.$inferSelect;
+export type NewSharedDashboard = typeof sharedDashboards.$inferInsert;
 
 // Theme Configuration Type
 export interface ThemeConfig {

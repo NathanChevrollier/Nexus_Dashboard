@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAlert } from "@/components/ui/confirm-provider";
 import EmojiPicker from "@/components/ui/emoji-picker";
 import AssetPicker from "@/components/ui/asset-picker";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -208,6 +209,7 @@ const widgetDefinitions = [
 ];
 
 export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidgetAdded }: AddWidgetDialogProps) {
+  const alert = useAlert();
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<"select" | "configure">("select");
   const [selectedWidget, setSelectedWidget] = useState<WidgetType | null>(null);
@@ -319,83 +321,83 @@ export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidge
       switch (selectedWidget) {
         case "link":
           options = linkForm;
-          defaultSize = { w: 2, h: 1 };
+          defaultSize = { w: 3, h: 2 };
           break;
         case "ping":
           options = pingForm;
-          defaultSize = { w: 2, h: 1 };
+          defaultSize = { w: 3, h: 2 };
           break;
         case "iframe":
           options = iframeForm;
-          defaultSize = { w: 4, h: 3 };
+          defaultSize = { w: 5, h: 4 };
           break;
         case "datetime":
           options = { format: "PPP", timezone: "Europe/Paris" };
-          defaultSize = { w: 3, h: 1 };
+          defaultSize = { w: 4, h: 2 };
           break;
         case "weather":
           options = weatherForm;
-          defaultSize = { w: 2, h: 2 };
+          defaultSize = { w: 3, h: 3 };
           break;
         case "notes":
           options = notesForm;
-          defaultSize = { w: 3, h: 3 };
+          defaultSize = { w: 4, h: 4 };
           break;
         case "chart":
           options = chartForm;
-          defaultSize = { w: 4, h: 2 };
+          defaultSize = { w: 5, h: 3 };
           break;
         case "anime-calendar":
           options = animeForm;
-          defaultSize = { w: 3, h: 3 };
+          defaultSize = { w: 4, h: 4 };
           break;
         case "todo-list":
           options = todoForm;
-          defaultSize = { w: 2, h: 3 };
+          defaultSize = { w: 3, h: 4 };
           break;
         case "watchlist":
           options = watchlistForm;
-          defaultSize = { w: 3, h: 3 };
+          defaultSize = { w: 4, h: 4 };
           break;
         case "timer":
           options = timerForm;
-          defaultSize = { w: 2, h: 3 };
+          defaultSize = { w: 3, h: 4 };
           break;
         case "bookmarks":
           options = bookmarksForm;
-          defaultSize = { w: 3, h: 3 };
+          defaultSize = { w: 4, h: 4 };
           break;
         case "quote":
           options = quoteForm;
-          defaultSize = { w: 3, h: 2 };
+          defaultSize = { w: 4, h: 3 };
           break;
         case "countdown":
           options = countdownForm;
-          defaultSize = { w: 2, h: 2 };
+          defaultSize = { w: 3, h: 3 };
           break;
         case "universal-calendar":
           options = universalCalendarForm;
-          defaultSize = { w: 4, h: 4 };
+          defaultSize = { w: 5, h: 5 };
           break;
         case "movies-tv-calendar":
           options = moviesTVForm;
-          defaultSize = { w: 3, h: 3 };
+          defaultSize = { w: 4, h: 4 };
           break;
         case "media-requests":
           options = mediaRequestsForm;
-          defaultSize = { w: 3, h: 3 };
+          defaultSize = { w: 4, h: 4 };
           break;
         case "torrent-overview":
           options = torrentForm;
-          defaultSize = { w: 3, h: 3 };
+          defaultSize = { w: 4, h: 4 };
           break;
         case "monitoring":
           options = monitoringForm;
-          defaultSize = { w: 3, h: 2 };
+          defaultSize = { w: 4, h: 3 };
           break;
         case "media-library":
           options = mediaLibraryForm;
-          defaultSize = { w: 3, h: 2 };
+          defaultSize = { w: 4, h: 3 };
           break;
       }
 
@@ -421,7 +423,7 @@ export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidge
       onOpenChange(false);
     } catch (error) {
       console.error("Erreur lors de la création du widget:", error);
-      alert("Erreur lors de la création du widget");
+      await alert("Erreur lors de la création du widget");
     } finally {
       setLoading(false);
     }

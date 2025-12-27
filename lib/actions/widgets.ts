@@ -45,9 +45,24 @@ export async function createWidget(
   let y = widgetData.y ?? 0;
 
   if ((x === 0 && y === 0) || (widgetData.x === undefined && widgetData.y === undefined)) {
-    // Récupérer le bas maximal des widgets existants sur ce dashboard
-    const existing = await db.select({ y: widgets.y, h: widgets.h }).from(widgets).where(eq(widgets.dashboardId, dashboardId));
-    const bottoms = existing.map((w: any) => (Number(w.y || 0) + Number(w.h || 0)));
+    // Récupérer le bas maximal des widgets et des catégories existants sur ce dashboard
+    const existingWidgets = await db.select({ y: widgets.y, h: widgets.h }).from(widgets).where(eq(widgets.dashboardId, dashboardId));
+    // categories table may not exist in this import scope so query defensively
+    let categoryRows: any[] = [];
+    try {
+      // Try to query categories if present
+      // @ts-ignore
+      const cats = await db.select({ y: (db as any).schema?.categories?.y ?? 0, h: (db as any).schema?.categories?.h ?? 0 }).from((db as any).schema?.categories).where(eq((db as any).schema?.categories?.dashboardId, dashboardId)).catch(() => []);
+      categoryRows = cats || [];
+    } catch (e) {
+      categoryRows = [];
+    }
+
+    const bottoms = [
+      ...existingWidgets.map((w: any) => Number(w.y || 0) + Number(w.h || 0)),
+      ...categoryRows.map((c: any) => Number(c.y || 0) + Number(c.h || 0)),
+    ];
+
     const maxBottom = bottoms.length ? Math.max(...bottoms) : 0;
     y = maxBottom;
     x = 0;

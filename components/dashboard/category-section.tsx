@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Category, Widget } from "@/lib/db/schema";
 import { WidgetComponent } from "@/components/widgets/widget-component";
 import { createCategory, updateCategory, deleteCategory, toggleCategoryCollapse } from "@/lib/actions/categories";
+import { useAlert } from "@/components/ui/confirm-provider";
 
 interface CategorySectionProps {
   category: Category;
@@ -21,6 +22,7 @@ interface CategorySectionProps {
 }
 
 export function CategorySection({ category, widgets, isEditMode, onWidgetDelete, onWidgetEdit, dragHandleProps }: CategorySectionProps) {
+  const alert = useAlert();
   const [isCollapsed, setIsCollapsed] = useState(category.isCollapsed);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(category.name);
@@ -206,7 +208,7 @@ export function AddCategoryButton({ dashboardId, onCategoryAdded }: AddCategoryB
       setIsOpen(false);
     } catch (error) {
       console.error("Erreur:", error);
-      alert("Erreur lors de la création de la catégorie");
+      await alert("Erreur lors de la création de la catégorie");
     } finally {
       setLoading(false);
     }

@@ -13,6 +13,7 @@ import { getIntegrations } from "@/lib/actions/integrations";
 import { REGIONS, getCitiesByRegion, getCityByName } from "@/lib/cities";
 import EmojiPicker from "@/components/ui/emoji-picker";
 import AssetPicker from "@/components/ui/asset-picker";
+import { useAlert } from "@/components/ui/confirm-provider";
 
 interface EditWidgetDialogProps {
   widget: Widget | null;
@@ -29,6 +30,7 @@ interface EditWidgetDialogProps {
 }
 
 export function EditWidgetDialog({ widget, categories, widgets, open, onOpenChange, onWidgetUpdated }: EditWidgetDialogProps) {
+  const alert = useAlert();
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -107,7 +109,7 @@ export function EditWidgetDialog({ widget, categories, widgets, open, onOpenChan
       onOpenChange(false);
     } catch (error) {
       console.error("Erreur lors de la mise à jour:", error);
-      alert("Erreur lors de la mise à jour du widget");
+      await alert("Erreur lors de la mise à jour du widget");
     } finally {
       setLoading(false);
     }

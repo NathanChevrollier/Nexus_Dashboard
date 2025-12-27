@@ -37,9 +37,28 @@ services:
       NEXTAUTH_SECRET: super_secret_key_change_in_production_12345
       NODE_ENV: production
       NEXT_PUBLIC_TMDB_API_KEY: ${NEXT_PUBLIC_TMDB_API_KEY}
+      NEXT_PUBLIC_SOCKET_SERVER_URL: http://socket-server:4001
+      SOCKET_SERVER_URL: http://socket-server:4001/emit
+      SOCKET_PORT: 4001
+      # If you prefer to run socket server inside the app container, set RUN_SOCKET_IN_APP to "true"
+      # RUN_SOCKET_IN_APP: "false"
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - nexus-network
+
+  socket-server:
+    build:
+      context: .
+      dockerfile: scripts/Dockerfile.socket
+    container_name: nexus-socket-server
+    restart: unless-stopped
+    ports:
+      - "4001:4001"
+    environment:
+      SOCKET_PORT: 4001
+      SOCKET_SERVER_URL: http://socket-server:4001
     networks:
       - nexus-network
 

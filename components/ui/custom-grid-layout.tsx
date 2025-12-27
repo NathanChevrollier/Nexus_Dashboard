@@ -144,8 +144,8 @@ export function CustomGridLayout({
     
     if (!isDragHandle) return; // Ignorer si ce n'est pas la poignée
 
-    // Si Ctrl est pressé, déclencher le cross-grid drag via un attribut data
-    if (e.ctrlKey) {
+    // Si Ctrl ou Cmd est pressé, déclencher le cross-grid drag via un attribut data
+    if (e.ctrlKey || e.metaKey) {
       const widgetElement = e.currentTarget as HTMLElement;
       widgetElement.dataset.crossGridDrag = 'true';
       return; // Empêcher le drag normal

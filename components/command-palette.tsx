@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useAlert } from "@/components/ui/confirm-provider";
 import { Command } from "cmdk";
 import { 
   Search, Settings, Plus, LayoutDashboard, Palette, 
@@ -16,6 +17,7 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ dashboardId, onAddWidget, onOpenSettings }: CommandPaletteProps) {
+  const alert = useAlert();
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
@@ -177,18 +179,18 @@ export function CommandPalette({ dashboardId, onAddWidget, onOpenSettings }: Com
             <Command.Group heading="Actions Dashboard" className="mb-2">
               <CommandItem
                 icon={Download}
-                onSelect={() => handleAction(() => {
+                onSelect={() => handleAction(async () => {
                   // Trigger export (you'll need to implement this)
-                  alert("Export du dashboard");
+                  await alert("Export du dashboard");
                 })}
               >
                 Exporter le Dashboard
               </CommandItem>
               <CommandItem
                 icon={Upload}
-                onSelect={() => handleAction(() => {
+                onSelect={() => handleAction(async () => {
                   // Trigger import dialog
-                  alert("Importer un dashboard");
+                  await alert("Importer un dashboard");
                 })}
               >
                 Importer un Dashboard

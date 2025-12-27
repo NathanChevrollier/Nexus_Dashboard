@@ -1,21 +1,26 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { User } from "@/lib/db/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check, X, Shield, Crown, User as UserIcon } from "lucide-react";
 import { useConfirm } from "@/components/ui/confirm-provider";
+import { useAlert } from "@/components/ui/confirm-provider";
 
 interface UserManagementProps {
   users: User[];
 }
 
 export function UserManagement({ users: initialUsers }: UserManagementProps) {
+  const alert = useAlert();
   const confirm = useConfirm();
   const [users, setUsers] = useState(initialUsers);
   const [loading, setLoading] = useState<string | null>(null);
+  const { data: session } = useSession();
+  const currentUserId = session?.user?.id;
 
   const updateUserStatus = async (userId: string, status: "PENDING" | "ACTIVE" | "BANNED") => {
     setLoading(userId);
@@ -70,11 +75,11 @@ export function UserManagement({ users: initialUsers }: UserManagementProps) {
         setUsers(users.filter(u => u.id !== userId));
       } else {
         console.error('Erreur suppression utilisateur:', body);
-        alert('Erreur lors de la suppression. Voir console.');
+        await alert('Erreur lors de la suppression. Voir console.');
       }
     } catch (e) {
       console.error('Erreur suppression utilisateur:', e);
-      alert('Erreur lors de la suppression. Voir console.');
+      await alert('Erreur lors de la suppression. Voir console.');
     } finally {
       setLoading(null);
     }
@@ -92,14 +97,14 @@ export function UserManagement({ users: initialUsers }: UserManagementProps) {
 
       const body = await response.json();
       if (response.ok && body.ok) {
-        alert('Réinitialisation effectuée avec succès.');
+        await alert('Réinitialisation effectuée avec succès.');
       } else {
         console.error('Erreur reset utilisateur:', body);
-        alert('Erreur lors de la réinitialisation. Voir console.');
+        await alert('Erreur lors de la réinitialisation. Voir console.');
       }
     } catch (e) {
       console.error('Erreur reset utilisateur:', e);
-      alert('Erreur lors de la réinitialisation. Voir console.');
+      await alert('Erreur lors de la réinitialisation. Voir console.');
     } finally {
       setLoading(null);
     }
@@ -160,7 +165,7 @@ export function UserManagement({ users: initialUsers }: UserManagementProps) {
                       size="sm"
                       variant="default"
                       onClick={() => updateUserStatus(user.id, "ACTIVE")}
-                      disabled={loading === user.id}
+                      disabled={loading === user.id || user.id === currentUserId}
                     >
                       <Check className="h-4 w-4 mr-1" />
                       Approuver
@@ -169,7 +174,7 @@ export function UserManagement({ users: initialUsers }: UserManagementProps) {
                       size="sm"
                       variant="destructive"
                       onClick={() => updateUserStatus(user.id, "BANNED")}
-                      disabled={loading === user.id}
+                      disabled={loading === user.id || user.id === currentUserId}
                     >
                       <X className="h-4 w-4 mr-1" />
                       Refuser
@@ -206,7 +211,7 @@ export function UserManagement({ users: initialUsers }: UserManagementProps) {
                   <select
                     value={user.role}
                     onChange={(e) => updateUserRole(user.id, e.target.value as "USER" | "VIP" | "ADMIN")}
-                    disabled={loading === user.id}
+                    disabled={loading === user.id || user.id === currentUserId}
                     className="px-3 py-1.5 border rounded-md text-sm bg-background"
                   >
                     <option value="USER">USER</option>
@@ -217,7 +222,7 @@ export function UserManagement({ users: initialUsers }: UserManagementProps) {
                     size="sm"
                     variant="outline"
                     onClick={() => updateUserStatus(user.id, "BANNED")}
-                    disabled={loading === user.id}
+                    disabled={loading === user.id || user.id === currentUserId}
                   >
                     Bannir
                   </Button>
@@ -225,7 +230,7 @@ export function UserManagement({ users: initialUsers }: UserManagementProps) {
                     size="sm"
                     variant="destructive"
                     onClick={() => deleteUser(user.id)}
-                    disabled={loading === user.id}
+                    disabled={loading === user.id || user.id === currentUserId}
                   >
                     Supprimer
                   </Button>
@@ -233,7 +238,7 @@ export function UserManagement({ users: initialUsers }: UserManagementProps) {
                     size="sm"
                     variant="secondary"
                     onClick={() => resetUser(user.id)}
-                    disabled={loading === user.id}
+                    disabled={loading === user.id || user.id === currentUserId}
                   >
                     Réinitialiser
                   </Button>

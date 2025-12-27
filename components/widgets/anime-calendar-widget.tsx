@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAlert } from '@/components/ui/confirm-provider';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -91,7 +92,7 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
 
   async function handleAddToSonarr(anime: AnimeSchedule) {
     if (!sonarrIntegration) {
-      alert('Sonarr not configured');
+      await alert('Sonarr not configured');
       return;
     }
 
@@ -111,13 +112,13 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
       const json = await res.json();
 
       if (!res.ok) {
-        alert(`Error: ${json.error || 'Failed to add to Sonarr'}`);
+        await alert(`Error: ${json.error || 'Failed to add to Sonarr'}`);
       } else {
-        alert(`${anime.title} added to Sonarr!`);
+        await alert(`${anime.title} added to Sonarr!`);
       }
     } catch (error) {
       console.error('Error adding to Sonarr:', error);
-      alert('Failed to add to Sonarr');
+      await alert('Failed to add to Sonarr');
     } finally {
       setAddingToSonarr((prev) => ({ ...prev, [anime.id]: false }));
     }
@@ -154,7 +155,7 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
   // and retry without being forced into a single-action view.
 
   return (
-    <Card className="w-full h-full flex flex-col overflow-hidden">
+    <Card className="w-full h-full flex flex-col overflow-hidden min-h-0">
       {/* Header */}
       <div className="p-4 border-b flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -220,7 +221,7 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
           )}
 
           {/* Anime List */}
-          <ScrollArea className="flex-1 min-h-0 border rounded-md">
+          <ScrollArea className="flex-1 min-h-0 border rounded-md overflow-auto">
             <div className="space-y-3 pr-4">
               {sortedAnime.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
@@ -228,9 +229,9 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
                   <p className="text-sm">No anime airing {selectedDay === 'All' ? 'this week' : `on ${selectedDay}`}</p>
                 </div>
               ) : (
-                sortedAnime.map((anime) => (
+                sortedAnime.map((anime, idx) => (
                   <AnimeCard 
-                    key={anime.id} 
+                    key={`${anime.id}-${anime.nextAiringEpisode?.airingAt ?? idx}`} 
                     anime={anime} 
                     isCompact={isCompact}
                     sonarrIntegration={sonarrIntegration}

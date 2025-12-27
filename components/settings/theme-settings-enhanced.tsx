@@ -11,6 +11,15 @@ import { Switch } from "@/components/ui/switch";
 import { Palette, Code, Globe, Check, Sparkles, Clock } from "lucide-react";
 import { updateDashboardCustomCss, updateGlobalCss } from "@/lib/actions/theme";
 import { useTheme } from "@/components/theme-provider";
+import { useAlert } from "@/components/ui/confirm-provider";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface ThemeSettingsProps {
   user: {
@@ -59,6 +68,7 @@ const colorPalettes = [
 ] as const;
 
 export function ThemeSettingsEnhanced({ user, dashboardId }: ThemeSettingsProps) {
+  const alert = useAlert();
   const { 
     theme, 
     setTheme, 
@@ -78,6 +88,10 @@ export function ThemeSettingsEnhanced({ user, dashboardId }: ThemeSettingsProps)
   const [globalCss, setGlobalCss] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   const canAccessVIP = user.role === "VIP" || user.role === "ADMIN";
   const canAccessAdmin = user.role === "ADMIN";
@@ -94,7 +108,7 @@ export function ThemeSettingsEnhanced({ user, dashboardId }: ThemeSettingsProps)
       showSavedMessage();
     } catch (error) {
       console.error("Erreur:", error);
-      alert("Erreur lors de la sauvegarde");
+      await alert("Erreur lors de la sauvegarde");
     } finally {
       setSaving(false);
     }
@@ -107,7 +121,7 @@ export function ThemeSettingsEnhanced({ user, dashboardId }: ThemeSettingsProps)
       showSavedMessage();
     } catch (error) {
       console.error("Erreur:", error);
-      alert("Erreur lors de la sauvegarde");
+      await alert("Erreur lors de la sauvegarde");
     } finally {
       setSaving(false);
     }
@@ -390,6 +404,7 @@ export function ThemeSettingsEnhanced({ user, dashboardId }: ThemeSettingsProps)
                 </div>
               </CardContent>
             </Card>
+            
           </div>
         </TabsContent>
 

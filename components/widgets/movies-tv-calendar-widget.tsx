@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAlert } from '@/components/ui/confirm-provider';
 import { Calendar, Film, Tv, TrendingUp, Clock, Star, Plus, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,7 @@ interface MoviesAndTVCalendarWidgetProps {
 }
 
 export function MoviesAndTVCalendarWidget({ options }: MoviesAndTVCalendarWidgetProps) {
+  const alert = useAlert();
   const [upcomingMovies, setUpcomingMovies] = useState<TMDbMovie[]>([]);
   const [trendingMovies, setTrendingMovies] = useState<TMDbMovie[]>([]);
   const [tvAiringToday, setTvAiringToday] = useState<TMDbTVShow[]>([]);
@@ -61,7 +63,7 @@ export function MoviesAndTVCalendarWidget({ options }: MoviesAndTVCalendarWidget
 
   const handleAddToRadarr = async (movie: TMDbMovie) => {
     if (!radarrIntegration) {
-      alert('Radarr not configured');
+      await alert('Radarr not configured');
       return;
     }
 
@@ -81,13 +83,13 @@ export function MoviesAndTVCalendarWidget({ options }: MoviesAndTVCalendarWidget
       const json = await res.json();
 
       if (!res.ok) {
-        alert(`Error: ${json.error || 'Failed to add to Radarr'}`);
+        await alert(`Error: ${json.error || 'Failed to add to Radarr'}`);
       } else {
-        alert(`${movie.title || (movie as any).name} added to Radarr!`);
+        await alert(`${movie.title || (movie as any).name} added to Radarr!`);
       }
     } catch (error) {
       console.error('Error adding to Radarr:', error);
-      alert('Failed to add to Radarr');
+      await alert('Failed to add to Radarr');
     } finally {
       setAddingToRadarr((prev) => ({ ...prev, [movie.id]: false }));
     }
@@ -95,7 +97,7 @@ export function MoviesAndTVCalendarWidget({ options }: MoviesAndTVCalendarWidget
 
   const handleAddToSonarr = async (tvShow: TMDbTVShow) => {
     if (!sonarrIntegration) {
-      alert('Sonarr not configured');
+      await alert('Sonarr not configured');
       return;
     }
 
@@ -115,13 +117,13 @@ export function MoviesAndTVCalendarWidget({ options }: MoviesAndTVCalendarWidget
       const json = await res.json();
 
       if (!res.ok) {
-        alert(`Error: ${json.error || 'Failed to add to Sonarr'}`);
+        await alert(`Error: ${json.error || 'Failed to add to Sonarr'}`);
       } else {
-        alert(`${tvShow.name} added to Sonarr!`);
+        await alert(`${tvShow.name} added to Sonarr!`);
       }
     } catch (error) {
       console.error('Error adding to Sonarr:', error);
-      alert('Failed to add to Sonarr');
+      await alert('Failed to add to Sonarr');
     } finally {
       setAddingToSonarr((prev) => ({ ...prev, [tvShow.id]: false }));
     }

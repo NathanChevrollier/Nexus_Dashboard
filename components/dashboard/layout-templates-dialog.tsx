@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sparkles, Loader2 } from "lucide-react";
 import { getLayoutTemplates, applyLayoutTemplate } from "@/lib/actions/layout-templates";
+import { useAlert } from "@/components/ui/confirm-provider";
 
 interface LayoutTemplate {
   id: string;
@@ -18,6 +19,7 @@ interface LayoutTemplate {
 }
 
 export function LayoutTemplatesDialog() {
+  const alert = useAlert();
   const [open, setOpen] = useState(false);
   const [templates, setTemplates] = useState<LayoutTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,11 +57,11 @@ export function LayoutTemplatesDialog() {
         // Redirect to new dashboard
         window.location.href = `/dashboard/${result.dashboardId}`;
       } else {
-        alert(result.error || "Erreur lors de l'application du template");
+        await alert(result.error || "Erreur lors de l'application du template");
       }
     } catch (error) {
       console.error("Apply template error:", error);
-      alert("Erreur lors de l'application du template");
+      await alert("Erreur lors de l'application du template");
     } finally {
       setApplying(false);
     }

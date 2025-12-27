@@ -45,6 +45,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.confi
 COPY --from=builder --chown=nextjs:nodejs /app/seed.ts ./seed.ts
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
+# Copy optional socket server script and entrypoint
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/socket-server.js ./scripts/socket-server.js
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/docker-entrypoint.sh ./scripts/docker-entrypoint.sh
+RUN chmod +x ./scripts/docker-entrypoint.sh || true
+
 # Install drizzle-kit, tsx and dotenv for database operations
 RUN npm install drizzle-kit tsx dotenv bcryptjs --production=false
 
@@ -55,4 +60,5 @@ EXPOSE 3000
 ENV PORT 3000
 ENV HOSTNAME "0.0.0.0"
 
-CMD ["node", "server.js"]
+# If you want the socket server to run inside this image, set RUN_SOCKET_IN_APP=true
+CMD ["sh", "./scripts/docker-entrypoint.sh"]

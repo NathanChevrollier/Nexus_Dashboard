@@ -57,6 +57,16 @@ export async function PATCH(request: Request) {
 
     const { userId, status, role } = validatedData.data;
 
+    // Prevent admins from banning or demoting themselves
+    if (session.user.id === userId) {
+      if (status === "BANNED") {
+        return NextResponse.json({ error: "Vous ne pouvez pas bannir votre propre compte" }, { status: 403 });
+      }
+      if (role && role !== "ADMIN") {
+        return NextResponse.json({ error: "Vous ne pouvez pas modifier votre propre rôle" }, { status: 403 });
+      }
+    }
+
     const updateData: any = {};
     if (status) updateData.status = status;
     if (role) updateData.role = role;

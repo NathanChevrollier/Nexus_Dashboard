@@ -10,6 +10,26 @@ export function middleware(request: NextRequest) {
   // Générer un nonce unique pour CSP
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
 
+  const socketEnv = process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || process.env.SOCKET_SERVER_URL || '';
+  const socketOrigin = socketEnv || (process.env.NODE_ENV !== 'production' ? 'http://localhost:4001' : '');
+  // Derive ws/wss forms for CSP (browsers enforce ws/wss for WebSocket connections)
+  let socketConnectSources = '';
+  if (socketOrigin) {
+    try {
+      const url = new URL(socketOrigin);
+      const wsProto = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsOrigin = `${wsProto}//${url.host}`;
+      socketConnectSources = `${socketOrigin} ${wsOrigin}`;
+    } catch (e) {
+      // If URL parsing fails, just use the socketOrigin as-is + add ws variant
+      socketConnectSources = socketOrigin;
+    }
+  }
+  // In development, always allow localhost socket origins to be safe
+  if (process.env.NODE_ENV !== 'production') {
+    socketConnectSources += ' http://localhost:4001 ws://localhost:4001 wss://localhost:4001';
+  }
+
   // Content Security Policy
   const cspHeader = `
     default-src 'self';
@@ -19,7 +39,7 @@ export function middleware(request: NextRequest) {
     style-src 'self' 'unsafe-inline';
     img-src 'self' blob: data: https://openweathermap.org https://s4.anilist.co https://media.kitsu.io;
     font-src 'self';
-    connect-src 'self' https://openweathermap.org https://graphql.anilist.co;
+    connect-src 'self' https://openweathermap.org https://graphql.anilist.co ${socketConnectSources};
     frame-src 'self' https://www.youtube.com https://player.vimeo.com https://codesandbox.io;
     object-src 'none';
     base-uri 'self';

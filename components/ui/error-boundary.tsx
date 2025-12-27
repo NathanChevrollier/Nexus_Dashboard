@@ -42,6 +42,9 @@ export class ErrorBoundaryInner extends React.Component<{ children: React.ReactN
               <a href="/" className="inline-block">
                 <Button size="sm">Retour au dashboard</Button>
               </a>
+              <a href="/settings" className="inline-block">
+                <Button size="sm">Aller aux paramètres</Button>
+              </a>
               <Button variant="outline" size="sm" onClick={this.handleReload}>Recharger</Button>
             </div>
           </div>

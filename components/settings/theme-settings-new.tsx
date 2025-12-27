@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Palette, Code, Globe, Check } from "lucide-react";
 import { updateDashboardCustomCss, updateGlobalCss } from "@/lib/actions/theme";
 import { useTheme } from "@/components/theme-provider";
+import { useAlert } from "@/components/ui/confirm-provider";
 
 interface ThemeSettingsProps {
   user: {
@@ -18,6 +19,7 @@ interface ThemeSettingsProps {
 }
 
 export function ThemeSettings({ user, dashboardId }: ThemeSettingsProps) {
+  const alert = useAlert();
   const { 
     theme, 
     setTheme, 
@@ -55,7 +57,7 @@ export function ThemeSettings({ user, dashboardId }: ThemeSettingsProps) {
       showSavedMessage();
     } catch (error) {
       console.error("Erreur:", error);
-      alert("Erreur lors de la sauvegarde");
+      await alert("Erreur lors de la sauvegarde");
     } finally {
       setSaving(false);
     }
@@ -68,7 +70,7 @@ export function ThemeSettings({ user, dashboardId }: ThemeSettingsProps) {
       showSavedMessage();
     } catch (error) {
       console.error("Erreur:", error);
-      alert("Erreur lors de la sauvegarde");
+      await alert("Erreur lors de la sauvegarde");
     } finally {
       setSaving(false);
     }

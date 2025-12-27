@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createCategory } from "@/lib/actions/categories";
+import { useAlert } from "@/components/ui/confirm-provider";
 
 interface AddCategoryDialogProps {
   open: boolean;
@@ -32,6 +33,7 @@ export function AddCategoryDialog({
   dashboardId,
   onCategoryAdded,
 }: AddCategoryDialogProps) {
+  const alert = useAlert();
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("📁");
   const [color, setColor] = useState("#3b82f6");
@@ -61,7 +63,7 @@ export function AddCategoryDialog({
       onCategoryAdded();
     } catch (error) {
       console.error("Erreur:", error);
-      alert("Erreur lors de la création de la catégorie");
+      await alert("Erreur lors de la création de la catégorie");
     } finally {
       setLoading(false);
     }
