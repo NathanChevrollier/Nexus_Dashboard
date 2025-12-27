@@ -6,12 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check, X, Shield, Crown, User as UserIcon } from "lucide-react";
+import { useConfirm } from "@/components/ui/confirm-provider";
 
 interface UserManagementProps {
   users: User[];
 }
 
 export function UserManagement({ users: initialUsers }: UserManagementProps) {
+  const confirm = useConfirm();
   const [users, setUsers] = useState(initialUsers);
   const [loading, setLoading] = useState<string | null>(null);
 
@@ -48,6 +50,56 @@ export function UserManagement({ users: initialUsers }: UserManagementProps) {
       }
     } catch (error) {
       console.error("Erreur lors de la mise à jour:", error);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const deleteUser = async (userId: string) => {
+    if (!(await confirm('Confirmez-vous la suppression complète de cet utilisateur et de toutes ses données ? Cette action est irréversible.'))) return;
+    setLoading(userId);
+    try {
+      const response = await fetch('/api/admin/users/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+
+      const body = await response.json();
+      if (response.ok && body.ok) {
+        setUsers(users.filter(u => u.id !== userId));
+      } else {
+        console.error('Erreur suppression utilisateur:', body);
+        alert('Erreur lors de la suppression. Voir console.');
+      }
+    } catch (e) {
+      console.error('Erreur suppression utilisateur:', e);
+      alert('Erreur lors de la suppression. Voir console.');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const resetUser = async (userId: string) => {
+    if (!(await confirm("Confirmez-vous la réinitialisation du dashboard de cet utilisateur ? Cela supprimera widgets, dashboards et données d'usage."))) return;
+    setLoading(userId);
+    try {
+      const response = await fetch('/api/admin/users/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+
+      const body = await response.json();
+      if (response.ok && body.ok) {
+        alert('Réinitialisation effectuée avec succès.');
+      } else {
+        console.error('Erreur reset utilisateur:', body);
+        alert('Erreur lors de la réinitialisation. Voir console.');
+      }
+    } catch (e) {
+      console.error('Erreur reset utilisateur:', e);
+      alert('Erreur lors de la réinitialisation. Voir console.');
     } finally {
       setLoading(null);
     }
@@ -168,6 +220,22 @@ export function UserManagement({ users: initialUsers }: UserManagementProps) {
                     disabled={loading === user.id}
                   >
                     Bannir
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => deleteUser(user.id)}
+                    disabled={loading === user.id}
+                  >
+                    Supprimer
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => resetUser(user.id)}
+                    disabled={loading === user.id}
+                  >
+                    Réinitialiser
                   </Button>
                 </div>
               </div>

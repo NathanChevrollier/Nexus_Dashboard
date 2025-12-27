@@ -70,6 +70,12 @@ export async function POST(request: Request) {
     }
 
     const data = await response.json();
+    // TEMP LOG: afficher un exemple de payload renvoyé par Overseerr pour debug
+    try {
+      console.debug('Overseerr payload sample:', Array.isArray(data.results) ? data.results[0] : data);
+    } catch (e) {
+      /* ignore */
+    }
 
     const allRequests = (data.results || data || []).map((req: any) => {
       const media = req.media || {};
@@ -77,14 +83,14 @@ export async function POST(request: Request) {
 
       return {
         id: req.id ?? media.id ?? `${req.requestedBy?.id}-${media.id}`,
-        status: req.status ?? media.status ?? "UNKNOWN",
+        status: String(req.status ?? media.status ?? "UNKNOWN"),
         createdAt: req.createdAt ?? req.createdAtUtc ?? new Date().toISOString(),
         requestedBy:
           req.requestedBy?.displayName ||
           req.requestedBy?.username ||
           req.requestedBy?.email ||
           "Inconnu",
-        type: media.mediaType || mediaInfo.mediaType || "movie",
+        type: String(media.mediaType || mediaInfo.mediaType || "movie"),
         title:
           media.title ||
           mediaInfo.title ||

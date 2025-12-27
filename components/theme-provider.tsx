@@ -204,13 +204,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   ]);
 
   // Avoid hydration mismatch by not rendering until mounted
-  if (!mounted) {
-    return <>{children}</>;
-  }
-
+  // Provide the context even before `mounted` to ensure client components
+  // consuming `useTheme()` don't throw during initial render. Visuals
+  // depending on DOM (like CyberParticles) are only rendered after mount.
   return (
     <ThemeContext.Provider value={contextValue}>
-      {isCyberTheme && <CyberParticles />}
+      {mounted && isCyberTheme && <CyberParticles />}
       {children}
     </ThemeContext.Provider>
   );

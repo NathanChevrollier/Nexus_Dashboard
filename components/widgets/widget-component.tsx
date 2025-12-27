@@ -1,3 +1,5 @@
+"use client";
+
 import { memo } from "react";
 import { Widget } from "@/lib/db/schema";
 import { LinkWidget } from "./link-widget";
@@ -23,6 +25,7 @@ import { MediaLibraryWidget } from "./media-library-widget";
 import { Button } from "@/components/ui/button";
 import { Settings, Trash2, GripVertical } from "lucide-react";
 import { useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-v2";
+import ErrorBoundary from "@/components/ui/error-boundary";
 
 interface WidgetComponentProps {
   widget: Widget;
@@ -169,7 +172,9 @@ export const WidgetComponent = memo(function WidgetComponent({
         </div>
       )}
       <div className="flex-1 overflow-hidden widget-no-drag">
-        {renderWidget()}
+        <ErrorBoundary>
+          {renderWidget()}
+        </ErrorBoundary>
       </div>
     </div>
   );

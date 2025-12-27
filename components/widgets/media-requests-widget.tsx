@@ -76,8 +76,8 @@ export function MediaRequestsWidget({ widget }: MediaRequestsWidgetProps) {
     loadRequests();
   }, [integrationId, statusFilter, limit]);
 
-  const renderStatusBadge = (status: string) => {
-    const normalized = status.toLowerCase();
+  const renderStatusBadge = (status: any) => {
+    const normalized = String(status ?? '').toLowerCase();
 
     if (normalized.includes('approved') || normalized.includes('accepted')) {
       return (
@@ -113,8 +113,8 @@ export function MediaRequestsWidget({ widget }: MediaRequestsWidgetProps) {
     );
   };
 
-  const renderTypeIcon = (type: string) => {
-    const normalized = type.toLowerCase();
+  const renderTypeIcon = (type: any) => {
+    const normalized = String(type ?? '').toLowerCase();
     return (
       <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center mr-2">
         <Film className="h-4 w-4 text-primary" />

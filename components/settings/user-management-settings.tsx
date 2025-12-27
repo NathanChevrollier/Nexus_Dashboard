@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, Check, X, Shield, Crown, User as UserIcon } from "lucide-react";
+import { useConfirm } from "@/components/ui/confirm-provider";
 
 interface User {
   id: string;
@@ -16,6 +17,7 @@ interface User {
 }
 
 export function UserManagementSettings() {
+  const confirm = useConfirm();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -52,6 +54,54 @@ export function UserManagementSettings() {
       setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...payload } : u)));
     } catch (e) {
       setError("Erreur lors de la mise à jour de l'utilisateur");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const deleteUser = async (userId: string) => {
+    if (!(await confirm('Confirmez-vous la suppression complète de cet utilisateur et de toutes ses données ? Cette action est irréversible.'))) return;
+    setSavingId(userId);
+    try {
+      const res = await fetch('/api/admin/users/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.ok) {
+        setUsers((prev) => prev.filter((u) => u.id !== userId));
+      } else {
+        console.error('Erreur suppression utilisateur:', body);
+        alert('Erreur lors de la suppression. Voir console.');
+      }
+    } catch (e) {
+      console.error('Erreur suppression utilisateur:', e);
+      alert('Erreur lors de la suppression. Voir console.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const resetUser = async (userId: string) => {
+    if (!(await confirm("Confirmez-vous la réinitialisation du dashboard de cet utilisateur ? Cela supprimera widgets, dashboards et données d'usage."))) return;
+    setSavingId(userId);
+    try {
+      const res = await fetch('/api/admin/users/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.ok) {
+        alert('Réinitialisation effectuée avec succès.');
+      } else {
+        console.error('Erreur reset utilisateur:', body);
+        alert('Erreur lors de la réinitialisation. Voir console.');
+      }
+    } catch (e) {
+      console.error('Erreur reset utilisateur:', e);
+      alert('Erreur lors de la réinitialisation. Voir console.');
     } finally {
       setSavingId(null);
     }
@@ -220,6 +270,22 @@ export function UserManagementSettings() {
                     onClick={() => updateUser(user.id, { status: "BANNED" })}
                   >
                     Bannir
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={savingId === user.id}
+                    onClick={() => deleteUser(user.id)}
+                  >
+                    Supprimer
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={savingId === user.id}
+                    onClick={() => resetUser(user.id)}
+                  >
+                    Réinitialiser
                   </Button>
                 </div>
               </div>
