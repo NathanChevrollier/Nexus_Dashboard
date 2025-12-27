@@ -18,6 +18,29 @@ services:
       - ./mysql/conf.d:/etc/mysql/conf.d:ro
     networks:
       - nexus-internal
+  socket:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    container_name: nexus-socket-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      SOCKET_PORT: 4001
+    command: node ./scripts/socket-server.js
+    ports:
+      - "4001:4001"
+    networks:
+      - nexus-public
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.2'
+          memory: 128M
     deploy:
       resources:
         limits:

@@ -374,7 +374,8 @@ docker-compose logs -f app
 **Services inclus** :
 
 - `db` : MySQL 8.0 avec healthcheck
-- `app` : Next.js avec dépendances auto-installées
+- `app` : Next.js (frontend + API)
+- `socket` : Serveur WebSocket temps réel (port 4001)
 
 ### Production (VPS/Server)
 
@@ -407,33 +408,48 @@ NODE_ENV=production
 ./deploy.sh prod
 ```
 
-**4. Migrations**
+**4. Services lancés**
+
+- `app` : Next.js (port 3000)
+- `db` : MySQL (port 3306 interne)
+- `socket` : Serveur WebSocket temps réel (port 4001)
+
+**5. Migrations**
 
 Le script `deploy.sh` exécute les migrations automatiquement. Pour les relancer manuellement:
 
 ```bash
-npm run db:push
+docker-compose -f docker-compose.production.yml exec app npm run db:push
 ```
 
-**5. Nginx Reverse Proxy (optionnel)**
+**6. Nginx Reverse Proxy (optionnel)**
 
 ```nginx
 server {
-    listen 80;
-    server_name votre-domaine.com;
+  listen 80;
+  server_name votre-domaine.com;
 
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
+  location / {
+    proxy_pass http://localhost:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_cache_bypass $http_upgrade;
+  }
+
+  location /socket/ {
+    proxy_pass http://localhost:4001/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_cache_bypass $http_upgrade;
+  }
 }
 ```
 
-**6. SSL avec Certbot**
+**7. SSL avec Certbot**
 
 ```bash
 sudo certbot --nginx -d votre-domaine.com
