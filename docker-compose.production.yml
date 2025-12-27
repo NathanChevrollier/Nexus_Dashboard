@@ -18,6 +18,12 @@ services:
       - ./mysql/conf.d:/etc/mysql/conf.d:ro
     networks:
       - nexus-internal
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "nexus", "-p$$(cat /run/secrets/db_password)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
   socket:
     build:
       context: .
