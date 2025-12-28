@@ -22,6 +22,12 @@ io.on('connection', (socket) => {
   });
 });
 
+
+// Healthcheck endpoint for Docker
+app.get('/', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 // HTTP endpoint to broadcast to a user
 app.post('/emit', (req, res) => {
   const { event, targetUserId, payload } = req.body || {};
