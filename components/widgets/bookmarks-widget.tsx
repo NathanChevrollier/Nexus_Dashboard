@@ -1,21 +1,26 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Card } from '@/components/ui/card';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import {
   Plus,
   Trash2,
   ExternalLink,
   Bookmark,
   Star,
-  Folder,
   Globe,
+  X,
+  Search,
+  LayoutGrid,
+  List as ListIcon,
+  Check
 } from 'lucide-react';
 import type { Widget } from '@/lib/db/schema';
+import { cn } from '@/lib/utils';
 
 interface BookmarksWidgetProps {
   widget: Widget;
@@ -25,7 +30,6 @@ interface BookmarkItem {
   id: string;
   title: string;
   url: string;
-  icon?: string;
   category?: string;
   favorite?: boolean;
   addedAt: number;
@@ -35,13 +39,20 @@ const categories = ['Work', 'Social', 'Dev', 'Tools', 'Entertainment', 'Other'];
 
 export function BookmarksWidget({ widget }: BookmarksWidgetProps) {
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
+  const [isAdding, setIsAdding] = useState(false);
+  
+  // Form states
   const [newTitle, setNewTitle] = useState('');
   const [newUrl, setNewUrl] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Work');
+  
+  // Filter states
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
   const isCompact = widget.w <= 2 && widget.h <= 2;
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (widget.options.bookmarks) {
@@ -49,32 +60,33 @@ export function BookmarksWidget({ widget }: BookmarksWidgetProps) {
     }
   }, [widget.options]);
 
-  // Auto-save bookmarks
+  useEffect(() => {
+    if (isAdding && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isAdding]);
+
+  // Auto-save logic (Debounced)
   useEffect(() => {
     const saveBookmarks = async () => {
       try {
         const { updateWidget } = await import('@/lib/actions/widgets');
         await updateWidget(widget.id, {
-          options: {
-            ...widget.options,
-            bookmarks,
-          },
+          options: { ...widget.options, bookmarks },
         });
       } catch (error) {
         console.error('Error saving bookmarks:', error);
       }
     };
-
-    const timer = setTimeout(saveBookmarks, 1000); // Debounce saves
+    const timer = setTimeout(saveBookmarks, 1000);
     return () => clearTimeout(timer);
-  }, [bookmarks]);
+  }, [bookmarks, widget.id, widget.options]); // Added correct deps
 
   const addBookmark = () => {
     if (!newTitle.trim() || !newUrl.trim()) return;
 
-    // Basic URL validation
     let validUrl = newUrl;
-    if (!validUrl.startsWith('http://') && !validUrl.startsWith('https://') && !validUrl.startsWith('/')) {
+    if (!validUrl.match(/^https?:\/\//) && !validUrl.startsWith('/')) {
       validUrl = 'https://' + validUrl;
     }
 
@@ -87,223 +99,234 @@ export function BookmarksWidget({ widget }: BookmarksWidgetProps) {
       addedAt: Date.now(),
     };
 
-    const updatedBookmarks = [...bookmarks, bookmark];
-    setBookmarks(updatedBookmarks);
+    setBookmarks([bookmark, ...bookmarks]); // Add to top
     setNewTitle('');
     setNewUrl('');
-  };
-
-  const toggleFavorite = (id: string) => {
-    const updatedBookmarks = bookmarks.map((bookmark) =>
-      bookmark.id === id ? { ...bookmark, favorite: !bookmark.favorite } : bookmark
-    );
-    setBookmarks(updatedBookmarks);
+    setIsAdding(false);
   };
 
   const deleteBookmark = (id: string) => {
-    setBookmarks(bookmarks.filter((bookmark) => bookmark.id !== id));
+    setBookmarks(bookmarks.filter((b) => b.id !== id));
   };
 
-  const openBookmark = (url: string) => {
-    window.open(url, '_blank', 'noopener,noreferrer');
+  const toggleFavorite = (id: string) => {
+    setBookmarks(bookmarks.map((b) => 
+      b.id === id ? { ...b, favorite: !b.favorite } : b
+    ));
   };
 
   const getFaviconUrl = (url: string) => {
     try {
       const domain = new URL(url).hostname;
-      return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+      return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
     } catch {
       return null;
     }
   };
 
-  let filteredBookmarks = bookmarks;
-  if (showFavoritesOnly) {
-    filteredBookmarks = filteredBookmarks.filter((b) => b.favorite);
-  }
-  if (filterCategory) {
-    filteredBookmarks = filteredBookmarks.filter((b) => b.category === filterCategory);
-  }
-
-  const categoryCounts = categories.reduce((acc, cat) => {
-    acc[cat] = bookmarks.filter((b) => b.category === cat).length;
-    return acc;
-  }, {} as Record<string, number>);
+  // Filtering
+  const filteredBookmarks = bookmarks.filter((b) => {
+    if (showFavoritesOnly && !b.favorite) return false;
+    if (filterCategory && b.category !== filterCategory) return false;
+    if (searchQuery && !b.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    return true;
+  });
 
   return (
-    <Card className="w-full h-full flex flex-col overflow-hidden">
+    <div className="flex flex-col h-full bg-background/50">
       {/* Header */}
-      <div className="p-4 border-b">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold flex items-center gap-2">
-            <Bookmark className="h-5 w-5 text-primary" />
-            {widget.options.title || 'Bookmarks'}
-          </h3>
+      <div className="flex flex-col border-b bg-card/50">
+        <div className="flex items-center justify-between p-3">
           <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-primary/10 rounded-md">
+               <Bookmark className="h-4 w-4 text-primary" />
+            </div>
+            <span className="font-semibold text-sm">{widget.options.title || 'Bookmarks'}</span>
+          </div>
+          
+          <div className="flex items-center gap-1">
             <Button
-              variant={showFavoritesOnly ? 'default' : 'ghost'}
-              size="sm"
+              variant={showFavoritesOnly ? "secondary" : "ghost"}
+              size="icon"
+              className="h-7 w-7"
               onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+              title="Favoris seulement"
             >
-              <Star
-                className={`h-4 w-4 ${showFavoritesOnly ? 'fill-current' : ''}`}
-              />
+              <Star className={cn("h-3.5 w-3.5", showFavoritesOnly && "fill-yellow-500 text-yellow-500")} />
             </Button>
-            <Badge variant="secondary">{bookmarks.length}</Badge>
+            <Button
+              variant={isAdding ? "secondary" : "ghost"}
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setIsAdding(!isAdding)}
+              title="Ajouter un favori"
+            >
+              {isAdding ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+            </Button>
           </div>
         </div>
 
-        {/* Category Filter */}
-        {!isCompact && (
-          <ScrollArea className="w-full">
-            <div className="flex gap-2 pb-2">
-              <Button
-                variant={filterCategory === null ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setFilterCategory(null)}
-              >
-                All
-              </Button>
-              {categories.map((cat) => (
-                <Button
-                  key={cat}
-                  variant={filterCategory === cat ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setFilterCategory(cat)}
-                >
-                  {cat} ({categoryCounts[cat] || 0})
-                </Button>
-              ))}
+        {/* Search & Categories (Compact view logic could hide this) */}
+        {!isAdding && !isCompact && (
+          <div className="px-3 pb-2 space-y-2">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+              <Input 
+                placeholder="Rechercher..." 
+                className="h-7 pl-7 text-xs bg-muted/50 border-none focus-visible:ring-1"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
-          </ScrollArea>
+            <ScrollArea className="w-full whitespace-nowrap pb-1">
+              <div className="flex gap-1">
+                <Badge 
+                  variant={filterCategory === null ? "default" : "outline"}
+                  className="cursor-pointer text-[10px] h-5 px-2 hover:bg-primary/90"
+                  onClick={() => setFilterCategory(null)}
+                >
+                  Tous
+                </Badge>
+                {categories.map((cat) => (
+                  <Badge
+                    key={cat}
+                    variant={filterCategory === cat ? "default" : "outline"}
+                    className="cursor-pointer text-[10px] h-5 px-2 hover:bg-primary/90"
+                    onClick={() => setFilterCategory(cat)}
+                  >
+                    {cat}
+                  </Badge>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+
+        {/* Add Form Area */}
+        {isAdding && (
+          <div className="p-3 bg-accent/20 border-b space-y-3 animate-in slide-in-from-top-2 duration-200">
+            <div className="space-y-2">
+              <Input
+                ref={inputRef}
+                placeholder="Titre du site"
+                className="h-8 text-xs bg-background"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+              />
+              <Input
+                placeholder="https://example.com"
+                className="h-8 text-xs bg-background"
+                value={newUrl}
+                onChange={(e) => setNewUrl(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addBookmark()}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-2">
+               <select 
+                 className="h-7 text-xs rounded border border-input bg-background px-2 w-full max-w-[120px]"
+                 value={selectedCategory}
+                 onChange={(e) => setSelectedCategory(e.target.value)}
+               >
+                 {categories.map(c => <option key={c} value={c}>{c}</option>)}
+               </select>
+               <Button size="sm" className="h-7 text-xs px-4" onClick={addBookmark}>
+                 Ajouter
+               </Button>
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Bookmarks Grid */}
-      <ScrollArea className="flex-1 p-4">
-        <div className={`grid gap-3 ${isCompact ? 'grid-cols-1' : 'grid-cols-2'}`}>
+      {/* List Content */}
+      <ScrollArea className="flex-1">
+        <div className="p-2 space-y-1">
           {filteredBookmarks.length === 0 ? (
-            <div className="col-span-2 text-center py-8 text-muted-foreground">
-              <Bookmark className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No bookmarks yet</p>
+            <div className="flex flex-col items-center justify-center py-10 text-muted-foreground opacity-60">
+              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-2">
+                <Bookmark className="h-5 w-5" />
+              </div>
+              <p className="text-xs">Aucun favori trouvé</p>
             </div>
           ) : (
             filteredBookmarks.map((bookmark) => (
               <div
                 key={bookmark.id}
-                className="group relative p-3 rounded-lg border bg-card hover:bg-accent transition-colors cursor-pointer"
-                onClick={() => openBookmark(bookmark.url)}
+                className="group flex items-center gap-3 p-2 rounded-lg hover:bg-accent/50 transition-all border border-transparent hover:border-border/50"
               >
-                <div className="flex items-start gap-3">
-                  {/* Favicon */}
-                  <div className="shrink-0 mt-0.5">
-                    {getFaviconUrl(bookmark.url) ? (
-                      <img
-                        src={getFaviconUrl(bookmark.url)!}
-                        alt=""
-                        className="w-5 h-5"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    ) : (
-                      <Globe className="h-5 w-5 text-muted-foreground" />
-                    )}
-                  </div>
+                {/* Favicon / Icon */}
+                <a 
+                  href={bookmark.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="shrink-0 relative w-8 h-8 rounded-md bg-muted/50 border flex items-center justify-center overflow-hidden hover:scale-105 transition-transform"
+                >
+                   <FaviconImage url={bookmark.url} />
+                </a>
 
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <h4 className="font-medium text-sm line-clamp-1">
-                        {bookmark.title}
-                      </h4>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFavorite(bookmark.id);
-                          }}
-                          className="hover:scale-110 transition-transform"
-                        >
-                          <Star
-                            className={`h-3.5 w-3.5 ${
-                              bookmark.favorite
-                                ? 'fill-yellow-500 text-yellow-500'
-                                : 'text-muted-foreground'
-                            }`}
-                          />
-                        </button>
-                        <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-                      {bookmark.url}
-                    </p>
-                    {bookmark.category && (
-                      <Badge variant="outline" className="text-xs mt-2">
-                        <Folder className="h-3 w-3 mr-1" />
-                        {bookmark.category}
-                      </Badge>
-                    )}
+                {/* Text Info */}
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                  <div className="flex items-center gap-2">
+                    <a 
+                      href={bookmark.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-xs font-medium truncate hover:text-primary transition-colors"
+                    >
+                      {bookmark.title}
+                    </a>
+                    {bookmark.favorite && <Star className="h-2.5 w-2.5 fill-yellow-500 text-yellow-500 shrink-0" />}
                   </div>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                    <span className="truncate max-w-[120px] opacity-70">{new URL(bookmark.url).hostname}</span>
+                    <span className="w-0.5 h-0.5 rounded-full bg-muted-foreground/50" />
+                    <span className="opacity-70">{bookmark.category}</span>
+                  </div>
+                </div>
 
-                  {/* Delete Button */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteBookmark(bookmark.id);
-                    }}
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 rounded p-1"
+                {/* Actions (Visible on Hover) */}
+                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-yellow-500"
+                    onClick={() => toggleFavorite(bookmark.id)}
                   >
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </button>
+                    <Star className={cn("h-3 w-3", bookmark.favorite && "fill-current")} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                    onClick={() => deleteBookmark(bookmark.id)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
                 </div>
               </div>
             ))
           )}
         </div>
       </ScrollArea>
+    </div>
+  );
+}
 
-      {/* Add Form */}
-      <div className="p-4 border-t space-y-2">
-        <div className="space-y-2">
-          <Input
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="Bookmark title..."
-            className="text-sm"
-          />
-          <div className="flex gap-2">
-            <Input
-              value={newUrl}
-              onChange={(e) => setNewUrl(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addBookmark()}
-              placeholder="https://..."
-              className="flex-1 text-sm"
-            />
-            <Button onClick={addBookmark} size="sm">
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-        {!isCompact && (
-          <div className="flex gap-1 flex-wrap">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-2 py-1 text-xs rounded border ${
-                  selectedCategory === cat
-                    ? 'border-primary text-primary bg-accent'
-                    : 'border-muted text-muted-foreground'
-                } transition-colors`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </Card>
+// Composant Helper pour gérer proprement les favicons
+function FaviconImage({ url }: { url: string }) {
+  const [error, setError] = useState(false);
+  const domain = new URL(url).hostname;
+  const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+
+  if (error) {
+    return <Globe className="h-4 w-4 text-muted-foreground/50" />;
+  }
+
+  return (
+    <img
+      src={faviconUrl}
+      alt="icon"
+      className="w-full h-full object-cover"
+      onError={() => setError(true)}
+    />
   );
 }

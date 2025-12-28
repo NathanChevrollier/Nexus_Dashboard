@@ -2,12 +2,25 @@
 
 import { useEffect, useState } from 'react';
 import { Widget } from '@/lib/db/schema';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { AlertCircle, CheckCircle2, Clock, Film, Loader2, XCircle } from 'lucide-react';
+import { AlertCircle, Film, Tv, User as UserIcon, Loader2, Settings2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface MediaRequestsWidgetProps {
   widget: Widget;
+}
+
+// CORRECTION 1 : Augmentation du timeout par défaut à 25s (au lieu de 10s)
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeout = 25000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const finalInit = { ...init, signal: controller.signal };
+    const res = await fetch(url, finalInit);
+    return res;
+  } finally {
+    clearTimeout(id);
+  }
 }
 
 interface MediaRequestItem {
@@ -17,193 +30,185 @@ interface MediaRequestItem {
   requestedBy: string;
   type: 'movie' | 'tv' | string;
   title: string;
+  posterUrl?: string | null;
+  backdropUrl?: string | null;
 }
 
-type StatusFilter = 'all' | 'pending' | 'approved' | 'declined';
-
 export function MediaRequestsWidget({ widget }: MediaRequestsWidgetProps) {
-  const options = widget.options as {
-    title?: string;
-    integrationId?: string;
-    statusFilter?: StatusFilter;
-    limit?: number;
-  };
-
+  const options = widget.options as any;
   const [requests, setRequests] = useState<MediaRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const integrationId = options.integrationId;
-  const statusFilter: StatusFilter = options.statusFilter || 'all';
+
+  const statusFilter = options.statusFilter || 'all';
   const limit = options.limit && options.limit > 0 ? options.limit : 10;
 
   useEffect(() => {
-    const loadRequests = async () => {
+    let isMounted = true;
+
+    async function loadRequests() {
       if (!integrationId) {
-        setLoading(false);
+        if (isMounted) setLoading(false);
         return;
       }
 
-      setLoading(true);
-      setError(null);
+      if (isMounted) {
+        setLoading(true);
+        setError(null);
+      }
 
       try {
-        const res = await fetch('/api/integrations/overseerr/requests', {
+        // On appelle avec un timeout long pour laisser le temps au serveur de chercher les images
+        const res = await fetchWithTimeout('/api/integrations/overseerr/requests', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            integrationId,
-            status: statusFilter,
-            limit,
-          }),
-        });
+          body: JSON.stringify({ integrationId, status: statusFilter, limit }),
+        }, 25000); // 25 secondes
 
         if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error || 'Erreur lors du chargement des requêtes');
+          throw new Error(`Erreur API (${res.status})`);
         }
 
         const data = await res.json();
-        setRequests(data.requests || []);
+        
+        if (isMounted) {
+          setRequests(data.requests || []);
+        }
       } catch (e: any) {
         console.error('Erreur MediaRequestsWidget:', e);
-        setError(e.message || 'Erreur inconnue');
+        if (isMounted) {
+          // Message d'erreur plus convivial pour le timeout
+          if (e.name === 'AbortError') {
+            setError("Le serveur met trop de temps à répondre.");
+          } else {
+            setError("Impossible de charger les requêtes.");
+          }
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
-    };
+    }
 
     loadRequests();
+
+    return () => { isMounted = false; };
   }, [integrationId, statusFilter, limit]);
 
-  const renderStatusBadge = (status: any) => {
-    const normalized = String(status ?? '').toLowerCase();
+  // ... (Le reste de tes fonctions d'affichage getStatusStyle, getYear, render restent identiques)
+  const getStatusStyle = (status: string) => {
+    const normalized = status.toLowerCase();
+    const base = "text-[10px] font-bold uppercase px-2 py-0.5 rounded-md tracking-wider shadow-sm backdrop-blur-md";
 
-    if (normalized.includes('approved') || normalized.includes('accepted')) {
-      return (
-        <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 flex items-center gap-1 text-[10px]">
-          <CheckCircle2 className="h-3 w-3" />
-          Approuvée
-        </Badge>
-      );
+    if (normalized.includes('approved')) {
+      return cn(base, "bg-[#5b5bd6]/80 text-white border border-[#5b5bd6]/50");
     }
-
     if (normalized.includes('pending')) {
-      return (
-        <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/30 flex items-center gap-1 text-[10px]">
-          <Clock className="h-3 w-3" />
-          En attente
-        </Badge>
-      );
+      return cn(base, "bg-amber-500/80 text-white border border-amber-500/50");
     }
-
-    if (normalized.includes('declined') || normalized.includes('rejected')) {
-      return (
-        <Badge className="bg-red-500/10 text-red-500 border-red-500/30 flex items-center gap-1 text-[10px]">
-          <XCircle className="h-3 w-3" />
-          Refusée
-        </Badge>
-      );
+    if (normalized.includes('declined')) {
+      return cn(base, "bg-red-500/80 text-white border border-red-500/50");
     }
-
-    return (
-      <Badge variant="outline" className="text-[10px]">
-        {status}
-      </Badge>
-    );
+    return cn(base, "bg-secondary/80 text-secondary-foreground");
   };
 
-  const renderTypeIcon = (type: any) => {
-    const normalized = String(type ?? '').toLowerCase();
-    return (
-      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center mr-2">
-        <Film className="h-4 w-4 text-primary" />
-      </div>
-    );
+  const getYear = (dateStr: string) => {
+    try { return new Date(dateStr).getFullYear(); } catch { return ''; }
   };
 
   return (
-    <div className="flex flex-col h-full p-4">
-      <div className="flex items-center justify-between mb-3 gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <Film className="h-4 w-4 text-primary" />
-          <div className="truncate font-medium text-sm">
-            {options.title || 'Media Requests'}
-          </div>
-        </div>
-        {integrationId ? (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground truncate max-w-[140px]">
-            Intégration liée
-          </span>
-        ) : (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 border border-yellow-500/30">
-            Aucune intégration configurée
-          </span>
-        )}
+    <div className="flex flex-col h-full bg-background/50">
+      <div className="flex items-center gap-2 p-4 pb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider text-[11px]">
+        {options.title || 'Dernières requêtes'}
       </div>
 
-      {!integrationId && (
-        <div className="text-xs text-muted-foreground bg-muted/40 border border-dashed border-border rounded-md p-3">
-          Configurez d'abord une intégration "Overseerr" dans les Paramètres, puis éditez ce widget pour lui
-          associer cette intégration.
-        </div>
-      )}
-
-      {integrationId && loading && (
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
-      )}
-
-      {integrationId && !loading && error && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-xs text-red-500 flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-md px-3 py-2">
-            <AlertCircle className="h-4 w-4" />
-            <span>{error}</span>
-          </div>
-        </div>
-      )}
-
-      {integrationId && !loading && !error && (
-        <ScrollArea className="flex-1 min-h-0">
-          {requests.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-              Aucune requête trouvée pour ce filtre.
-            </div>
-          ) : (
-            <div className="space-y-2 pr-2">
+      <div className="flex-1 min-h-0 px-2 pb-2">
+        {!integrationId ? (
+           <div className="flex h-full items-center justify-center flex-col gap-2 text-muted-foreground opacity-60">
+             <Settings2 className="h-6 w-6" />
+             <span className="text-xs">Configuration requise</span>
+           </div>
+        ) : loading ? (
+           <div className="flex h-full items-center justify-center">
+             <Loader2 className="h-6 w-6 animate-spin text-primary/50" />
+           </div>
+        ) : error ? (
+           <div className="flex h-full flex-col items-center justify-center p-4 text-center text-red-400 gap-2">
+             <AlertCircle className="h-6 w-6" />
+             <p className="text-xs">{error}</p>
+           </div>
+        ) : requests.length === 0 ? (
+           <div className="flex h-full items-center justify-center text-muted-foreground text-xs opacity-60">
+             Aucune requête trouvée
+           </div>
+        ) : (
+          <ScrollArea className="h-full">
+            <div className="space-y-2 pr-3">
               {requests.map((req) => (
                 <div
                   key={req.id}
-                  className="flex items-start justify-between rounded border bg-card/80 px-3 py-2 text-xs"
+                  className="group relative flex items-center h-[70px] rounded-lg overflow-hidden border border-border/50 transition-all hover:border-primary/50 bg-card/40"
                 >
-                  <div className="flex items-start gap-2 min-w-0">
-                    {renderTypeIcon(req.type)}
-                    <div className="space-y-1 min-w-0">
-                      <div className="font-medium truncate text-[13px]" title={req.title}>
-                        {req.title}
+                  {/* BACKGROUND */}
+                  <div className="absolute inset-0 z-0">
+                    {req.backdropUrl ? (
+                      <img
+                        src={req.backdropUrl}
+                        alt=""
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-60"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-r from-background to-muted/20" />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-r from-background via-background/90 to-transparent" />
+                  </div>
+
+                  {/* CONTENU */}
+                  <div className="relative z-10 flex items-center w-full px-3 gap-3">
+                    {/* Poster */}
+                    <div className="shrink-0 w-[30px] h-[45px] rounded bg-black/40 shadow-sm overflow-hidden hidden sm:block border border-white/10">
+                      {req.posterUrl ? (
+                         <img src={req.posterUrl} className="w-full h-full object-cover" alt="" />
+                      ) : (
+                         <div className="w-full h-full flex items-center justify-center">
+                           <Film className="h-3 w-3 text-white/20" />
+                         </div>
+                      )}
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                      <div className="flex items-center gap-2">
+                         <span className="text-[10px] font-medium text-muted-foreground">
+                            {getYear(req.createdAt)}
+                         </span>
+                         <span className={getStatusStyle(req.status)}>
+                            {req.status === 'pending' ? 'ATTENTE' : req.status}
+                         </span>
+                         {/* Badge count si applicable, sinon retirer */}
+                         {/* <Badge variant="secondary" className="h-4 px-1 text-[9px]">2</Badge> */}
                       </div>
-                      <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
-                        <span>Par {req.requestedBy}</span>
-                        <span>•</span>
-                        <span>
-                          {new Date(req.createdAt).toLocaleDateString(undefined, {
-                            day: '2-digit',
-                            month: '2-digit',
-                          })}
-                        </span>
+                      <h4 className="text-sm font-bold text-foreground truncate pr-2 shadow-black drop-shadow-md">
+                        {req.title}
+                      </h4>
+                    </div>
+
+                    {/* User */}
+                    <div className="flex items-center gap-2 pl-2 border-l border-white/10 h-8 ml-auto">
+                      <span className="text-[10px] font-medium text-foreground/70 hidden sm:block">
+                        {req.requestedBy}
+                      </span>
+                      <div className="w-6 h-6 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-sm">
+                        <UserIcon className="h-3 w-3 text-white/80" />
                       </div>
                     </div>
-                  </div>
-                  <div className="ml-2 flex-shrink-0 flex flex-col items-end gap-1">
-                    {renderStatusBadge(req.status)}
                   </div>
                 </div>
               ))}
             </div>
-          )}
-        </ScrollArea>
-      )}
+          </ScrollArea>
+        )}
+      </div>
     </div>
   );
 }

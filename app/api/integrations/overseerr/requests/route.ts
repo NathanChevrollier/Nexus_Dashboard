@@ -4,6 +4,11 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { integrations } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
+import { 
+  getTMDbImageUrl, 
+  getMovieDetails, 
+  getTVShowDetails 
+} from '@/lib/api/tmdb';
 
 const bodySchema = z.object({
   integrationId: z.string(),
@@ -11,122 +16,170 @@ const bodySchema = z.object({
   limit: z.number().min(1).max(100).optional(),
 });
 
+// Nouvelle fonction d'extraction, plus robuste et propre
+function extractMediaInfo(req: any) {
+    const mediaObject = req.media 
+        || req.movie 
+        || req.tv 
+        || (Array.isArray(req.media) ? req.media[0] : null) 
+        || {};
+    
+    // Parfois, les détails sont dans un sous-objet mediaInfo
+    const mediaInfo = mediaObject.mediaInfo || mediaObject;
+
+    const title = [
+        mediaInfo.title,
+        mediaInfo.name,
+        mediaInfo.originalTitle,
+        mediaInfo.originalName,
+        req.title, // Fallback sur la racine de la requête
+        req.displayName
+    ].find(t => typeof t === 'string' && t.trim().length > 0) || 'Titre inconnu';
+
+    const tmdbId = [
+        mediaInfo.tmdbId,
+        mediaInfo.id, // L'ID du média est souvent le tmdbId
+        req.tmdbId // Fallback
+    ].find(v => v != null) ?? null;
+
+    let type = 'movie';
+    if (req.type === 'tv' || mediaObject.mediaType === 'tv' || mediaInfo.mediaType === 'tv' || req.tv) {
+        type = 'tv';
+    }
+
+    const posterPath = [
+        mediaInfo.posterPath,
+        mediaInfo.poster_path
+    ].find(p => typeof p === 'string' && p.trim().length > 0) || null;
+
+    const backdropPath = [
+        mediaInfo.backdropPath,
+        mediaInfo.backdrop_path
+    ].find(p => typeof p === 'string' && p.trim().length > 0) || null;
+
+    return {
+        id: req.id ?? mediaInfo.id ?? `${req.requestedBy?.id}-${Date.now()}`,
+        status: String(req.status ?? mediaInfo.status ?? 'UNKNOWN'),
+        createdAt: req.createdAt ?? req.createdAtUtc ?? req.addedAt ?? new Date().toISOString(),
+        requestedBy: req.requestedBy?.displayName || req.requestedBy?.username || req.requestedBy?.email || 'Inconnu',
+        type,
+        title,
+        posterUrl: getTMDbImageUrl(posterPath, 'w300'),
+        backdropUrl: getTMDbImageUrl(backdropPath, 'w780'),
+        tmdbId,
+        // On enrichit si le titre est générique, ou si une des images manque
+        needsEnrichment: (title === 'Titre inconnu' || !backdropPath || !posterPath) && !!tmdbId
+    };
+}
+
 export async function POST(request: Request) {
   try {
     const session = await auth();
-
-    if (!session) {
-      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-    }
+    if (!session) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
     const json = await request.json();
     const parsed = bodySchema.safeParse(json);
-
-    if (!parsed.success) {
-      return NextResponse.json({ error: "Données invalides" }, { status: 400 });
-    }
+    if (!parsed.success) return NextResponse.json({ error: "Données invalides" }, { status: 400 });
 
     const { integrationId, status = "all", limit = 10 } = parsed.data;
 
     const integration = await db.query.integrations.findFirst({
-      where: and(
-        eq(integrations.id, integrationId),
-        eq(integrations.userId, session.user.id)
-      ),
+      where: and(eq(integrations.id, integrationId), eq(integrations.userId, session.user.id)),
     });
 
-    if (!integration) {
-      return NextResponse.json({ error: "Intégration introuvable" }, { status: 404 });
+    if (!integration || integration.type !== "overseerr") {
+      return NextResponse.json({ error: "Config invalide" }, { status: 404 });
     }
 
-    if (integration.type !== "overseerr") {
-      return NextResponse.json({ error: "Type d'intégration incompatible" }, { status: 400 });
-    }
-
-    if (!integration.baseUrl || !integration.apiKey) {
-      return NextResponse.json({ error: "Intégration Overseerr incomplète" }, { status: 400 });
-    }
-
-    const url = new URL("/api/v1/request", integration.baseUrl);
-    url.searchParams.set("take", String(Math.min(limit, 50)));
+    // Appel API Overseerr
+    const cleanBaseUrl = integration.baseUrl!.replace(/\/$/, "");
+    const url = new URL(`${cleanBaseUrl}/api/v1/request`);
+    
+    let apiFilter = "all";
+    if (status === "approved") apiFilter = "approved";
+    if (status === "pending") apiFilter = "pending";
+    
+    // On prend un peu plus d'items pour filtrer ensuite si besoin
+    url.searchParams.set("take", String(limit + 5)); 
     url.searchParams.set("skip", "0");
     url.searchParams.set("sort", "added");
+    if (apiFilter !== "all") url.searchParams.set("filter", apiFilter);
 
-    const response = await fetch(url.toString(), {
-      headers: {
-        "X-Api-Key": integration.apiKey,
-        "Content-Type": "application/json",
-      },
-      cache: "no-store",
+    // Timeout de sécurité pour l'appel Overseerr
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const resOverseerr = await fetch(url.toString(), {
+      headers: { "X-Api-Key": integration.apiKey!, "Content-Type": "application/json" },
+      signal: controller.signal,
+      next: { revalidate: 10 }, // Cache très court
     });
+    clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("Overseerr error", response.status, text);
-      return NextResponse.json(
-        { error: `Erreur Overseerr (${response.status})` },
-        { status: 502 }
-      );
+    if (!resOverseerr.ok) throw new Error("Erreur Overseerr");
+
+    const data = await resOverseerr.json();
+    const rawList = (data.results || data || []) as any[];
+
+    // 1. Premier passage : Extraction des données brutes
+    let requests = rawList.map(extractMediaInfo);
+
+    // 2. Filtrage JS (Sécurité supplémentaire)
+    if (status !== "all") {
+      requests = requests.filter(r => {
+        const s = r.status.toLowerCase();
+        if (status === "pending") return s.includes("pending");
+        if (status === "approved") return s.includes("approved") || s.includes("available");
+        return true;
+      });
     }
 
-    const data = await response.json();
-    // TEMP LOG: afficher un exemple de payload renvoyé par Overseerr pour debug
-    try {
-      console.debug('Overseerr payload sample:', Array.isArray(data.results) ? data.results[0] : data);
-    } catch (e) {
-      /* ignore */
+    const finalRequests = requests.slice(0, limit);
+
+    // 3. ENRICHISSEMENT DIRECT (Récupération des données manquantes via TMDB)
+    const itemsToEnrich = finalRequests.filter(i => i.needsEnrichment);
+
+    if (itemsToEnrich.length > 0) {
+      // On lance toutes les récupérations en parallèle
+      const enrichmentTasks = itemsToEnrich.map(async (item) => {
+        try {
+          let details: any = null;
+          
+          if (item.type === 'tv') {
+            details = await getTVShowDetails(Number(item.tmdbId));
+          } else {
+            details = await getMovieDetails(Number(item.tmdbId));
+          }
+
+          if (details) {
+            // Mise à jour de l'objet (mutabilité)
+            // Si le titre était inconnu, on le remplace
+            if (item.title === 'Titre inconnu') {
+              item.title = details.title || details.name || details.original_title || 'Sans titre';
+            }
+            // Si on n'avait pas de bannière, on prend celle de TMDB
+            if (!item.backdropUrl && details.backdrop_path) {
+              item.backdropUrl = getTMDbImageUrl(details.backdrop_path, 'w780');
+            }
+            // Idem pour le poster
+            if (!item.posterUrl && details.poster_path) {
+              item.posterUrl = getTMDbImageUrl(details.poster_path, 'w300');
+            }
+          }
+        } catch (e) {
+          console.warn(`Impossible d'enrichir ${item.tmdbId}`);
+        }
+      });
+
+      // On attend que tout soit fini, avec un timeout global de 4s pour ne pas bloquer l'UI
+      const timeoutTask = new Promise(resolve => setTimeout(resolve, 4000));
+      await Promise.race([Promise.all(enrichmentTasks), timeoutTask]);
     }
 
-    const allRequests = (data.results || data || []).map((req: any) => {
-      const media = req.media || {};
-      const mediaInfo = media.mediaInfo || media;
+    return NextResponse.json({ requests: finalRequests });
 
-      return {
-        id: req.id ?? media.id ?? `${req.requestedBy?.id}-${media.id}`,
-        status: String(req.status ?? media.status ?? "UNKNOWN"),
-        createdAt: req.createdAt ?? req.createdAtUtc ?? new Date().toISOString(),
-        requestedBy:
-          req.requestedBy?.displayName ||
-          req.requestedBy?.username ||
-          req.requestedBy?.email ||
-          "Inconnu",
-        type: String(media.mediaType || mediaInfo.mediaType || "movie"),
-        title:
-          media.title ||
-          mediaInfo.title ||
-          mediaInfo.name ||
-          media.originalTitle ||
-          media.originalName ||
-          "Titre inconnu",
-      };
-    });
-
-    let filtered = allRequests;
-
-    if (status === "pending") {
-      filtered = allRequests.filter((r: any) =>
-        r.status && r.status.toString().toLowerCase().includes("pending")
-      );
-    } else if (status === "approved") {
-      filtered = allRequests.filter((r: any) =>
-        r.status && r.status.toString().toLowerCase().includes("approved")
-      );
-    } else if (status === "declined") {
-      filtered = allRequests.filter((r: any) =>
-        r.status &&
-        (r.status.toString().toLowerCase().includes("declined") ||
-          r.status.toString().toLowerCase().includes("rejected"))
-      );
-    }
-
-    filtered = filtered.slice(0, limit);
-
-    return NextResponse.json({ requests: filtered });
-  } catch (error) {
-    console.error("Erreur API Overseerr requests:", error);
-    return NextResponse.json(
-      { error: "Erreur interne du serveur" },
-      { status: 500 }
-    );
+  } catch (error: any) {
+    console.error("API Route Error:", error);
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
 }

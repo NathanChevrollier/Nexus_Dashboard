@@ -72,7 +72,9 @@ export function Navbar({ user, dashboards, currentDashboardId }: NavbarProps) {
         {/* User info et actions - Desktop */}
         <div className="hidden md:flex items-center gap-2 lg:gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-card/50 rounded-lg border border-border/50 backdrop-blur-sm">
-            <span className="font-semibold text-xs lg:text-sm text-foreground">Admin</span>
+            <div className="flex flex-col">
+              <span className="font-semibold text-xs lg:text-sm text-foreground">{user.name || user.email || 'Utilisateur'}</span>
+            </div>
             <div className="h-4 w-px bg-border" />
             <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-gradient-to-r from-primary/20 to-primary/10 text-primary border border-primary/30">
               {user.role}

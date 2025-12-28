@@ -9,6 +9,8 @@ interface IframeWidgetProps {
 export function IframeWidget({ widget }: IframeWidgetProps) {
   const { title, iframeUrl } = widget.options;
   const [hasError, setHasError] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [requestSent, setRequestSent] = useState<string | null>(null);
 
   if (!iframeUrl) {
     return (
@@ -54,11 +56,49 @@ export function IframeWidget({ widget }: IframeWidgetProps) {
 
   return (
     <div className="h-full w-full bg-background">
+      <div className="p-2 flex items-center justify-end gap-2">
+        <button
+          className="text-xs text-primary hover:underline"
+          onClick={async () => {
+            if (!iframeUrl) return;
+            const reason = window.prompt('Raison de la demande (optionnel)');
+            setRequesting(true);
+            try {
+              const res = await fetch('/api/iframe/request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: iframeUrl, reason }),
+              });
+              const body = await res.json();
+              if (res.ok && body.id) {
+                setRequestSent('Demande envoyée');
+                setTimeout(() => setRequestSent(null), 4000);
+              } else {
+                setRequestSent('Erreur lors de l\'envoi');
+                console.error('Request iframe failed', body);
+              }
+            } catch (e) {
+              console.error(e);
+              setRequestSent('Erreur réseau');
+            } finally {
+              setRequesting(false);
+            }
+          }}
+          disabled={requesting}
+        >
+          Demander autorisation
+        </button>
+        {requestSent && <span className="text-xs text-muted-foreground">{requestSent}</span>}
+      </div>
       <iframe
         src={iframeUrl}
         title={title || "Iframe"}
         className="w-full h-full border-0"
         sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+        allow="fullscreen; encrypted-media; picture-in-picture"
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onLoad={() => setHasError(false)}
         onError={() => setHasError(true)}
       />
     </div>

@@ -6,7 +6,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   // Générer un nonce unique pour CSP
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
 
@@ -37,6 +37,48 @@ export function middleware(request: NextRequest) {
   }
 
   // Content Security Policy
+  // Allow configuring iframe sources via env var (comma-separated list)
+  let iframeAllowlistRaw =
+    process.env.NEXT_PUBLIC_IFRAME_ALLOWLIST || process.env.IFRAME_ALLOWLIST || '';
+
+  // If no env var provided, try fetching the dynamic allowlist from internal API
+  // Avoid doing this for API routes to prevent recursive middleware fetches
+  if (!iframeAllowlistRaw) {
+    try {
+      const pathname = request.nextUrl?.pathname || '';
+      // Skip fetching when middleware is executing for an API route or _next resources
+      if (!pathname.startsWith('/api/') && !pathname.startsWith('/_next/')) {
+        const origin = request.nextUrl?.origin || '';
+        if (origin) {
+          const res = await fetch(`${origin}/api/iframe/allowlist`, { cache: 'no-store' });
+          if (res.ok) {
+            const body = await res.json();
+            if (body && Array.isArray(body.origins)) {
+              iframeAllowlistRaw = body.origins.join(',');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // ignore - fallback to empty
+      console.error('Middleware: could not fetch dynamic iframe allowlist', e);
+    }
+  }
+  const iframeAllowlist = iframeAllowlistRaw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => {
+      try {
+        const u = new URL(s);
+        return `${u.protocol}//${u.host}`;
+      } catch (e) {
+        // If no protocol provided, assume https by default
+        return s.includes('://') ? s : `https://${s}`;
+      }
+    })
+    .join(' ');
+
   const cspHeader = `
     default-src 'self';
     script-src 'self' 'nonce-${nonce}' 'strict-dynamic' ${
@@ -46,7 +88,7 @@ export function middleware(request: NextRequest) {
     img-src 'self' blob: data: https://openweathermap.org https://s4.anilist.co https://media.kitsu.io https://image.tmdb.org;
     font-src 'self';
     connect-src 'self' https://openweathermap.org https://graphql.anilist.co ${socketConnectSources} http://localhost:4001 ws://localhost:4001 wss://localhost:4001 data: blob:;
-    frame-src 'self' https://www.youtube.com https://player.vimeo.com https://codesandbox.io;
+    frame-src 'self' https://www.youtube.com https://player.vimeo.com https://codesandbox.io ${iframeAllowlist};
     object-src 'none';
     base-uri 'self';
     form-action 'self';

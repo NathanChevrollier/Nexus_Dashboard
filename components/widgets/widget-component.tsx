@@ -2,8 +2,16 @@
 
 import { memo } from "react";
 import { Widget } from "@/lib/db/schema";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { Settings, Trash2, GripVertical, AlertTriangle } from "lucide-react";
+import { useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-v2";
+import ErrorBoundary from "@/components/ui/error-boundary";
+
+// Imports des widgets
 import { LinkWidget } from "./link-widget";
 import { PingWidget } from "./ping-widget";
+import { LinkPingWidget } from "./link-ping-widget";
 import { IframeWidget } from "./iframe-widget";
 import { DateTimeWidget } from "./datetime-widget";
 import { WeatherWidget } from "./weather-widget";
@@ -22,10 +30,6 @@ import { MediaRequestsWidget } from "./media-requests-widget";
 import { TorrentOverviewWidget } from "./torrent-overview-widget";
 import { MonitoringWidget } from "./monitoring-widget";
 import { MediaLibraryWidget } from "./media-library-widget";
-import { Button } from "@/components/ui/button";
-import { Settings, Trash2, GripVertical } from "lucide-react";
-import { useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-v2";
-import ErrorBoundary from "@/components/ui/error-boundary";
 
 interface WidgetComponentProps {
   widget: Widget;
@@ -35,6 +39,42 @@ interface WidgetComponentProps {
   sourceType?: 'main' | 'category';
   sourceCategoryId?: string;
 }
+
+const WIDGET_REGISTRY: Record<string, React.ComponentType<any>> = {
+  "link": LinkWidget,
+  "ping": PingWidget,
+  "link-ping": LinkPingWidget,
+  "iframe": IframeWidget,
+  "datetime": DateTimeWidget,
+  "weather": WeatherWidget,
+  "notes": NotesWidget,
+  "chart": ChartWidget,
+  "anime-calendar": AnimeCalendarWidget,
+  "todo-list": TodoListWidget,
+  "watchlist": WatchlistWidget,
+  "timer": TimerWidget,
+  "bookmarks": BookmarksWidget,
+  "quote": QuoteWidget,
+  "countdown": CountdownWidget,
+  "universal-calendar": UniversalCalendarWidget,
+  "movies-tv-calendar": MoviesAndTVCalendarWidget,
+  "media-requests": MediaRequestsWidget,
+  "torrent-overview": TorrentOverviewWidget,
+  "monitoring": MonitoringWidget,
+  "media-library": MediaLibraryWidget,
+};
+
+// Widgets "Seamless" (Sans bordures par le parent)
+const SEAMLESS_WIDGETS = [
+  "link-ping", 
+  "media-requests", 
+  "weather", 
+  "anime-calendar", 
+  "movies-tv-calendar", 
+  "universal-calendar",
+  "iframe",
+  "media-library"
+];
 
 export const WidgetComponent = memo(function WidgetComponent({ 
   widget, 
@@ -47,137 +87,162 @@ export const WidgetComponent = memo(function WidgetComponent({
   const { startDrag, isDragging, draggedWidget } = useCrossGridDrag();
   const isThisWidgetDragging = isDragging && draggedWidget?.id === widget.id;
 
-  const handleActionMouseDown = (event: React.MouseEvent) => {
-    // Empêche le drag de capturer le mousedown
+  const isSeamless = SEAMLESS_WIDGETS.includes(widget.type);
+
+  // Gestion du Drag
+  // NOTE: laisser le drag "normal" géré par `CustomGridLayout` lorsque l'utilisateur
+  // clique simplement sur la poignée. N'activer le drag cross-grid (déplacer entre
+  // catégories) que si Ctrl/Cmd est pressé.
+  const handleDragHandlePointerDown = (event: React.PointerEvent) => {
+    const activateCrossGrid = event.ctrlKey || event.metaKey;
+
+    if (!activateCrossGrid) {
+      // Ne rien intercepter : laisser le layout gérer le drag natif
+      return;
+    }
+
+    // Si Ctrl/Cmd est pressé, on intercepte et on déclenche le drag global
+    event.preventDefault();
     event.stopPropagation();
+
+    // Effet visuel "Pop"
+    const widgetElement = event.currentTarget.closest('.widget-container') as HTMLElement;
+    if (widgetElement) {
+      widgetElement.animate([
+        { transform: 'scale(1)' },
+        { transform: 'scale(1.02)' },
+        { transform: 'scale(1)' }
+      ], { duration: 250, easing: 'ease-out' });
+    }
+
+    // Déclenchement du drag global (cross-grid)
+    startDrag(widget, sourceType, sourceCategoryId);
   };
 
-  // Gérer le Ctrl/Cmd+Drag pour le cross-grid drag avec animation
-  const handleDragHandlePointerDown = (event: React.PointerEvent) => {
-    // Supporter Command (⌘) sur macOS via metaKey
-    const activateCrossGrid = event.ctrlKey || event.metaKey;
-    if (isEditMode && activateCrossGrid) {
-      event.preventDefault();
-      event.stopPropagation();
-      
-      // Ajouter une classe d'animation temporaire
-      const widgetElement = event.currentTarget.closest('.h-full.w-full.flex.flex-col') as HTMLElement;
-      if (widgetElement) {
-        widgetElement.style.transform = 'scale(1.05)';
-        widgetElement.style.transition = 'transform 0.2s ease-out';
-        widgetElement.style.boxShadow = '0 10px 40px rgba(var(--primary-rgb, 59, 130, 246), 0.4)';
-        
-        setTimeout(() => {
-          widgetElement.style.transform = 'scale(1)';
-          widgetElement.style.boxShadow = 'none';
-        }, 200);
-      }
-      
-      startDrag(widget, sourceType, sourceCategoryId);
+  const WidgetToRender = WIDGET_REGISTRY[widget.type];
+
+  const renderContent = () => {
+    if (!WidgetToRender) {
+      return (
+        <div className="h-full flex flex-col items-center justify-center p-4 bg-muted/20 text-muted-foreground border-2 border-dashed rounded-lg">
+          <AlertTriangle className="h-8 w-8 mb-2 opacity-50" />
+          <p className="text-xs font-medium">Widget inconnu: {widget.type}</p>
+        </div>
+      );
     }
-    // Sinon, laisser le drag normal se produire (géré par CustomGridLayout)
-  };
-  const renderWidget = () => {
-    switch (widget.type) {
-      case "link":
-        return <LinkWidget widget={widget} />;
-      case "ping":
-        return <PingWidget widget={widget} />;
-      case "iframe":
-        return <IframeWidget widget={widget} />;
-      case "datetime":
-        return <DateTimeWidget widget={widget} />;
-      case "weather":
-        return <WeatherWidget widget={widget} />;
-      case "notes":
-        return <NotesWidget widget={widget} />;
-      case "chart":
-        return <ChartWidget widget={widget} />;
-      case "anime-calendar":
-        return <AnimeCalendarWidget width={widget.w} height={widget.h} />;
-      case "todo-list":
-        return <TodoListWidget widget={widget} />;
-      case "watchlist":
-        return <WatchlistWidget widget={widget} />;
-      case "timer":
-        return <TimerWidget widget={widget} />;
-      case "bookmarks":
-        return <BookmarksWidget widget={widget} />;
-      case "quote":
-        return <QuoteWidget widget={widget} />;
-      case "countdown":
-        return <CountdownWidget widget={widget} />;
-      case "universal-calendar":
-        return <UniversalCalendarWidget />;
-      case "movies-tv-calendar":
-        return <MoviesAndTVCalendarWidget options={widget.options as any} />;
-      case "media-requests":
-        return <MediaRequestsWidget widget={widget} />;
-      case "torrent-overview":
-        return <TorrentOverviewWidget widget={widget} />;
-      case "monitoring":
-        return <MonitoringWidget widget={widget} />;
-      case "media-library":
-        return <MediaLibraryWidget widget={widget} />;
-      default:
-        return (
-          <div className="p-4">
-            <p className="text-muted-foreground">Type de widget inconnu: {widget.type}</p>
-          </div>
-        );
-    }
+    // Props spécifiques
+    if (widget.type === "anime-calendar") return <AnimeCalendarWidget width={widget.w} height={widget.h} />;
+    if (widget.type === "movies-tv-calendar") return <MoviesAndTVCalendarWidget options={widget.options as any} />;
+    
+    return <WidgetToRender widget={widget} />;
   };
 
   return (
-    <div className={`h-full w-full flex flex-col transition-all duration-200 ${isThisWidgetDragging ? 'opacity-70 scale-95 ring-2 ring-primary ring-offset-2' : ''}`}>
-      {isEditMode && (
-        <div className="px-3 py-2 border-b bg-muted/50 text-xs text-muted-foreground flex items-center justify-between gap-2">
-          <div 
-            className="widget-drag-handle cursor-move select-none flex items-center gap-1 hover:text-primary transition-colors"
-            onPointerDown={handleDragHandlePointerDown}
-            title="Glisser pour déplacer | Ctrl+Glisser pour changer de catégorie"
-          >
-            <GripVertical className="h-3 w-3 opacity-60" />
-            <span>{widget.type}</span>
-            <span className="text-[10px] opacity-50 ml-1">(Ctrl/Cmd = 🔄)</span>
-          </div>
-          {(onEdit || onDelete) && (
-            <div className="flex gap-1 widget-no-drag">
-              {onEdit && (
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="outline"
-                  className="h-6 w-6"
-                  onMouseDown={handleActionMouseDown}
-                  onClick={onEdit}
-                  title="Modifier le widget"
-                >
-                  <Settings className="h-3 w-3" />
-                </Button>
-              )}
-              {onDelete && (
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="destructive"
-                  className="h-6 w-6"
-                  onMouseDown={handleActionMouseDown}
-                  onClick={onDelete}
-                  title="Supprimer le widget"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
+    <div
+      className={cn(
+        'widget-container h-full w-full flex flex-col transition-all duration-200 min-w-0 relative group',
+        // On retire le z-index élevé ici pour éviter les conflits de stacking context
+        isThisWidgetDragging ? 'opacity-50 scale-95 z-50' : 'z-0'
       )}
-      <div className="flex-1 overflow-hidden widget-no-drag">
+    >
+      {/* CONTROLS D'ÉDITION 
+        Positionnés en absolute mais à l'INTÉRIEUR (top-2) pour éviter d'être coupés par l'overflow des grilles.
+        Z-Index 50 pour passer au dessus du contenu du widget (images, etc).
+      */}
+      {isEditMode && (
+        <WidgetEditControls 
+          type={widget.type}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onPointerDown={handleDragHandlePointerDown}
+        />
+      )}
+
+      {/* CONTENEUR DU WIDGET */}
+      <div 
+        className={cn(
+          "flex-1 overflow-hidden widget-no-drag h-full w-full relative z-0",
+          isSeamless 
+            ? "rounded-xl" // Pas de bordure/bg pour les widgets seamless
+            : "rounded-xl bg-card border shadow-sm"
+        )}
+      >
         <ErrorBoundary>
-          {renderWidget()}
+          <div className="h-full w-full">
+            {renderContent()}
+          </div>
         </ErrorBoundary>
       </div>
     </div>
   );
 });
+
+// --- Sous-composant Controls ---
+
+interface WidgetEditControlsProps {
+  type: string;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onPointerDown: (e: React.PointerEvent) => void;
+}
+
+function WidgetEditControls({ type, onEdit, onDelete, onPointerDown }: WidgetEditControlsProps) {
+  // Empêcher le clic de traverser vers le widget
+  const handleMouseDown = (e: React.MouseEvent) => e.stopPropagation();
+
+  return (
+    <div 
+      className="absolute top-2 inset-x-0 z-[60] flex justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+      // Important : pointer-events-none sur le conteneur large pour ne pas bloquer les clics sur le widget en dessous
+      style={{ pointerEvents: 'none' }}
+    >
+      <div 
+        className="flex items-center gap-1 p-1 rounded-full bg-foreground/90 text-background backdrop-blur-md border border-white/20 shadow-xl transform translate-y-[-2px] hover:translate-y-0 transition-transform"
+        // Réactiver les pointer-events sur la bulle elle-même
+        style={{ pointerEvents: 'auto' }}
+        onMouseDown={handleMouseDown}
+      >
+        
+        {/* HANDLE DE DRAG */}
+        <div
+          className="widget-drag-handle cursor-grab active:cursor-grabbing flex items-center gap-1.5 px-2 py-1 rounded-full hover:bg-white/20 transition-colors"
+          onPointerDown={onPointerDown}
+          title="Maintenir pour déplacer"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+          <span className="text-[10px] font-bold uppercase tracking-wider max-w-[80px] truncate select-none">
+            {type.replace("-", " ")}
+          </span>
+        </div>
+
+        <div className="w-px h-3 bg-white/20 mx-0.5" />
+
+        {/* ACTIONS */}
+        <div className="flex items-center gap-1 pr-1">
+          {onEdit && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 rounded-full hover:bg-blue-500 hover:text-white text-inherit"
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              title="Configurer"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 rounded-full hover:bg-red-500 hover:text-white text-inherit"
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              title="Supprimer"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -241,6 +241,34 @@ export const integrationsRelations = relations(integrations, ({ one }) => ({
   }),
 }));
 
+// ============= IFRAME REQUESTS & ALLOWLIST =============
+export const iframeRequestStatusEnum = mysqlEnum('iframe_request_status', ['PENDING', 'APPROVED', 'REJECTED']);
+
+export const iframeRequests = mysqlTable('iframe_requests', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull(),
+  url: text('url').notNull(),
+  reason: text('reason'),
+  status: iframeRequestStatusEnum.default('PENDING').notNull(),
+  adminId: varchar('admin_id', { length: 255 }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: index('iframe_request_user_id_idx').on(table.userId),
+  statusIdx: index('iframe_request_status_idx').on(table.status),
+}));
+
+export const iframeAllowlist = mysqlTable('iframe_allowlist', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  origin: varchar('origin', { length: 512 }).notNull(),
+  addedBy: varchar('added_by', { length: 255 }).notNull(),
+  addedAt: timestamp('added_at').defaultNow().notNull(),
+  approvedAt: timestamp('approved_at'),
+  removed: boolean('removed').default(false).notNull(),
+}, (table) => ({
+  originIdx: index('iframe_allowlist_origin_idx').on(table.origin),
+}));
+
 export const mediaItemsRelations = relations(mediaItems, ({ one }) => ({
   user: one(users, {
     fields: [mediaItems.userId],

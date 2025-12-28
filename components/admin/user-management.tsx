@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import IframeRequestsAdmin from "@/components/admin/iframe-requests-admin";
 import { useSession } from "next-auth/react";
 import { User } from "@/lib/db/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -140,6 +141,17 @@ export function UserManagement({ users: initialUsers }: UserManagementProps) {
 
   return (
     <div className="space-y-6">
+      {/* --- Demandes d'iframe (admin) --- */}
+      {session?.user?.role === 'ADMIN' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">🌐 Demandes d'iframes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <IframeRequestsAdmin />
+          </CardContent>
+        </Card>
+      )}
       {/* Utilisateurs en attente */}
       {pendingUsers.length > 0 && (
         <Card>

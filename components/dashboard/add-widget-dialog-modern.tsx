@@ -1,40 +1,26 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAlert } from "@/components/ui/confirm-provider";
 import EmojiPicker from "@/components/ui/emoji-picker";
 import AssetPicker from "@/components/ui/asset-picker";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { createWidget } from "@/lib/actions/widgets";
-import { 
-  Link as LinkIcon, 
-  Activity, 
-  Frame, 
-  Clock, 
-  Cloud, 
-  StickyNote, 
-  BarChart3, 
-  Calendar, 
-  CheckSquare, 
-  Eye, 
-  Timer, 
-  Bookmark, 
-  Quote, 
-  CalendarClock, 
-  Film, 
-  CalendarRange,
-  ArrowLeft,
-  Check,
-  ListChecks,
-  Download,
-  Server,
-} from "lucide-react";
 import { getIntegrations } from "@/lib/actions/integrations";
+import { REGIONS, getCitiesByRegion } from "@/lib/cities";
 import type { Widget } from "@/lib/db/schema";
+import { 
+  Link as LinkIcon, Activity, Frame, Clock, Cloud, StickyNote, BarChart3, 
+  Calendar, CheckSquare, Eye, Timer, Bookmark, Quote, CalendarClock, 
+  CalendarRange, Film, ArrowLeft, Check, ListChecks, Download, Server, Loader2
+} from "lucide-react";
 
 interface AddWidgetDialogProps {
   open: boolean;
@@ -43,239 +29,48 @@ interface AddWidgetDialogProps {
   onWidgetAdded?: (widget: Widget) => void;
 }
 
-type WidgetType =
-  | "link"
-  | "ping"
-  | "iframe"
-  | "datetime"
-  | "weather"
-  | "notes"
-  | "chart"
-  | "anime-calendar"
-  | "todo-list"
-  | "watchlist"
-  | "timer"
-  | "bookmarks"
-  | "quote"
-  | "countdown"
-  | "universal-calendar"
-  | "movies-tv-calendar"
-  | "media-requests"
-  | "torrent-overview"
-  | "monitoring"
-  | "media-library";
+type WidgetType = "link" | "ping" | "link-ping" | "iframe" | "datetime" | "weather" | "notes" | "chart" | "anime-calendar" | "todo-list" | "watchlist" | "timer" | "bookmarks" | "quote" | "countdown" | "universal-calendar" | "movies-tv-calendar" | "media-requests" | "torrent-overview" | "monitoring" | "media-library";
 
 const widgetDefinitions = [
-  {
-    type: "link" as WidgetType,
-    icon: LinkIcon,
-    name: "Lien",
-    description: "Lien rapide vers un site",
-    color: "from-blue-500 to-blue-600",
-  },
-  {
-    type: "ping" as WidgetType,
-    icon: Activity,
-    name: "Ping",
-    description: "Surveiller un serveur",
-    color: "from-green-500 to-emerald-600",
-  },
-  {
-    type: "iframe" as WidgetType,
-    icon: Frame,
-    name: "Iframe",
-    description: "Intégrer une page web",
-    color: "from-purple-500 to-purple-600",
-  },
-  {
-    type: "datetime" as WidgetType,
-    icon: Clock,
-    name: "Horloge",
-    description: "Date et heure",
-    color: "from-orange-500 to-orange-600",
-  },
-  {
-    type: "weather" as WidgetType,
-    icon: Cloud,
-    name: "Météo",
-    description: "Prévisions météo",
-    color: "from-sky-500 to-sky-600",
-  },
-  {
-    type: "notes" as WidgetType,
-    icon: StickyNote,
-    name: "Notes",
-    description: "Prendre des notes",
-    color: "from-yellow-500 to-amber-600",
-  },
-  {
-    type: "chart" as WidgetType,
-    icon: BarChart3,
-    name: "Graphique",
-    description: "Visualiser des données",
-    color: "from-indigo-500 to-indigo-600",
-  },
-  {
-    type: "anime-calendar" as WidgetType,
-    icon: Calendar,
-    name: "Calendrier Animé",
-    description: "Anime & Manga à venir",
-    color: "from-pink-500 to-rose-600",
-  },
-  {
-    type: "todo-list" as WidgetType,
-    icon: CheckSquare,
-    name: "Todo List",
-    description: "Gérer vos tâches",
-    color: "from-teal-500 to-cyan-600",
-  },
-  {
-    type: "watchlist" as WidgetType,
-    icon: Eye,
-    name: "Watchlist",
-    description: "Liste de visionnage",
-    color: "from-red-500 to-red-600",
-  },
-  {
-    type: "timer" as WidgetType,
-    icon: Timer,
-    name: "Timer",
-    description: "Minuteur et chronomètre",
-    color: "from-violet-500 to-purple-600",
-  },
-  {
-    type: "bookmarks" as WidgetType,
-    icon: Bookmark,
-    name: "Favoris",
-    description: "Vos liens favoris",
-    color: "from-fuchsia-500 to-pink-600",
-  },
-  {
-    type: "quote" as WidgetType,
-    icon: Quote,
-    name: "Citation",
-    description: "Citation du jour",
-    color: "from-slate-500 to-gray-600",
-  },
-  {
-    type: "countdown" as WidgetType,
-    icon: CalendarClock,
-    name: "Compte à rebours",
-    description: "Compteur d'événement",
-    color: "from-lime-500 to-green-600",
-  },
-  {
-    type: "universal-calendar" as WidgetType,
-    icon: CalendarRange,
-    name: "Calendrier Universel",
-    description: "Tous vos événements",
-    color: "from-cyan-500 to-blue-600",
-  },
-  {
-    type: "movies-tv-calendar" as WidgetType,
-    icon: Film,
-    name: "Films & Séries",
-    description: "Sorties cinéma et TV",
-    color: "from-rose-500 to-red-600",
-  },
-  {
-    type: "media-requests" as WidgetType,
-    icon: ListChecks,
-    name: "Media Requests",
-    description: "Liste des demandes (Overseerr)",
-    color: "from-emerald-500 to-teal-600",
-  },
-  {
-    type: "media-library" as WidgetType,
-    icon: Film,
-    name: "Médiathèque",
-    description: "Page complète films/séries/musiques",
-    color: "from-fuchsia-500 to-indigo-500",
-  },
-  {
-    type: "torrent-overview" as WidgetType,
-    icon: Download,
-    name: "Torrent Overview",
-    description: "Vitesse & torrents en cours",
-    color: "from-blue-500 to-cyan-500",
-  },
-  {
-    type: "monitoring" as WidgetType,
-    icon: Server,
-    name: "Monitoring Serveur",
-    description: "CPU, RAM, load & uptime",
-    color: "from-amber-500 to-orange-500",
-  },
+  { type: "link", icon: LinkIcon, name: "Lien", description: "Raccourci vers un site", color: "from-blue-500 to-blue-600" },
+  { type: "ping", icon: Activity, name: "Ping", description: "Disponibilité serveur", color: "from-green-500 to-emerald-600" },
+  { type: "link-ping", icon: Activity, name: "Lien+", description: "Lien cliquable avec surveillance de disponibilité", color: "from-green-500 to-emerald-600" },
+  { type: "iframe", icon: Frame, name: "Iframe", description: "Intégration web", color: "from-purple-500 to-purple-600" },
+  { type: "datetime", icon: Clock, name: "Horloge", description: "Date et heure", color: "from-orange-500 to-orange-600" },
+  { type: "weather", icon: Cloud, name: "Météo", description: "Prévisions locales", color: "from-sky-500 to-sky-600" },
+  { type: "notes", icon: StickyNote, name: "Notes", description: "Bloc-notes simple", color: "from-yellow-500 to-amber-600" },
+  { type: "chart", icon: BarChart3, name: "Graphique", description: "Visualisation données", color: "from-indigo-500 to-indigo-600" },
+  { type: "anime-calendar", icon: Calendar, name: "Calendrier Anime", description: "Sorties AniList", color: "from-pink-500 to-rose-600" },
+  { type: "todo-list", icon: CheckSquare, name: "Todo List", description: "Gestion de tâches", color: "from-teal-500 to-cyan-600" },
+  { type: "watchlist", icon: Eye, name: "Watchlist", description: "Liste visionnage", color: "from-red-500 to-red-600" },
+  { type: "timer", icon: Timer, name: "Timer", description: "Pomodoro / Chrono", color: "from-violet-500 to-purple-600" },
+  { type: "bookmarks", icon: Bookmark, name: "Favoris", description: "Collection de liens", color: "from-fuchsia-500 to-pink-600" },
+  { type: "quote", icon: Quote, name: "Citation", description: "Citation du jour", color: "from-slate-500 to-gray-600" },
+  { type: "countdown", icon: CalendarClock, name: "Compte à rebours", description: "Jours restants", color: "from-lime-500 to-green-600" },
+  { type: "universal-calendar", icon: CalendarRange, name: "Calendrier Global", description: "Tous événements", color: "from-cyan-500 to-blue-600" },
+  { type: "movies-tv-calendar", icon: Film, name: "Cinéma & TV", description: "Sorties TMDb", color: "from-rose-500 to-red-600" },
+  { type: "media-requests", icon: ListChecks, name: "Media Requests", description: "Overseerr / Jellyseerr", color: "from-emerald-500 to-teal-600" },
+  { type: "media-library", icon: Film, name: "Médiathèque", description: "Accès bibliothèque", color: "from-fuchsia-500 to-indigo-500" },
+  { type: "torrent-overview", icon: Download, name: "Torrent Overview", description: "Client Torrent", color: "from-blue-500 to-cyan-500" },
+  { type: "monitoring", icon: Server, name: "Monitoring", description: "Ressources Serveur", color: "from-amber-500 to-orange-500" },
 ];
 
-export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidgetAdded }: AddWidgetDialogProps) {
+// Data
+export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWidgetAdded }: AddWidgetDialogProps) {
   const alert = useAlert();
-  const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState<"select" | "configure">("select");
+
+  // Local UI state
+  const [step, setStep] = useState<'select' | 'configure'>('select');
   const [selectedWidget, setSelectedWidget] = useState<WidgetType | null>(null);
+  const [loading, setLoading] = useState(false);
+
   const [availableIntegrations, setAvailableIntegrations] = useState<any[]>([]);
   const [loadingIntegrations, setLoadingIntegrations] = useState(false);
+  const [availableCities, setAvailableCities] = useState<any[]>([]);
+  const [selectedRegion, setSelectedRegion] = useState<string>("");
 
-  // Formulaires pour chaque type
-  const [linkForm, setLinkForm] = useState({ title: "", url: "", icon: "🔗", iconUrl: "", openInNewTab: true });
-  const [pingForm, setPingForm] = useState({ title: "", host: "", port: 80 });
-  const [iframeForm, setIframeForm] = useState({ title: "", iframeUrl: "" });
-  const [weatherForm, setWeatherForm] = useState({ city: "Paris" });
-  const [notesForm, setNotesForm] = useState({ title: "Notes", content: "" });
-  const [chartForm, setChartForm] = useState({ title: "Statistiques", chartType: "bar" });
-  const [animeForm, setAnimeForm] = useState({ defaultTab: "anime", daysToShow: 7 });
-  const [todoForm, setTodoForm] = useState({ title: "Todo List", todos: [] });
-  const [watchlistForm, setWatchlistForm] = useState({ title: "Watchlist", watchlist: [] });
-  const [timerForm, setTimerForm] = useState({ 
-    title: "Timer",
-    pomodoroMinutes: 25,
-    shortBreakMinutes: 5,
-    longBreakMinutes: 15,
-    customMinutes: 30,
-  });
-  const [bookmarksForm, setBookmarksForm] = useState({ title: "Bookmarks", bookmarks: [] });
-  const [quoteForm, setQuoteForm] = useState({ title: "Quote of the Day" });
-  const [countdownForm, setCountdownForm] = useState({ 
-    countdownTitle: "Mon Événement", 
-    countdownDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), 
-    countdownEmoji: "🎉" 
-  });
-  const [universalCalendarForm, setUniversalCalendarForm] = useState({ 
-    calendarView: "month",
-    enabledSources: { anime: true, manga: true, movies: true, tv: true, personal: true },
-    sourceColors: {
-      anime: "#3b82f6",
-      manga: "#8b5cf6",
-      movies: "#ef4444",
-      tv: "#10b981",
-      personal: "#f59e0b",
-    },
-    showWeekends: true,
-  });
-  const [moviesTVForm, setMoviesTVForm] = useState({ 
-    view: "both",
-    timeWindow: "day",
-    showTrending: true,
-  });
-  const [mediaRequestsForm, setMediaRequestsForm] = useState({
-    title: "Media Requests",
-    integrationId: "",
-    statusFilter: "all" as "all" | "pending" | "approved" | "declined",
-    limit: 10,
-  });
-  const [torrentForm, setTorrentForm] = useState({
-    title: "Torrent Overview",
-    integrationId: "",
-    limitActive: 10,
-    showCompleted: true,
-  });
-  const [monitoringForm, setMonitoringForm] = useState({
-    title: "Monitoring Serveur",
-    integrationId: "",
-  });
-  const [mediaLibraryForm, setMediaLibraryForm] = useState({
-    title: "Médiathèque",
-  });
+  // Form State (Single object for simplicity, cleared on open)
+  const [formState, setFormState] = useState<any>({});
 
   const loadIntegrations = async () => {
     try {
@@ -283,818 +78,496 @@ export function AddWidgetDialogModern({ open, onOpenChange, dashboardId, onWidge
       const data = await getIntegrations();
       setAvailableIntegrations(data || []);
     } catch (error) {
-      console.error("Erreur lors du chargement des intégrations", error);
+      console.error("Erreur intégrations", error);
     } finally {
       setLoadingIntegrations(false);
     }
   };
 
-  const handleWidgetSelect = (type: WidgetType) => {
-    setSelectedWidget(type);
-    setStep("configure");
-
-    if (type === "media-requests" || type === "torrent-overview" || type === "monitoring") {
-      loadIntegrations();
-    }
-  };
-
   useEffect(() => {
-    // Preload integrations when dialog opens
-    if (open && availableIntegrations.length === 0) {
+    if (open) {
+      setStep("select");
+      setSelectedWidget(null);
+      setFormState({}); // Reset form
       loadIntegrations();
     }
   }, [open]);
 
-  const handleBack = () => {
-    setStep("select");
-    setSelectedWidget(null);
+  const handleWidgetSelect = (type: WidgetType) => {
+    setSelectedWidget(type);
+    
+    // Initialize default values based on type
+    const defaults: any = { title: "" };
+    
+    // Default Titles
+    const def = widgetDefinitions.find(w => w.type === type);
+    if (def) defaults.title = def.name;
+
+    switch (type) {
+      case "link": Object.assign(defaults, { icon: "🔗", openInNewTab: true, title: "Nouveau lien" }); break;
+      case "link-ping": Object.assign(defaults, { openInNewTab: true, title: "Service" }); break;
+      case "ping": Object.assign(defaults, { port: "80", title: "Serveur" }); break;
+      case "weather": Object.assign(defaults, { units: "metric", title: "Météo" }); break;
+      case "media-requests": Object.assign(defaults, { limit: 10, statusFilter: "all", title: "Requêtes" }); break;
+      case "torrent-overview": Object.assign(defaults, { limit: 5, showCompleted: false, title: "Torrents" }); break;
+      case "iframe": Object.assign(defaults, { transparent: false, title: "Embed" }); break;
+      case "notes": Object.assign(defaults, { content: "", title: "Notes" }); break;
+      case "timer": Object.assign(defaults, { pomodoroMinutes: 25, shortBreakMinutes: 5, longBreakMinutes: 15, customMinutes: 30, title: "Timer" }); break;
+      case "countdown": Object.assign(defaults, { countdownDate: new Date(Date.now() + 86400000).toISOString(), countdownEmoji: "🎉", title: "Événement" }); break;
+      case "chart": Object.assign(defaults, { chartType: "bar", title: "Graphique" }); break;
+    }
+    setFormState(defaults);
+    setStep("configure");
   };
 
   const handleSubmit = async () => {
     if (!selectedWidget) return;
-
     setLoading(true);
-    try {
-      let options: any = {};
-      let defaultSize = { w: 2, h: 2 };
 
-      switch (selectedWidget) {
-        case "link":
-          options = linkForm;
-          defaultSize = { w: 3, h: 2 };
-          break;
-        case "ping":
-          options = pingForm;
-          defaultSize = { w: 3, h: 2 };
-          break;
-        case "iframe":
-          options = iframeForm;
-          defaultSize = { w: 5, h: 4 };
-          break;
-        case "datetime":
-          options = { format: "PPP", timezone: "Europe/Paris" };
-          defaultSize = { w: 4, h: 2 };
-          break;
-        case "weather":
-          options = weatherForm;
-          defaultSize = { w: 3, h: 3 };
-          break;
-        case "notes":
-          options = notesForm;
-          defaultSize = { w: 4, h: 4 };
-          break;
-        case "chart":
-          options = chartForm;
-          defaultSize = { w: 5, h: 3 };
-          break;
-        case "anime-calendar":
-          options = animeForm;
-          defaultSize = { w: 4, h: 4 };
-          break;
-        case "todo-list":
-          options = todoForm;
-          defaultSize = { w: 3, h: 4 };
-          break;
-        case "watchlist":
-          options = watchlistForm;
-          defaultSize = { w: 4, h: 4 };
-          break;
-        case "timer":
-          options = timerForm;
-          defaultSize = { w: 3, h: 4 };
-          break;
-        case "bookmarks":
-          options = bookmarksForm;
-          defaultSize = { w: 4, h: 4 };
-          break;
-        case "quote":
-          options = quoteForm;
-          defaultSize = { w: 4, h: 3 };
-          break;
-        case "countdown":
-          options = countdownForm;
-          defaultSize = { w: 3, h: 3 };
-          break;
-        case "universal-calendar":
-          options = universalCalendarForm;
-          defaultSize = { w: 5, h: 5 };
-          break;
-        case "movies-tv-calendar":
-          options = moviesTVForm;
-          defaultSize = { w: 4, h: 4 };
-          break;
-        case "media-requests":
-          options = mediaRequestsForm;
-          defaultSize = { w: 4, h: 4 };
-          break;
-        case "torrent-overview":
-          options = torrentForm;
-          defaultSize = { w: 4, h: 4 };
-          break;
-        case "monitoring":
-          options = monitoringForm;
-          defaultSize = { w: 4, h: 3 };
-          break;
-        case "media-library":
-          options = mediaLibraryForm;
-          defaultSize = { w: 4, h: 3 };
-          break;
-      }
+    try {
+      // Prepare options with correct types
+      const options = { ...formState };
+      if (options.limit) options.limit = Number(options.limit);
+      if (options.port) options.port = options.port; 
+
+      // Default dimensions mapping
+      const sizeMap: Partial<Record<WidgetType, { w: number, h: number }>> = {
+         "link": { w: 2, h: 2 },
+         "link-ping": { w: 3, h: 2 },
+         "ping": { w: 3, h: 2 },
+         "weather": { w: 2, h: 2 },
+         "datetime": { w: 4, h: 2 },
+         "iframe": { w: 4, h: 3 },
+         "notes": { w: 4, h: 4 },
+         "todo-list": { w: 3, h: 4 },
+         "media-requests": { w: 4, h: 4 },
+         "torrent-overview": { w: 4, h: 4 },
+         "media-library": { w: 4, h: 3 },
+         "monitoring": { w: 4, h: 3 },
+         "chart": { w: 5, h: 3 },
+         "anime-calendar": { w: 4, h: 4 },
+         "universal-calendar": { w: 5, h: 5 },
+         "movies-tv-calendar": { w: 4, h: 4 },
+         "countdown": { w: 3, h: 3 },
+         "timer": { w: 3, h: 4 },
+         "watchlist": { w: 4, h: 4 },
+         "bookmarks": { w: 4, h: 4 },
+         "quote": { w: 4, h: 3 },
+      };
+
+      const size = sizeMap[selectedWidget] || { w: 2, h: 2 };
 
       const newWidget = await createWidget(dashboardId, {
         type: selectedWidget,
-        x: 0,
-        y: 0,
-        ...defaultSize,
+        x: 0, y: 0,
+        ...size,
         options,
       });
 
       if (newWidget && onWidgetAdded) {
-        onWidgetAdded({
-          ...newWidget,
-          categoryId: newWidget.categoryId ?? null,
-          categoryX: (newWidget as any).categoryX ?? 0,
-          categoryY: (newWidget as any).categoryY ?? 0,
-        });
+        onWidgetAdded({ ...newWidget, categoryId: null } as any);
       }
-
-      // Reset
-      handleBack();
       onOpenChange(false);
     } catch (error) {
-      console.error("Erreur lors de la création du widget:", error);
-      await alert("Erreur lors de la création du widget");
+      console.error("Création widget échouée:", error);
+      await alert("Erreur lors de la création.");
     } finally {
       setLoading(false);
     }
   };
 
+  // --- Configuration renderers ---
+  const renderConfig = () => {
+    switch (selectedWidget) {
+      case "link":
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Titre</Label>
+              <Input value={formState.title} onChange={e => setFormState({...formState, title: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <Label>URL</Label>
+              <Input value={formState.url || ""} onChange={e => setFormState({...formState, url: e.target.value})} placeholder="https://..." />
+            </div>
+             <div className="space-y-2">
+              <Label>Icône</Label>
+              <Tabs defaultValue="emoji" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="emoji">Emoji</TabsTrigger>
+                  <TabsTrigger value="custom">Image</TabsTrigger>
+                </TabsList>
+                <TabsContent value="emoji" className="pt-2 flex gap-3">
+                   <div className="h-10 w-10 flex items-center justify-center text-2xl bg-muted rounded border">{formState.icon}</div>
+                   <div className="flex-1"><EmojiPicker value={formState.icon} onSelect={e => setFormState({...formState, icon: e, iconUrl: undefined})} /></div>
+                </TabsContent>
+                <TabsContent value="custom" className="pt-2 space-y-2">
+                   <div className="flex gap-2">
+                      <Input placeholder="https://..." value={formState.iconUrl || ""} onChange={e => setFormState({...formState, iconUrl: e.target.value, icon: undefined})} />
+                      {formState.iconUrl && <img src={formState.iconUrl} className="h-10 w-10 object-contain bg-white rounded border" />}
+                   </div>
+                   <AssetPicker inline onSelect={url => setFormState({...formState, iconUrl: url, icon: undefined})} />
+                </TabsContent>
+              </Tabs>
+            </div>
+            <div className="flex items-center justify-between border p-3 rounded-lg bg-muted/20">
+              <Label htmlFor="newtab">Nouvel onglet</Label>
+              <Switch id="newtab" checked={formState.openInNewTab} onCheckedChange={c => setFormState({...formState, openInNewTab: c})} />
+            </div>
+          </div>
+        );
+
+      case "link-ping":
+        return (
+          <div className="space-y-4">
+             <div className="space-y-2">
+               <Label>Titre</Label>
+               <Input value={formState.title} onChange={e => setFormState({...formState, title: e.target.value})} />
+             </div>
+             <div className="space-y-2">
+               <Label>URL (avec port si nécessaire)</Label>
+               <Input value={formState.url || ""} onChange={e => setFormState({...formState, url: e.target.value})} placeholder="https://mon-service:8080" />
+             </div>
+             <div className="space-y-2">
+               <Label>Icône</Label>
+               <Tabs defaultValue="emoji" className="w-full">
+                 <TabsList className="grid w-full grid-cols-2">
+                   <TabsTrigger value="emoji">Emoji</TabsTrigger>
+                   <TabsTrigger value="custom">Image</TabsTrigger>
+                 </TabsList>
+                 <TabsContent value="emoji" className="pt-2 flex gap-3">
+                    <div className="h-10 w-10 flex items-center justify-center text-2xl bg-muted rounded border">{formState.icon}</div>
+                    <div className="flex-1"><EmojiPicker value={formState.icon} onSelect={e => setFormState({...formState, icon: e, iconUrl: undefined})} /></div>
+                 </TabsContent>
+                 <TabsContent value="custom" className="pt-2 space-y-2">
+                    <div className="flex gap-2">
+                       <Input placeholder="https://..." value={formState.iconUrl || ""} onChange={e => setFormState({...formState, iconUrl: e.target.value, icon: undefined})} />
+                       {formState.iconUrl && <img src={formState.iconUrl} className="h-10 w-10 object-contain bg-white rounded border" />}
+                    </div>
+                    <AssetPicker inline onSelect={url => setFormState({...formState, iconUrl: url, icon: undefined})} />
+                 </TabsContent>
+               </Tabs>
+             </div>
+             <div className="flex items-center justify-between border p-3 rounded-lg bg-muted/20">
+               <Label htmlFor="newtab-lp">Nouvel onglet</Label>
+               <Switch id="newtab-lp" checked={formState.openInNewTab} onCheckedChange={c => setFormState({...formState, openInNewTab: c})} />
+             </div>
+          </div>
+        );
+
+      case "ping":
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+               <Label>Titre</Label>
+               <Input value={formState.title} onChange={e => setFormState({...formState, title: e.target.value})} />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+               <div className="col-span-2 space-y-2">
+                 <Label>Hôte</Label>
+                 <Input value={formState.host || ""} onChange={e => setFormState({...formState, host: e.target.value})} placeholder="192.168.1.1" />
+               </div>
+               <div className="space-y-2">
+                 <Label>Port</Label>
+                 <Input value={formState.port || ""} onChange={e => setFormState({...formState, port: e.target.value})} placeholder="80" />
+               </div>
+            </div>
+          </div>
+        );
+
+      case "weather":
+        return (
+          <div className="space-y-4">
+             <div className="grid grid-cols-2 gap-4">
+               <div className="space-y-2">
+                 <Label>Région</Label>
+                 <Select onValueChange={(r) => {
+                    setSelectedRegion(r);
+                    const cities = getCitiesByRegion(r);
+                    setAvailableCities(cities);
+                    if(cities.length > 0) setFormState({...formState, city: cities[0].name});
+                 }}>
+                   <SelectTrigger><SelectValue placeholder="Région" /></SelectTrigger>
+                   <SelectContent>
+                     {REGIONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                   </SelectContent>
+                 </Select>
+               </div>
+               <div className="space-y-2">
+                 <Label>Ville</Label>
+                 <Select value={formState.city || ""} onValueChange={c => setFormState({...formState, city: c})} disabled={!selectedRegion}>
+                   <SelectTrigger><SelectValue placeholder="Ville" /></SelectTrigger>
+                   <SelectContent>
+                     {availableCities.map(c => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}
+                   </SelectContent>
+                 </Select>
+               </div>
+             </div>
+             <div className="space-y-2">
+               <Label>Unités</Label>
+               <Select value={formState.units || "metric"} onValueChange={v => setFormState({...formState, units: v})}>
+                 <SelectTrigger><SelectValue /></SelectTrigger>
+                 <SelectContent>
+                    <SelectItem value="metric">Métrique (°C)</SelectItem>
+                    <SelectItem value="imperial">Impérial (°F)</SelectItem>
+                 </SelectContent>
+               </Select>
+             </div>
+          </div>
+        );
+
+      case "media-requests":
+      case "torrent-overview":
+      case "monitoring":
+         const typeMap: any = { "media-requests": "overseerr", "torrent-overview": "torrent-client", "monitoring": "monitoring" };
+         const reqType = typeMap[selectedWidget];
+         const validIntegrations = availableIntegrations.filter(i => i.type === reqType);
+
+         if (validIntegrations.length === 0) {
+            return (
+              <div className="p-6 text-center border-2 border-dashed rounded-xl bg-muted/10">
+                 <p className="text-muted-foreground mb-4">Aucune intégration compatible trouvée.</p>
+                 <Button variant="outline" asChild><a href="/settings" target="_blank">Ajouter une intégration</a></Button>
+              </div>
+            );
+         }
+
+         return (
+           <div className="space-y-4">
+             <div className="space-y-2">
+               <Label>Intégration</Label>
+               <Select value={formState.integrationId || ""} onValueChange={v => setFormState({...formState, integrationId: v})}>
+                 <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                 <SelectContent>
+                   {validIntegrations.map(i => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}
+                 </SelectContent>
+               </Select>
+             </div>
+             
+             {selectedWidget === "media-requests" && (
+                <>
+                  <div className="space-y-2">
+                     <Label>Filtre Statut</Label>
+                     <Select value={formState.statusFilter} onValueChange={v => setFormState({...formState, statusFilter: v})}>
+                       <SelectTrigger><SelectValue /></SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="all">Tout</SelectItem>
+                         <SelectItem value="pending">En attente</SelectItem>
+                         <SelectItem value="approved">Approuvé</SelectItem>
+                       </SelectContent>
+                     </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Limite</Label>
+                    <Input type="number" value={formState.limit} onChange={e => setFormState({...formState, limit: e.target.value})} min={1} max={50} />
+                  </div>
+                </>
+             )}
+
+             {selectedWidget === "torrent-overview" && (
+                <div className="space-y-2">
+                  <Label>Limite torrents</Label>
+                  <Input type="number" value={formState.limit} onChange={e => setFormState({...formState, limit: e.target.value})} min={1} max={20} />
+                </div>
+             )}
+           </div>
+         );
+      
+      case "iframe":
+         return (
+           <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>URL Iframe</Label>
+                <Input value={formState.url || ""} onChange={e => setFormState({...formState, url: e.target.value})} placeholder="https://..." />
+              </div>
+              <div className="flex items-center justify-between border p-3 rounded-lg bg-muted/20">
+                 <Label>Fond transparent</Label>
+                 <Switch checked={formState.transparent} onCheckedChange={c => setFormState({...formState, transparent: c})} />
+              </div>
+           </div>
+         );
+
+      case "notes":
+        return (
+           <div className="space-y-4">
+              <div className="space-y-2">
+                 <Label>Titre</Label>
+                 <Input value={formState.title} onChange={e => setFormState({...formState, title: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                 <Label>Contenu initial</Label>
+                 <textarea 
+                    className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm" 
+                    value={formState.content || ""} 
+                    onChange={e => setFormState({...formState, content: e.target.value})} 
+                    placeholder="Écrivez quelque chose..."
+                 />
+              </div>
+           </div>
+        );
+
+      case "countdown":
+        return (
+          <div className="space-y-4">
+             <div className="space-y-2">
+               <Label>Titre de l'événement</Label>
+               <Input value={formState.title} onChange={e => setFormState({...formState, title: e.target.value})} />
+             </div>
+             <div className="space-y-2">
+               <Label>Date cible</Label>
+               <Input 
+                 type="datetime-local" 
+                 value={formState.countdownDate ? new Date(formState.countdownDate).toISOString().slice(0, 16) : ""} 
+                 onChange={e => setFormState({...formState, countdownDate: new Date(e.target.value).toISOString()})} 
+               />
+             </div>
+             <div className="space-y-2">
+                <Label>Emoji</Label>
+                <div className="flex gap-2">
+                   <div className="h-10 w-10 flex items-center justify-center text-2xl bg-muted rounded border">{formState.countdownEmoji || "📅"}</div>
+                   <div className="flex-1">
+                      <EmojiPicker value={formState.countdownEmoji} onSelect={e => setFormState({...formState, countdownEmoji: e})} />
+                   </div>
+                </div>
+             </div>
+          </div>
+        );
+
+      case "timer":
+        return (
+           <div className="space-y-4">
+              <div className="space-y-2">
+                 <Label>Titre</Label>
+                 <Input value={formState.title} onChange={e => setFormState({...formState, title: e.target.value})} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                 <div className="space-y-1">
+                    <Label className="text-xs">Pomodoro (min)</Label>
+                    <Input type="number" value={formState.pomodoroMinutes} onChange={e => setFormState({...formState, pomodoroMinutes: Number(e.target.value)})} />
+                 </div>
+                 <div className="space-y-1">
+                    <Label className="text-xs">Pause (min)</Label>
+                    <Input type="number" value={formState.shortBreakMinutes} onChange={e => setFormState({...formState, shortBreakMinutes: Number(e.target.value)})} />
+                 </div>
+              </div>
+           </div>
+        );
+
+      case "chart":
+        return (
+          <div className="space-y-4">
+             <div className="space-y-2">
+               <Label>Titre</Label>
+               <Input value={formState.title} onChange={e => setFormState({...formState, title: e.target.value})} />
+             </div>
+             <div className="bg-muted/50 p-3 rounded text-sm text-muted-foreground">
+                Vous pourrez configurer les données du graphique après l'avoir créé.
+             </div>
+          </div>
+        );
+
+      default:
+        // Default simple form for widgets with just a Title (Todo, Watchlist, Calendar, etc.)
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Titre</Label>
+              <Input value={formState.title || ""} onChange={e => setFormState({...formState, title: e.target.value})} />
+            </div>
+            <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded border">
+              Ce widget sera configuré avec des valeurs par défaut. Vous pourrez le personnaliser davantage après sa création.
+            </p>
+          </div>
+        );
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(open) => {
-      onOpenChange(open);
-      if (!open) {
-        setStep("select");
-        setSelectedWidget(null);
-      }
-    }}>
-      <DialogContent className="max-w-4xl max-h-[85vh]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogHeader className="p-6 pb-2 border-b">
+          <DialogTitle className="flex items-center gap-2 text-xl">
             {step === "configure" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleBack}
-                className="mr-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
+               <Button variant="ghost" size="icon" onClick={() => setStep("select")} className="-ml-2 h-8 w-8">
+                 <ArrowLeft className="h-4 w-4" />
+               </Button>
             )}
-            {step === "select" ? "Choisir un widget" : `Configurer : ${widgetDefinitions.find(w => w.type === selectedWidget)?.name}`}
+            {step === "select" ? "Ajouter un Widget" : `Configurer : ${widgetDefinitions.find(w => w.type === selectedWidget)?.name}`}
           </DialogTitle>
           <DialogDescription>
-            {step === "select" 
-              ? "Sélectionnez le type de widget que vous souhaitez ajouter"
-              : "Configurez les paramètres de votre widget"}
+             {step === "select" ? "Choisissez un module à ajouter à votre tableau de bord." : "Personnalisez les options avant l'ajout."}
           </DialogDescription>
         </DialogHeader>
 
-        {step === "select" ? (
-          <ScrollArea className="h-[calc(85vh-180px)] pr-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {widgetDefinitions.map((widget) => {
-                const Icon = widget.icon;
-                // Check if widget requires an integration
-                const requiresIntegration = ["media-requests", "torrent-overview", "monitoring"].includes(widget.type);
-                const hasRequiredIntegration = requiresIntegration && availableIntegrations.length > 0;
-                const isDisabled = requiresIntegration && !hasRequiredIntegration;
-                
-                return (
-                  <div key={widget.type} className="relative group">
-                    <button
-                      onClick={() => handleWidgetSelect(widget.type)}
-                      disabled={isDisabled}
-                      className={`w-full group relative overflow-hidden rounded-xl border-2 transition-all duration-200 ${
-                        isDisabled 
-                          ? 'border-transparent opacity-50 cursor-not-allowed' 
-                          : 'border-transparent hover:border-primary/50 hover:scale-105 hover:shadow-lg'
-                      }`}
-                    >
-                      <div className={`absolute inset-0 bg-gradient-to-br ${widget.color} opacity-10 ${!isDisabled && 'group-hover:opacity-20'} transition-opacity`} />
-                      <div className="relative p-4 flex flex-col items-center text-center space-y-3">
-                        <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${widget.color} flex items-center justify-center shadow-md`}>
-                          <Icon className="h-6 w-6 text-white" />
-                        </div>
-                        <div className="space-y-1">
-                          <h3 className="font-semibold text-sm">{widget.name}</h3>
-                          <p className="text-xs text-muted-foreground line-clamp-2">{widget.description}</p>
-                        </div>
-                      </div>
-                    </button>
-                    {isDisabled && (
-                      <div className="absolute inset-0 rounded-xl flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-xs">
-                        <div className="text-xs font-medium text-white text-center px-2">
-                          Créez une intégration<br />pour utiliser ce widget
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </ScrollArea>
-        ) : (
-          <ScrollArea className="h-[calc(85vh-180px)] pr-4">
-            <div className="space-y-4">
-              {selectedWidget === "link" && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Titre</Label>
-                    <Input
-                      value={linkForm.title}
-                      onChange={(e) => setLinkForm({ ...linkForm, title: e.target.value })}
-                      placeholder="Mon lien"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>URL</Label>
-                    <Input
-                      value={linkForm.url}
-                      onChange={(e) => setLinkForm({ ...linkForm, url: e.target.value })}
-                      placeholder="https://example.com"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Icône (emoji)</Label>
-                    <div className="flex gap-2 items-center">
-                      <Input
-                        value={linkForm.icon}
-                        onChange={(e) => setLinkForm({ ...linkForm, icon: e.target.value })}
-                        placeholder="🔗"
-                        maxLength={2}
-                        className="h-9 w-24"
-                      />
-                      <div className="flex-1">
-                        <EmojiPicker value={linkForm.icon} onSelect={(e) => setLinkForm({ ...linkForm, icon: e })} />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Icône (URL externe)</Label>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={(linkForm as any).iconUrl || ""}
-                          onChange={(e) => setLinkForm({ ...linkForm, iconUrl: e.target.value })}
-                          placeholder="https://raw.githubusercontent.com/homarr-labs/dashboard-icons/main/png/overseerr.png"
-                          className="h-9 flex-1"
-                        />
-                        {(linkForm as any).iconUrl ? (
-                          <div className="h-9 w-9 flex items-center justify-center bg-muted/30 rounded ml-2">
-                            <img src={(linkForm as any).iconUrl} alt="preview" className="max-h-6 max-w-full object-contain" />
-                          </div>
-                        ) : null}
-                      </div>
-                      <div className="mt-2">
-                        <AssetPicker inline onSelect={(url) => setLinkForm({ ...linkForm, iconUrl: url })} />
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground">
-                      💡 Parcourez la bibliothèque d'icônes publique <a href="https://github.com/homarr-labs/dashboard-icons" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">homarr-labs/dashboard-icons</a> ou collez directement une URL d'image.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={linkForm.openInNewTab}
-                      onChange={(e) => setLinkForm({ ...linkForm, openInNewTab: e.target.checked })}
-                      id="openInNewTab"
-                      className="rounded"
-                    />
-                    <Label htmlFor="openInNewTab">Ouvrir dans un nouvel onglet</Label>
-                  </div>
-                </>
-              )}
-              {selectedWidget === "media-library" && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Titre</Label>
-                    <Input
-                      value={mediaLibraryForm.title}
-                      onChange={(e) => setMediaLibraryForm({ ...mediaLibraryForm, title: e.target.value })}
-                      placeholder="Médiathèque"
-                    />
-                  </div>
-                  <div className="bg-muted/50 p-4 rounded-lg mt-2">
-                    <p className="text-sm text-muted-foreground">
-                      Ce widget agit comme un raccourci vers une page complète où vous pouvez gérer vos films,
-                      séries et musiques, et lancer un lecteur vidéo capable de lire des sources 4K.
-                    </p>
-                  </div>
-                </>
-              )}
-              {selectedWidget === "media-requests" && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Titre</Label>
-                    <Input
-                      value={mediaRequestsForm.title}
-                      onChange={(e) =>
-                        setMediaRequestsForm({ ...mediaRequestsForm, title: e.target.value })
-                      }
-                      placeholder="Media Requests"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Intégration Overseerr</Label>
-                    {loadingIntegrations ? (
-                      <p className="text-xs text-muted-foreground">
-                        Chargement des intégrations...
-                      </p>
-                    ) : availableIntegrations.filter((i) => i.type === "overseerr").length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        Aucune intégration Overseerr trouvée. Rendez-vous dans les Paramètres &gt; Intégrations
-                        pour en ajouter une, puis revenez ici.
-                      </p>
-                    ) : (
-                      <select
-                        value={mediaRequestsForm.integrationId}
-                        onChange={(e) =>
-                          setMediaRequestsForm({
-                            ...mediaRequestsForm,
-                            integrationId: e.target.value,
-                          })
-                        }
-                        className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+        <div className="flex-1 overflow-hidden bg-background/50">
+          {step === "select" ? (
+             <ScrollArea className="h-[60vh]">
+               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-6">
+                 {widgetDefinitions.map((w) => {
+                    const Icon = w.icon;
+                    // Check integration requirement
+                    const reqInt = ["media-requests", "torrent-overview", "monitoring"].includes(w.type);
+                    const hasInt = !reqInt || availableIntegrations.some(i => 
+                        (w.type === "media-requests" && i.type === "overseerr") ||
+                        (w.type === "torrent-overview" && i.type === "torrent-client") ||
+                        (w.type === "monitoring" && i.type === "monitoring")
+                    );
+
+                    return (
+                      <button
+                        key={w.type}
+                        onClick={() => handleWidgetSelect(w.type as any)}
+                        disabled={!hasInt && reqInt}
+                        className={`group relative flex flex-col items-center p-4 rounded-xl border text-center gap-3 transition-all duration-200
+                           ${!hasInt && reqInt 
+                              ? "opacity-60 cursor-not-allowed bg-muted/20 border-transparent grayscale" 
+                              : "bg-card border-border hover:border-primary/50 hover:shadow-lg hover:-translate-y-1"}
+                        `}
                       >
-                        <option value="">Sélectionner une intégration</option>
-                        {availableIntegrations
-                          .filter((i) => i.type === "overseerr")
-                          .map((integration) => (
-                            <option key={integration.id} value={integration.id}>
-                              {integration.name}
-                            </option>
-                          ))}
-                      </select>
-                    )}
+                         <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${w.color} flex items-center justify-center shadow-md transition-transform group-hover:scale-110`}>
+                            <Icon className="text-white h-6 w-6" />
+                         </div>
+                         <div className="space-y-1">
+                            <span className="font-semibold text-sm block">{w.name}</span>
+                            <span className="text-xs text-muted-foreground line-clamp-2 leading-tight px-1">{w.description}</span>
+                         </div>
+                         
+                         {!hasInt && reqInt && (
+                            <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-background/60 backdrop-blur-[1px]">
+                               <span className="text-[10px] font-bold text-destructive bg-destructive/10 px-2 py-1 rounded border border-destructive/20 shadow-sm">
+                                 Intégration requise
+                               </span>
+                            </div>
+                         )}
+                      </button>
+                    );
+                 })}
+               </div>
+             </ScrollArea>
+          ) : (
+             <ScrollArea className="h-[60vh]">
+               <div className="max-w-lg mx-auto p-6">
+                  <div className="border rounded-xl p-6 bg-card shadow-sm">
+                     {renderConfig()}
                   </div>
-                  <div className="space-y-2">
-                    <Label>Filtre de statut</Label>
-                    <select
-                      value={mediaRequestsForm.statusFilter}
-                      onChange={(e) =>
-                        setMediaRequestsForm({
-                          ...mediaRequestsForm,
-                          statusFilter: e.target.value as any,
-                        })
-                      }
-                      className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
-                    >
-                      <option value="all">Toutes les demandes</option>
-                      <option value="pending">En attente</option>
-                      <option value="approved">Approuvées</option>
-                      <option value="declined">Refusées</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Nombre maximum de demandes</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={50}
-                      value={mediaRequestsForm.limit}
-                      onChange={(e) =>
-                        setMediaRequestsForm({
-                          ...mediaRequestsForm,
-                          limit: Number(e.target.value) || 10,
-                        })
-                      }
-                    />
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Ce widget affiche les dernières demandes de médias depuis votre instance Overseerr / Jellyseerr
-                    en utilisant l'intégration configurée.
-                  </p>
-                </>
-              )}
-
-              {selectedWidget === "torrent-overview" && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Titre</Label>
-                    <Input
-                      value={torrentForm.title}
-                      onChange={(e) =>
-                        setTorrentForm({
-                          ...torrentForm,
-                          title: e.target.value,
-                        })
-                      }
-                      placeholder="Torrent Overview"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Intégration Torrent</Label>
-                    {loadingIntegrations ? (
-                      <p className="text-xs text-muted-foreground">
-                        Chargement des intégrations...
-                      </p>
-                    ) : availableIntegrations.filter((i) => i.type === "torrent-client").length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        Aucune intégration de client torrent trouvée. Rendez-vous dans les Paramètres &gt; Intégrations
-                        pour en ajouter une, puis revenez ici.
-                      </p>
-                    ) : (
-                      <select
-                        value={torrentForm.integrationId}
-                        onChange={(e) =>
-                          setTorrentForm({
-                            ...torrentForm,
-                            integrationId: e.target.value,
-                          })
-                        }
-                        className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
-                      >
-                        <option value="">Sélectionner une intégration</option>
-                        {availableIntegrations
-                          .filter((i) => i.type === "torrent-client")
-                          .map((integration) => (
-                            <option key={integration.id} value={integration.id}>
-                              {integration.name}
-                            </option>
-                          ))}
-                      </select>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Nombre maximum de torrents actifs</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={50}
-                      value={torrentForm.limitActive}
-                      onChange={(e) =>
-                        setTorrentForm({
-                          ...torrentForm,
-                          limitActive: Number(e.target.value) || 10,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={torrentForm.showCompleted}
-                      onChange={(e) =>
-                        setTorrentForm({
-                          ...torrentForm,
-                          showCompleted: e.target.checked,
-                        })
-                      }
-                      id="showCompletedTorrents"
-                      className="rounded"
-                    />
-                    <Label htmlFor="showCompletedTorrents">Afficher aussi les torrents terminés</Label>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Ce widget affiche un aperçu de votre client torrent (vitesse de téléchargement, nombre de torrents actifs,
-                    et liste des torrents sélectionnés) en utilisant l'intégration configurée.
-                  </p>
-                </>
-              )}
-
-              {selectedWidget === "ping" && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Titre</Label>
-                    <Input
-                      value={pingForm.title}
-                      onChange={(e) => setPingForm({ ...pingForm, title: e.target.value })}
-                      placeholder="Nom du serveur"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Hôte</Label>
-                    <Input
-                      value={pingForm.host}
-                      onChange={(e) => setPingForm({ ...pingForm, host: e.target.value })}
-                      placeholder="example.com ou 192.168.1.1"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Port</Label>
-                    <Input
-                      type="number"
-                      value={pingForm.port}
-                      onChange={(e) => setPingForm({ ...pingForm, port: parseInt(e.target.value) || 80 })}
-                      placeholder="80"
-                    />
-                  </div>
-                </>
-              )}
-
-              {selectedWidget === "monitoring" && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Titre</Label>
-                    <Input
-                      value={monitoringForm.title}
-                      onChange={(e) =>
-                        setMonitoringForm({
-                          ...monitoringForm,
-                          title: e.target.value,
-                        })
-                      }
-                      placeholder="Monitoring Serveur"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Intégration Monitoring</Label>
-                    {loadingIntegrations ? (
-                      <p className="text-xs text-muted-foreground">
-                        Chargement des intégrations...
-                      </p>
-                    ) : availableIntegrations.filter((i) => i.type === "monitoring").length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        Aucune intégration de monitoring trouvée. Rendez-vous dans les Paramètres &gt; Intégrations
-                        pour en ajouter une, puis revenez ici.
-                      </p>
-                    ) : (
-                      <select
-                        value={monitoringForm.integrationId}
-                        onChange={(e) =>
-                          setMonitoringForm({
-                            ...monitoringForm,
-                            integrationId: e.target.value,
-                          })
-                        }
-                        className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
-                      >
-                        <option value="">Sélectionner une intégration</option>
-                        {availableIntegrations
-                          .filter((i) => i.type === "monitoring")
-                          .map((integration) => (
-                            <option key={integration.id} value={integration.id}>
-                              {integration.name}
-                            </option>
-                          ))}
-                      </select>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Ce widget affiche un aperçu de l'état de votre serveur (CPU, mémoire, charge, uptime)
-                    en utilisant l'intégration de monitoring configurée.
-                  </p>
-                </>
-              )}
-
-              {selectedWidget === "iframe" && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Titre</Label>
-                    <Input
-                      value={iframeForm.title}
-                      onChange={(e) => setIframeForm({ ...iframeForm, title: e.target.value })}
-                      placeholder="Ma page intégrée"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>URL de l'iframe</Label>
-                    <Input
-                      value={iframeForm.iframeUrl}
-                      onChange={(e) => setIframeForm({ ...iframeForm, iframeUrl: e.target.value })}
-                      placeholder="https://example.com"
-                    />
-                  </div>
-                </>
-              )}
-
-              {selectedWidget === "weather" && (
-                <div className="space-y-2">
-                  <Label>Ville</Label>
-                  <Input
-                    value={weatherForm.city}
-                    onChange={(e) => setWeatherForm({ city: e.target.value })}
-                    placeholder="Paris"
-                  />
-                </div>
-              )}
-
-              {selectedWidget === "notes" && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Titre</Label>
-                    <Input
-                      value={notesForm.title}
-                      onChange={(e) => setNotesForm({ ...notesForm, title: e.target.value })}
-                      placeholder="Mes notes"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Contenu initial (optionnel)</Label>
-                    <textarea
-                      value={notesForm.content}
-                      onChange={(e) => setNotesForm({ ...notesForm, content: e.target.value })}
-                      placeholder="Commencez à écrire..."
-                      className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2"
-                    />
-                  </div>
-                </>
-              )}
-
-              {selectedWidget === "countdown" && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Nom de l'événement</Label>
-                    <Input
-                      value={countdownForm.countdownTitle}
-                      onChange={(e) => setCountdownForm({ ...countdownForm, countdownTitle: e.target.value })}
-                      placeholder="Mon événement"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Date de l'événement</Label>
-                    <Input
-                      type="datetime-local"
-                      value={countdownForm.countdownDate.slice(0, 16)}
-                      onChange={(e) => setCountdownForm({ ...countdownForm, countdownDate: new Date(e.target.value).toISOString() })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Emoji</Label>
-                    <Input
-                      value={countdownForm.countdownEmoji}
-                      onChange={(e) => setCountdownForm({ ...countdownForm, countdownEmoji: e.target.value })}
-                      placeholder="🎉"
-                      maxLength={2}
-                    />
-                  </div>
-                </>
-              )}
-
-              {selectedWidget === "datetime" && (
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    L'horloge affichera automatiquement la date et l'heure actuelle.
-                    Aucune configuration nécessaire.
-                  </p>
-                </div>
-              )}
-
-              {selectedWidget === "chart" && (
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    Le widget graphique sera configuré après sa création.
-                    Vous pourrez y ajouter vos données personnalisées.
-                  </p>
-                </div>
-              )}
-
-              {selectedWidget === "anime-calendar" && (
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    Affiche les sorties d'anime et manga à venir.
-                    Les données sont synchronisées automatiquement avec AniList.
-                  </p>
-                </div>
-              )}
-
-              {selectedWidget === "todo-list" && (
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    Créez et gérez vos tâches quotidiennes.
-                    Vous pourrez ajouter des tâches après la création du widget.
-                  </p>
-                </div>
-              )}
-
-              {selectedWidget === "watchlist" && (
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    Liste de films et séries à regarder.
-                    Ajoutez vos contenus favoris après la création.
-                  </p>
-                </div>
-              )}
-
-              {selectedWidget === "timer" && (
-                <>
-                  <div className="space-y-2 mb-4">
-                    <Label>Titre</Label>
-                    <Input
-                      value={timerForm.title}
-                      onChange={(e) => setTimerForm({ ...timerForm, title: e.target.value })}
-                      placeholder="Timer de travail"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label>Pomodoro (min)</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={timerForm.pomodoroMinutes}
-                        onChange={(e) => setTimerForm({ 
-                          ...timerForm, 
-                          pomodoroMinutes: parseInt(e.target.value) || 1,
-                        })}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Pause courte (min)</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={timerForm.shortBreakMinutes}
-                        onChange={(e) => setTimerForm({ 
-                          ...timerForm, 
-                          shortBreakMinutes: parseInt(e.target.value) || 1,
-                        })}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Pause longue (min)</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={timerForm.longBreakMinutes}
-                        onChange={(e) => setTimerForm({ 
-                          ...timerForm, 
-                          longBreakMinutes: parseInt(e.target.value) || 1,
-                        })}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Mode custom (min)</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={timerForm.customMinutes}
-                        onChange={(e) => setTimerForm({ 
-                          ...timerForm, 
-                          customMinutes: parseInt(e.target.value) || 1,
-                        })}
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {selectedWidget === "bookmarks" && (
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    Organisez vos liens favoris.
-                    Ajoutez et catégorisez vos favoris après la création.
-                  </p>
-                </div>
-              )}
-
-              {selectedWidget === "quote" && (
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    Citation inspirante du jour.
-                    Une nouvelle citation s'affiche automatiquement chaque jour.
-                  </p>
-                </div>
-              )}
-
-              {selectedWidget === "universal-calendar" && (
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    Calendrier complet regroupant tous vos événements :
-                    anime, manga, films, séries TV et événements personnels.
-                  </p>
-                </div>
-              )}
-
-              {selectedWidget === "movies-tv-calendar" && (
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <p className="text-sm text-muted-foreground">
-                    Suivez les sorties cinéma et les nouvelles séries TV.
-                    Données synchronisées avec The Movie Database (TMDb).
-                  </p>
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-        )}
+               </div>
+             </ScrollArea>
+          )}
+        </div>
 
         {step === "configure" && (
-          <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button variant="outline" onClick={handleBack} disabled={loading}>
-              Retour
-            </Button>
-            <Button onClick={handleSubmit} disabled={loading}>
-              {loading ? "Création..." : (
-                <>
-                  <Check className="h-4 w-4 mr-2" />
-                  Valider
-                </>
-              )}
-            </Button>
-          </div>
+           <DialogFooter className="p-4 bg-muted/10 border-t">
+              <Button variant="ghost" onClick={() => setStep("select")} disabled={loading}>Retour</Button>
+              <Button onClick={handleSubmit} disabled={loading} className="gap-2">
+                 {loading ? <Loader2 className="animate-spin h-4 w-4" /> : <Check className="h-4 w-4" />}
+                 Ajouter le widget
+              </Button>
+           </DialogFooter>
         )}
       </DialogContent>
     </Dialog>
   );
 }
+
+// Backwards-compatible named export expected by other modules
+export const AddWidgetDialogModern = AddWidgetDialog;

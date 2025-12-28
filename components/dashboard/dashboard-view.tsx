@@ -246,8 +246,8 @@ function DashboardViewInner({
     w: w.w,
     h: w.h,
     static: !isEditMode,
-    minW: 2,
-    minH: 2,
+    minW: 1,
+    minH: 1,
   }));
 
   const mainLayout: GridItem[] = [...categoryLayout, ...widgetLayout];

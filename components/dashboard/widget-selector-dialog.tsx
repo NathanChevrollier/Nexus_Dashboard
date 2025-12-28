@@ -24,11 +24,12 @@ interface WidgetSelectorDialogProps {
   onWidgetAdded?: (widget: Widget) => void;
 }
 
-type WidgetType = "link" | "ping" | "iframe" | "datetime" | "weather" | "notes" | "chart" | "anime-calendar" | "todo-list" | "watchlist" | "timer" | "bookmarks" | "quote" | "countdown" | "universal-calendar" | "movies-tv-calendar";
+type WidgetType = "link" | "ping" | "link-ping" | "iframe" | "datetime" | "weather" | "notes" | "chart" | "anime-calendar" | "todo-list" | "watchlist" | "timer" | "bookmarks" | "quote" | "countdown" | "universal-calendar" | "movies-tv-calendar";
 
 const widgetTypes = [
   { type: "link", icon: LinkIcon, label: "Lien", description: "Lien rapide vers un site" },
   { type: "ping", icon: Activity, label: "Ping/Status", description: "Surveillance d'un serveur" },
+  { type: "link-ping", icon: Activity, label: "Lien+", description: "Lien cliquable avec surveillance de disponibilité" },
   { type: "iframe", icon: Frame, label: "Iframe", description: "Intégration d'une page web" },
   { type: "datetime", icon: Clock, label: "Date/Heure", description: "Horloge en temps réel" },
   { type: "weather", icon: Cloud, label: "Météo", description: "Météo en temps réel" },
@@ -55,6 +56,7 @@ export function WidgetSelectorDialog({ open, onOpenChange, dashboardId, categori
   // Forms for each widget type
   const [linkForm, setLinkForm] = useState({ title: "", url: "", icon: "🔗", openInNewTab: true });
   const [pingForm, setPingForm] = useState({ title: "", host: "", port: 80 });
+  const [linkPingForm, setLinkPingForm] = useState({ title: "", url: "", openInNewTab: true, icon: "🔗", iconUrl: undefined });
   const [iframeForm, setIframeForm] = useState({ title: "", iframeUrl: "" });
   const [weatherForm, setWeatherForm] = useState({ city: "Paris" });
 
@@ -78,6 +80,11 @@ export function WidgetSelectorDialog({ open, onOpenChange, dashboardId, categori
         case "link":
           options = linkForm;
           defaultSize = { w: 2, h: 1 };
+          break;
+        case "link-ping":
+          options = linkPingForm;
+          defaultSize = { w: 2, h: 1 };
+          break;
           break;
         case "ping":
           options = pingForm;
@@ -116,6 +123,7 @@ export function WidgetSelectorDialog({ open, onOpenChange, dashboardId, categori
       // Reset
       setLinkForm({ title: "", url: "", icon: "🔗", openInNewTab: true });
       setPingForm({ title: "", host: "", port: 80 });
+      setLinkPingForm({ title: "", url: "", openInNewTab: true, icon: "🔗", iconUrl: undefined });
       setIframeForm({ title: "", iframeUrl: "" });
       setWeatherForm({ city: "Paris" });
       setSelectedType(null);
@@ -228,6 +236,38 @@ export function WidgetSelectorDialog({ open, onOpenChange, dashboardId, categori
                       className="h-4 w-4"
                     />
                     <Label htmlFor="newtab">Ouvrir dans un nouvel onglet</Label>
+                  </div>
+                </>
+              )}
+
+              {selectedType === "link-ping" && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Titre</Label>
+                    <Input
+                      value={linkPingForm.title}
+                      onChange={(e) => setLinkPingForm({ ...linkPingForm, title: e.target.value })}
+                      placeholder="Mon service"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>URL</Label>
+                    <Input
+                      type="url"
+                      value={linkPingForm.url}
+                      onChange={(e) => setLinkPingForm({ ...linkPingForm, url: e.target.value })}
+                      placeholder="https://example.com:8080/path"
+                    />
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      id="lp-newtab"
+                      type="checkbox"
+                      checked={linkPingForm.openInNewTab}
+                      onChange={(e) => setLinkPingForm({ ...linkPingForm, openInNewTab: e.target.checked })}
+                      className="h-4 w-4"
+                    />
+                    <Label htmlFor="lp-newtab">Ouvrir dans un nouvel onglet</Label>
                   </div>
                 </>
               )}

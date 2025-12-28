@@ -142,7 +142,7 @@ export function ThemeSettingsEnhanced({ user, dashboardId }: ThemeSettingsProps)
       )}
 
       <Tabs defaultValue="gui" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="flex gap-2 flex-wrap w-full">
           <TabsTrigger value="gui" className="flex items-center gap-2">
             <Palette className="h-4 w-4" />
             Apparence

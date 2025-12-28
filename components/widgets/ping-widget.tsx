@@ -10,14 +10,31 @@ interface PingWidgetProps {
 
 export function PingWidget({ widget }: PingWidgetProps) {
   const { title, host, port } = widget.options;
+  // Support parsing host/port from a provided URL (ex: https://example.com:8080/path)
+  let effectiveHost: string | undefined = host;
+  let effectivePort: number | undefined = port ? Number(port) : undefined;
+  try {
+    if (!effectiveHost && widget.options.url) {
+      const u = new URL(widget.options.url);
+      effectiveHost = u.hostname;
+      if (u.port) effectivePort = Number(u.port);
+    }
+    // If host field is a full URL, parse it too
+    if (effectiveHost && (effectiveHost.startsWith('http://') || effectiveHost.startsWith('https://'))) {
+      const u = new URL(effectiveHost);
+      effectiveHost = u.hostname;
+      if (u.port) effectivePort = Number(u.port);
+    }
+  } catch (e) {
+    // ignore parsing errors
+  }
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["ping", widget.id, host, port],
+    queryKey: ["ping", widget.id, effectiveHost, effectivePort],
     queryFn: async () => {
-      if (!host) throw new Error("Host not configured");
-      const portNumber = port ? Number(port) : undefined;
-      const body: any = { host };
-      if (portNumber) body.port = portNumber;
+      if (!effectiveHost) throw new Error("Host not configured");
+      const body: any = { host: effectiveHost };
+      if (effectivePort) body.port = effectivePort;
 
       const response = await fetch("/api/widgets/ping", {
         method: "POST",
