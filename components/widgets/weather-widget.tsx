@@ -1,9 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Cloud, CloudRain, Sun, Wind, Droplets, CloudSnow, Cloudy, Eye, Gauge } from "lucide-react";
+// CORRECTION 1 : Ajout de Umbrella dans les imports pour éviter l'erreur "not defined"
+import { 
+  Cloud, CloudRain, Sun, Wind, Droplets, CloudSnow, 
+  Cloudy, Eye, Gauge, Umbrella, Navigation, RefreshCw, CalendarDays 
+} from "lucide-react";
 import { Widget } from "@/lib/db/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 interface WeatherWidgetProps {
   widget: Widget;
@@ -20,308 +26,263 @@ interface WeatherData {
   visibility: number;
   precipitation: number;
   isDay: boolean;
+  code: number;
 }
 
 interface ForecastDay {
   date: string;
-  temp: number;
-  condition: string;
   tempMin: number;
   tempMax: number;
+  condition: string;
+  code: number;
   precipitation: number;
-  uvIndex: number;
 }
+
+const WEATHER_THEMES: Record<string, { gradient: string; iconColor: string; textColor: string }> = {
+  default: { gradient: "from-slate-100 to-slate-300 dark:from-slate-800 dark:to-slate-950", iconColor: "text-slate-500", textColor: "text-slate-700 dark:text-slate-300" },
+  sunny: { gradient: "from-amber-200 to-orange-100 dark:from-amber-900/60 dark:to-orange-950/60", iconColor: "text-amber-500", textColor: "text-amber-800 dark:text-amber-200" },
+  cloudy: { gradient: "from-gray-200 to-slate-200 dark:from-slate-700/60 dark:to-gray-900/60", iconColor: "text-gray-400", textColor: "text-gray-700 dark:text-gray-300" },
+  rainy: { gradient: "from-blue-200 to-indigo-200 dark:from-blue-900/60 dark:to-indigo-950/60", iconColor: "text-blue-500", textColor: "text-blue-800 dark:text-blue-200" },
+  snowy: { gradient: "from-sky-100 to-blue-50 dark:from-sky-900/50 dark:to-blue-950/50", iconColor: "text-sky-400", textColor: "text-sky-800 dark:text-sky-200" },
+  stormy: { gradient: "from-violet-200 to-fuchsia-200 dark:from-violet-900/60 dark:to-fuchsia-950/60", iconColor: "text-violet-500", textColor: "text-violet-800 dark:text-violet-200" },
+};
 
 export function WeatherWidget({ widget }: WeatherWidgetProps) {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [forecast, setForecast] = useState<ForecastDay[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"current" | "forecast">("current");
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
-  const options = widget.options as { city?: string; apiKey?: string };
+  const options = widget.options as { city?: string };
   const city = options.city || "Paris";
 
-  useEffect(() => {
-    const fetchWeather = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/weather?city=${encodeURIComponent(city)}`);
-        if (!res.ok) throw new Error("Failed to fetch weather");
+  const fetchWeather = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/weather?city=${encodeURIComponent(city)}`);
+      if (!res.ok) throw new Error("Failed to fetch weather");
 
-        const data = await res.json();
-        
-        // Open-Meteo retourne "current" (objet avec les données actuelles) 
-        // ET "current_weather" (simple avec temp/windspeed/weathercode)
-        const current = data.current || {};
-        const currentWeather = data.current_weather || {};
-        const hourly = data.hourly || null;
-        const daily = data.daily || null;
-        const resolvedCity = data.city || city;
+      const data = await res.json();
+      
+      const current = data.current || {};
+      const currentWeather = data.current_weather || {};
+      const daily = data.daily || null;
+      
+      const temp = current.temperature_2m ?? currentWeather.temperature ?? 0;
+      const weatherCode = current.weather_code ?? currentWeather.weathercode ?? 0;
+      const isDay = (current.is_day ?? currentWeather.is_day) === 1;
 
-        const humidity = (() => {
-          try {
-            if (hourly && current.time) {
-              const times: string[] = hourly.time || [];
-              const rh: number[] = hourly.relativehumidity_2m || [];
-              const idx = times.findIndex((t) => t.startsWith(current.time.substring(0, 13)));
-              if (idx >= 0 && rh[idx] != null) return Math.round(rh[idx]);
-              if (rh.length > 0) return Math.round(rh[0]);
-            }
-          } catch (e) {
-            // ignore
-          }
-          return current.relative_humidity_2m ? Math.round(current.relative_humidity_2m) : 0;
-        })();
+      setWeather({
+        temp: Math.round(temp),
+        condition: getConditionLabel(weatherCode),
+        humidity: current.relative_humidity_2m || 0,
+        windSpeed: Math.round(current.wind_speed_10m ?? currentWeather.windspeed ?? 0),
+        windDirection: current.wind_direction_10m ?? currentWeather.winddirection ?? 0,
+        city: data.city || city,
+        feelsLike: Math.round(data.current?.apparent_temperature ?? temp),
+        visibility: current.visibility ? Math.round(current.visibility / 1000) : 10,
+        precipitation: current.precipitation ?? 0,
+        isDay,
+        code: weatherCode
+      });
 
-        const conditionFromCode = (code: number) => {
-          if (code === 0) return "Ensoleillé";
-          if (code === 1 || code === 2) return "Peu nuageux";
-          if (code === 3) return "Nuageux";
-          if (code === 45 || code === 48) return "Brumeux";
-          if (code >= 51 && code <= 67) return "Pluie";
-          if (code >= 71 && code <= 77 || code === 85 || code === 86)
-            return "Neige";
-          if (code >= 80 && code <= 82) return "Averse";
-          if (code >= 85 && code <= 86) return "Averse de neige";
-          if (code === 95 || code === 96 || code === 99) return "Orage";
-          return "Inconnu";
-        };
-
-        const hasTemp = current?.temperature_2m != null || currentWeather?.temperature != null;
-        const hasCode = current?.weather_code != null || currentWeather?.weathercode != null;
-
-        // If the API returned no useful current values, consider it an error
-        if (!hasTemp && !hasCode) {
-          throw new Error('Incomplete weather data from API');
-        }
-
-        const temp = hasTemp ? (current.temperature_2m ?? currentWeather.temperature) : undefined;
-        const weatherCode = hasCode ? (current.weather_code ?? currentWeather.weathercode) : undefined;
-        const windSpeed = current?.wind_speed_10m ?? currentWeather?.windspeed ?? 0;
-
-        const w: WeatherData = {
-          temp: temp != null ? Math.round(temp) : 0,
-          condition: conditionFromCode(weatherCode),
-          humidity: humidity,
-          windSpeed: Math.round(windSpeed),
-          windDirection: current.wind_direction_10m ? Math.round(current.wind_direction_10m) : (currentWeather.winddirection ? Math.round(currentWeather.winddirection) : 0),
-          city: resolvedCity,
-          feelsLike: Math.round(temp - (windSpeed / 3)),
-          visibility: current.visibility ? Math.round(current.visibility / 1000) : 10,
-          precipitation: current.precipitation ?? 0,
-          isDay: current.is_day === 1 || currentWeather.is_day === 1,
-        };
-
-        setWeather(w);
-
+      if (daily && daily.time) {
         const forecastData: ForecastDay[] = [];
-        if (daily) {
-          const times: string[] = daily.time || [];
-          const tmax: number[] = daily.temperature_2m_max || [];
-          const tmin: number[] = daily.temperature_2m_min || [];
-          const codes: number[] = daily.weather_code || [];
-          const precip: number[] = daily.precipitation_sum || [];
-          const uv: number[] = daily.uv_index_max || [];
-
-          for (let i = 0; i < Math.min(times.length, 5); i++) {
-            const d = new Date(times[i]);
-            const day = d.toLocaleDateString("fr-FR", { weekday: "short" });
-            const low = Math.round(tmin[i] ?? 0);
-            const high = Math.round(tmax[i] ?? 0);
-            const avg = Math.round(((low + high) / 2) || 0);
-            const cond = conditionFromCode(codes[i] ?? -1);
-            forecastData.push({
-              date: day,
-              temp: avg,
-              condition: cond,
-              tempMin: low,
-              tempMax: high,
-              precipitation: Math.round((precip[i] ?? 0) * 10) / 10,
-              uvIndex: Math.round((uv[i] ?? 0) * 10) / 10,
-            });
-          }
+        for (let i = 0; i < Math.min(daily.time.length, 5); i++) {
+          const d = new Date(daily.time[i]);
+          const dayNameFr = d.toLocaleDateString("fr-FR", { weekday: "short" });
+          const dayNum = d.getDate();
+          forecastData.push({
+            date: `${dayNameFr}. ${dayNum}`,
+            tempMin: Math.round(daily.temperature_2m_min[i]),
+            tempMax: Math.round(daily.temperature_2m_max[i]),
+            condition: getConditionLabel(daily.weather_code[i]),
+            code: daily.weather_code[i],
+            precipitation: daily.precipitation_sum[i] ?? 0
+          });
         }
-
         setForecast(forecastData);
-      } catch (error) {
-        console.error('Erreur météo:', error);
-        // Clear data on error so widget shows an explicit error state
-        setWeather(null);
-        setForecast([]);
-      } finally {
-        setLoading(false);
       }
-    };
 
-    fetchWeather();
-    const interval = setInterval(fetchWeather, 300000); // Refresh toutes les 5 min
-    return () => clearInterval(interval);
-  }, [city, options]);
-
-  const getWeatherIcon = (condition: string, size: "sm" | "lg" = "lg") => {
-    const className = size === "lg" ? "h-12 w-12" : "h-6 w-6";
-    
-    switch (condition) {
-      case "Ensoleillé":
-        return <Sun className={`${className} text-yellow-500`} />;
-      case "Pluvieux":
-        return <CloudRain className={`${className} text-blue-500`} />;
-      case "Venteux":
-        return <Wind className={`${className} text-gray-500`} />;
-      case "Neigeux":
-        return <CloudSnow className={`${className} text-blue-200`} />;
-      default:
-        return <Cloudy className={`${className} text-gray-400`} />;
+      setLastUpdated(new Date());
+    } catch (error) {
+      console.error("Weather Error:", error);
+      setWeather(null);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="p-4 h-full flex items-center justify-center">
-        <div className="flex flex-col items-center gap-2">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-          <span className="text-sm text-muted-foreground">Chargement...</span>
-        </div>
-      </div>
-    );
+  useEffect(() => {
+    fetchWeather();
+    const interval = setInterval(fetchWeather, 600000); 
+    return () => clearInterval(interval);
+  }, [city]);
+
+  const getConditionLabel = (code: number) => {
+    if (code === 0) return "Ensoleillé";
+    if (code >= 1 && code <= 3) return "Nuageux";
+    if (code >= 45 && code <= 48) return "Brume";
+    if (code >= 51 && code <= 67) return "Pluie";
+    if (code >= 71 && code <= 77) return "Neige";
+    if (code >= 80 && code <= 86) return "Averses";
+    if (code >= 95) return "Orage";
+    return "Inconnu";
+  };
+
+  const getTheme = (code: number, isDay: boolean = true) => {
+    if (code === 0 || code === 1) return isDay ? WEATHER_THEMES.sunny : WEATHER_THEMES.default;
+    if (code >= 2 && code <= 3) return WEATHER_THEMES.cloudy;
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return WEATHER_THEMES.rainy;
+    if ((code >= 71 && code <= 77) || code >= 85) return WEATHER_THEMES.snowy;
+    if (code >= 95) return WEATHER_THEMES.stormy;
+    return WEATHER_THEMES.default;
+  };
+
+  const getIcon = (code: number, className: string) => {
+    if (code === 0 || code === 1) return <Sun className={className} />;
+    if (code >= 2 && code <= 3) return <Cloudy className={className} />;
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return <CloudRain className={className} />;
+    if ((code >= 71 && code <= 77) || code >= 85) return <CloudSnow className={className} />;
+    if (code >= 95) return <CloudRain className={className} />;
+    return <Cloud className={className} />;
+  };
+
+  if (loading && !weather) {
+    return <div className="h-full flex items-center justify-center bg-card animate-pulse"><Cloud className="h-10 w-10 text-muted" /></div>;
   }
 
   if (!weather) {
     return (
-      <div className="p-4 h-full flex flex-col items-center justify-center text-center">
-        <div className="text-sm text-muted-foreground mb-2">Impossible d'obtenir les données météo</div>
-        <button
-          className="px-3 py-1 rounded-md bg-primary text-white text-sm"
-          onClick={() => {
-            // simple retry by re-triggering the effect: change city key via query param trick
-            setLoading(true);
-            setTimeout(() => setLoading(false), 50);
-            // More robust: re-run fetch by using a microtask
-            setTimeout(() => {
-              // no-op: effect depends on `city` and `options`; user can reload dashboard
-            }, 100);
-          }}
-        >
-          Réessayer
-        </button>
+      <div className="h-full flex flex-col items-center justify-center p-4 bg-card text-center">
+        <Cloud className="h-10 w-10 mb-2 opacity-20" />
+        <p className="text-sm text-muted-foreground mb-2">Météo indisponible</p>
+        <Button size="sm" variant="outline" onClick={fetchWeather}>Réessayer</Button>
       </div>
     );
   }
 
-  // Compact view (small widgets)
-  if (widget.h <= 1 || widget.w <= 2) {
+  const theme = getTheme(weather.code, weather.isDay);
+  const isCompact = widget.w <= 2 || widget.h <= 2;
+
+  if (isCompact) {
     return (
-      <div className="p-3 h-full flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {getWeatherIcon(weather.condition, "sm")}
-          <div>
-            <div className="text-2xl font-bold">{weather.temp}°C</div>
-            <div className="text-xs text-muted-foreground">{weather.city}</div>
-          </div>
+      <div className={cn("h-full w-full flex flex-col justify-between p-4 bg-gradient-to-br", theme.gradient)}>
+        <div className="flex justify-between items-start">
+          <span className="font-semibold text-sm truncate max-w-[80px]">{weather.city}</span>
+          <div className={theme.iconColor}>{getIcon(weather.code, "h-6 w-6")}</div>
+        </div>
+        <div className="flex items-end gap-2">
+          <span className="text-3xl font-bold">{weather.temp}°</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 h-full flex flex-col">
-      <Tabs value={view} onValueChange={(v) => setView(v as any)} className="flex-1 flex flex-col">
-        <TabsList className="grid w-full grid-cols-2 mb-3">
-          <TabsTrigger value="current" className="text-xs">Maintenant</TabsTrigger>
-          <TabsTrigger value="forecast" className="text-xs">5 jours</TabsTrigger>
+    <Tabs defaultValue="current" className={cn("h-full w-full flex flex-col bg-gradient-to-br relative overflow-hidden", theme.gradient)}>
+      
+      <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-black/5 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Header Fixe */}
+      <div className="flex items-center justify-between px-5 pt-4 z-10 shrink-0">
+        <div>
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <Navigation className="h-3 w-3 text-primary" /> {weather.city}
+          </h2>
+          <p className="text-[10px] text-muted-foreground flex items-center gap-1 opacity-70">
+            {lastUpdated.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+            <RefreshCw className="h-3 w-3 cursor-pointer hover:rotate-180 transition-transform" onClick={fetchWeather} />
+          </p>
+        </div>
+        
+        <TabsList className="h-7 bg-background/30 backdrop-blur-md border border-white/10 p-0.5 w-auto rounded-lg">
+          <TabsTrigger value="current" className="text-[10px] h-6 px-2 rounded-sm data-[state=active]:bg-white/80 dark:data-[state=active]:bg-black/50">Actuel</TabsTrigger>
+          <TabsTrigger value="forecast" className="text-[10px] h-6 px-2 rounded-sm data-[state=active]:bg-white/80 dark:data-[state=active]:bg-black/50">5 Jours</TabsTrigger>
         </TabsList>
+      </div>
 
-        <TabsContent value="current" className="flex-1 mt-0">
-          <div className="text-sm text-muted-foreground mb-2">{weather.city}</div>
-          <div className="flex-1 flex items-start justify-between mb-4">
-            <div>
-              <div className="text-5xl font-bold mb-1">{weather.temp}°C</div>
-              <div className="text-sm text-muted-foreground">
-                Ressenti {weather.feelsLike}°C
+      {/* Zone de Contenu Principale */}
+      {/* CORRECTION 2: Utilisation de flex-col et h-full pour occuper tout l'espace */}
+      <div className="flex-1 overflow-hidden z-10 p-5 pt-2 flex flex-col min-h-0 relative">
+        
+        {/* --- ONGLET ACTUEL --- */}
+        <TabsContent value="current" className="flex-1 flex flex-col mt-0 h-full min-h-0 data-[state=inactive]:hidden">
+          {/* Scrollable si besoin */}
+          <div className="overflow-y-auto flex-1 flex flex-col">
+            <div className="flex items-center justify-between mb-4 mt-2 shrink-0">
+              <div className="flex flex-col">
+                <span className="text-5xl font-bold tracking-tighter">{weather.temp}°</span>
+                <span className="text-sm font-medium opacity-80 mt-1 capitalize">{weather.condition}</span>
+                <span className="text-xs opacity-60">Ressenti {weather.feelsLike}°</span>
               </div>
-              <div className="text-sm mt-1 font-medium">{weather.condition}</div>
+              <div className={cn("p-3 rounded-3xl bg-white/20 dark:bg-black/10 backdrop-blur-md shadow-sm border border-white/10", theme.iconColor)}>
+                {getIcon(weather.code, "h-14 w-14 drop-shadow-md")}
+              </div>
             </div>
-            <div>{getWeatherIcon(weather.condition, "lg")}</div>
-          </div>
 
-          {/* Main metrics grid */}
-          <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
-            <div className="bg-card/50 rounded-lg p-2.5 border border-border/50">
-              <div className="flex items-center gap-2 mb-1">
-                <Droplets className="h-4 w-4 text-blue-500" />
-                <span className="text-muted-foreground">Humidité</span>
-              </div>
-              <div className="text-lg font-semibold">{weather.humidity}%</div>
+            <div className="grid grid-cols-2 gap-2 mt-auto">
+              <MetricCard icon={Wind} label="Vent" value={`${weather.windSpeed} km/h`} color="text-cyan-500" />
+              <MetricCard icon={Droplets} label="Humidité" value={`${weather.humidity}%`} color="text-blue-500" />
+              <MetricCard icon={Eye} label="Visibilité" value={`${weather.visibility} km`} color="text-amber-500" />
+              <MetricCard icon={Umbrella} label="Précip." value={`${weather.precipitation} mm`} color="text-purple-500" />
             </div>
-            <div className="bg-card/50 rounded-lg p-2.5 border border-border/50">
-              <div className="flex items-center gap-2 mb-1">
-                <Wind className="h-4 w-4 text-cyan-500" />
-                <span className="text-muted-foreground">Vent</span>
-              </div>
-              <div className="text-lg font-semibold">{weather.windSpeed} km/h</div>
-              <div className="text-[10px] text-muted-foreground">Direction: {weather.windDirection}°</div>
-            </div>
-            <div className="bg-card/50 rounded-lg p-2.5 border border-border/50">
-              <div className="flex items-center gap-2 mb-1">
-                <Eye className="h-4 w-4 text-amber-500" />
-                <span className="text-muted-foreground">Visibilité</span>
-              </div>
-              <div className="text-lg font-semibold">{weather.visibility} km</div>
-            </div>
-            <div className="bg-card/50 rounded-lg p-2.5 border border-border/50">
-              <div className="flex items-center gap-2 mb-1">
-                <Gauge className="h-4 w-4 text-purple-500" />
-                <span className="text-muted-foreground">Précipitation</span>
-              </div>
-              <div className="text-lg font-semibold">{weather.precipitation.toFixed(1)} mm</div>
-            </div>
-          </div>
-
-          {/* Additional info footer */}
-          <div className="text-[10px] text-muted-foreground border-t pt-2">
-            {weather.isDay ? "☀️ Jour" : "🌙 Nuit"}
           </div>
         </TabsContent>
 
-        <TabsContent value="forecast" className="flex-1 mt-0 overflow-y-auto">
-          <div className="space-y-2">
-            {forecast.map((day, index) => (
-              <div
-                key={index}
-                className="flex flex-col gap-2 p-3 rounded-lg bg-card/50 border border-border/50 hover:bg-accent/50 transition-colors"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 flex-1">
-                    <span className="text-sm font-medium w-12">{day.date}</span>
-                    <div className="flex items-center gap-2">
-                      {getWeatherIcon(day.condition, "sm")}
-                      <span className="text-xs text-muted-foreground">{day.condition}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 text-sm">
-                    <span className="text-muted-foreground">{day.tempMin}°</span>
-                    <div className="w-12 h-1.5 bg-gradient-to-r from-blue-400 to-orange-400 rounded-full"></div>
-                    <span className="font-semibold">{day.tempMax}°</span>
-                  </div>
-                </div>
-                <div className="flex gap-3 text-[10px] text-muted-foreground">
-                  {day.precipitation > 0 && (
-                    <div className="flex items-center gap-1">
-                      <Droplets className="h-3 w-3 text-blue-500" />
-                      {day.precipitation.toFixed(1)} mm
-                    </div>
-                  )}
-                  {day.uvIndex > 0 && (
-                    <div>
-                      UV Index: {day.uvIndex}
-                    </div>
-                  )}
-                </div>
+        {/* --- ONGLET PRÉVISIONS --- */}
+        {/* CORRECTION 3: Suppression de justify-end ou mt-auto implicites qui poussaient le contenu en bas */}
+        <TabsContent value="forecast" className="flex-1 mt-0 h-full min-h-0 data-[state=inactive]:hidden flex flex-col">
+          {/* Container Scrollable qui prend toute la hauteur disponible */}
+          <div className="overflow-y-auto flex-1 pr-1 space-y-2">
+            {forecast.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-50">
+                <CalendarDays className="h-8 w-8 mb-2" />
+                <span className="text-xs">Pas de prévisions</span>
               </div>
-            ))}
+            ) : (
+              forecast.map((day, i) => (
+                <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-background/20 hover:bg-background/40 backdrop-blur-sm transition-colors border border-white/5">
+                  <div className="w-16 font-semibold text-sm capitalize">{day.date}</div>
+                  
+                  <div className={cn("flex flex-col items-center mx-2", getTheme(day.code, true).iconColor)}>
+                    {getIcon(day.code, "h-6 w-6")}
+                  </div>
+
+                  <div className="flex-1 flex items-center gap-2 text-sm">
+                    <span className="text-right w-8 opacity-70">{day.tempMin}°</span>
+                    <div className="flex-1 h-2 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden relative">
+                      <div 
+                        className="absolute h-full rounded-full bg-gradient-to-r from-blue-400 to-orange-400 opacity-80"
+                        style={{ 
+                          left: '10%',
+                          right: '10%' 
+                        }}
+                      />
+                    </div>
+                    <span className="font-bold w-8 text-right">{day.tempMax}°</span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </TabsContent>
-      </Tabs>
+      </div>
+    </Tabs>
+  );
+}
+
+function MetricCard({ icon: Icon, label, value, color }: any) {
+  return (
+    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-background/30 backdrop-blur-md border border-white/5 shadow-sm">
+      <div className={cn("p-1.5 rounded-lg bg-white/40 dark:bg-black/20 shrink-0", color)}>
+        <Icon className="h-3.5 w-3.5" />
+      </div>
+      <div className="flex flex-col min-w-0">
+        <span className="text-[9px] opacity-60 uppercase tracking-wider truncate">{label}</span>
+        <span className="font-bold text-xs truncate">{value}</span>
+      </div>
     </div>
   );
 }

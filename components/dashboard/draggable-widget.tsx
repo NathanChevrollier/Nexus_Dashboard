@@ -2,16 +2,24 @@
 
 import { Widget } from "@/lib/db/schema";
 import { WidgetComponent } from "@/components/widgets/widget-component";
-import { useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-context";
-import { useState } from "react";
+import { useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-v2"; // Correction de l'import
+import { cn } from "@/lib/utils";
+import { CSSProperties } from "react";
 
 interface DraggableWidgetProps {
   widget: Widget;
   isEditMode: boolean;
   sourceType: 'main' | 'category';
   sourceCategoryId?: string;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  // Props injectées par CustomGridLayout (nécessaires pour le positionnement)
+  style?: CSSProperties;
+  className?: string;
+  onPointerDown?: (e: React.PointerEvent) => void;
+  onPointerMove?: (e: React.PointerEvent) => void;
+  onPointerUp?: (e: React.PointerEvent) => void;
+  onPointerCancel?: (e: React.PointerEvent) => void;
 }
 
 export function DraggableWidget({
@@ -21,67 +29,44 @@ export function DraggableWidget({
   sourceCategoryId,
   onEdit,
   onDelete,
+  style,
+  className,
+  ...gridProps // Capture les événements de la grille (onPointerDown, etc.)
 }: DraggableWidgetProps) {
-  const { startDrag, isDragging, draggingWidget } = useCrossGridDrag();
-  const [isHoldingForDrag, setIsHoldingForDrag] = useState(false);
-  const [holdTimer, setHoldTimer] = useState<NodeJS.Timeout | null>(null);
+  const { isDragging, draggedWidget } = useCrossGridDrag();
 
-  const isThisWidgetDragging = isDragging && draggingWidget?.widget.id === widget.id;
-
-  const handlePointerDown = (e: React.PointerEvent) => {
-    if (!isEditMode) return;
-
-    // Démarrer un timer pour le hold-to-drag
-    const timer = setTimeout(() => {
-      setIsHoldingForDrag(true);
-      startDrag(widget, sourceType, sourceCategoryId);
-    }, 200); // 200ms pour activer le drag cross-grid
-
-    setHoldTimer(timer);
-  };
-
-  const handlePointerUp = () => {
-    if (holdTimer) {
-      clearTimeout(holdTimer);
-      setHoldTimer(null);
-    }
-    setIsHoldingForDrag(false);
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    // Si on bouge avant les 200ms, annuler le timer
-    if (holdTimer && !isHoldingForDrag) {
-      const moveDistance = 5; // pixels
-      if (Math.abs(e.movementX) > moveDistance || Math.abs(e.movementY) > moveDistance) {
-        clearTimeout(holdTimer);
-        setHoldTimer(null);
-      }
-    }
-  };
+  // Vérifie si CE widget spécifique est en train d'être déplacé (pour l'effet fantôme)
+  const isThisWidgetDragging = isDragging && draggedWidget?.id === widget.id;
 
   return (
     <div
-      className={`h-full w-full bg-card border-2 rounded-lg shadow-sm relative overflow-hidden transition-all ${
-        isThisWidgetDragging ? 'opacity-50 scale-95' : ''
-      }`}
+      className={cn(
+        "h-full w-full bg-card border rounded-xl shadow-sm relative overflow-hidden transition-all duration-200",
+        isThisWidgetDragging ? "opacity-40 scale-95 ring-2 ring-primary ring-offset-2 grayscale" : "hover:shadow-md",
+        className
+      )}
       style={{
-        borderColor: 'hsl(var(--border))',
+        ...style, // Positionnement absolu géré par la grille
+        borderColor: 'var(--border)',
       }}
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerMove={handlePointerMove}
-      onPointerCancel={handlePointerUp}
+      // On passe les props d'événements de la grille ici
+      {...gridProps}
     >
       <WidgetComponent
         widget={widget}
         isEditMode={isEditMode}
+        sourceType={sourceType}
+        sourceCategoryId={sourceCategoryId}
         onEdit={onEdit}
         onDelete={onDelete}
       />
       
-      {isHoldingForDrag && (
-        <div className="absolute inset-0 bg-primary/10 border-2 border-primary border-dashed rounded-lg flex items-center justify-center z-50">
-          <span className="text-sm font-medium text-primary">Déplacement vers catégorie...</span>
+      {/* Overlay visuel si en cours de drag (optionnel, pour feedback visuel fort) */}
+      {isThisWidgetDragging && (
+        <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-50 backdrop-blur-[1px]">
+          <div className="bg-primary/20 text-primary px-3 py-1 rounded-full text-xs font-bold border border-primary/50 animate-pulse">
+            En déplacement...
+          </div>
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { TrendingUp, TrendingDown, Settings, Save, X } from "lucide-react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { TrendingUp, TrendingDown, Settings, Save, X, BarChart3, PieChart, LineChart, Activity } from "lucide-react";
 import { Widget } from "@/lib/db/schema";
 import { updateWidget } from "@/lib/actions/widgets";
 import {
@@ -16,10 +16,11 @@ import {
   Tooltip,
   Legend,
   Filler,
+  ScriptableContext,
 } from "chart.js";
 import { Bar, Line, Pie, Doughnut } from "react-chartjs-2";
 
-// Register ChartJS components
+// Enregistrement des composants ChartJS
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -37,251 +38,402 @@ interface ChartWidgetProps {
   widget: Widget;
 }
 
-interface DataPoint {
-  label: string;
-  value: number;
-}
-
 type ChartType = "bar" | "line" | "pie" | "doughnut" | "area";
 
+// Palette de couleurs moderne
+const COLORS = [
+  "rgba(59, 130, 246, 0.8)",   // Blue
+  "rgba(16, 185, 129, 0.8)",   // Emerald
+  "rgba(245, 158, 11, 0.8)",   // Amber
+  "rgba(239, 68, 68, 0.8)",    // Red
+  "rgba(139, 92, 246, 0.8)",   // Violet
+  "rgba(236, 72, 153, 0.8)",   // Pink
+  "rgba(6, 182, 212, 0.8)",    // Cyan
+];
+
 export function ChartWidget({ widget }: ChartWidgetProps) {
-  const options = widget.options as { 
-    title?: string; 
+  const chartRef = useRef<any>(null); // Référence pour créer des gradients
+  
+  // Parsing sécurisé des options
+  const options = widget.options as {
+    title?: string;
     chartType?: ChartType;
     labels?: string[];
     values?: number[];
   };
-  
-  const [data, setData] = useState<DataPoint[]>([]);
+
+  // --- STATE ---
   const [isEditing, setIsEditing] = useState(false);
+  const [localTitle, setLocalTitle] = useState(options.title || "Statistiques");
+  const [localType, setLocalType] = useState<ChartType>(options.chartType || "bar");
   const [labelsInput, setLabelsInput] = useState<string>((options.labels || []).join(", "));
   const [valuesInput, setValuesInput] = useState<string>((options.values || []).join(", "));
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const chartType = options.chartType || "bar";
+  const [dataSourceUrl, setDataSourceUrl] = useState<string>(options.dataSourceUrl || "");
+  const [pollInterval, setPollInterval] = useState<number>(options.pollInterval || 0);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Utiliser les données fournies ou un exemple simple
-    if (options.labels && options.values) {
-      const chartData = options.labels.map((label, i) => ({
-        label,
-        value: options.values![i] || 0,
-      }));
-      setData(chartData);
-    } else {
-      // Jeu de données d'exemple fixe pour éviter les graphes aléatoires
-      const labels = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
-      const values = [20, 35, 40, 30, 50];
-      setData(labels.map((label, i) => ({ label, value: values[i] })));
-    }
-  }, [options.labels, options.values]);
+  // Runtime data (fetched)
+  const [runtimeLabels, setRuntimeLabels] = useState<string[] | null>(null);
+  const [runtimeValues, setRuntimeValues] = useState<number[] | null>(null);
 
-  const trend = data.length > 1 ? data[data.length - 1].value > data[0].value : true;
-  const trendValue = Math.abs((data[data.length - 1]?.value || 0) - (data[0]?.value || 0));
+  // --- DATA PROCESSING (Memoized) ---
+  const { chartData, stats, trend } = useMemo(() => {
+    // Fallback data si vide
+    const labels = (runtimeLabels && runtimeLabels.length) ? runtimeLabels : (options.labels?.length ? options.labels : ["Lun", "Mar", "Mer", "Jeu", "Ven"]);
+    const values = (runtimeValues && runtimeValues.length) ? runtimeValues : (options.values?.length ? options.values : [10, 25, 45, 30, 55]);
 
-  // Chart.js data configuration
-  const chartData = {
-    labels: data.map(d => d.label),
-    datasets: [
-      {
-        label: options.title || "Données",
-        data: data.map(d => d.value),
-        backgroundColor: chartType === "line" || chartType === "area" 
-          ? "rgba(59, 130, 246, 0.1)"
-          : [
-              "rgba(59, 130, 246, 0.8)",
-              "rgba(16, 185, 129, 0.8)",
-              "rgba(251, 191, 36, 0.8)",
-              "rgba(239, 68, 68, 0.8)",
-              "rgba(139, 92, 246, 0.8)",
-              "rgba(236, 72, 153, 0.8)",
-              "rgba(14, 165, 233, 0.8)",
-            ],
-        borderColor: chartType === "line" || chartType === "area"
-          ? "rgb(59, 130, 246)"
-          : "rgba(255, 255, 255, 0.2)",
-        borderWidth: 2,
-        fill: chartType === "area",
-        tension: 0.4,
-      },
-    ],
-  };
+    // Stats
+    const sum = values.reduce((a, b) => a + b, 0);
+    const avg = values.length ? sum / values.length : 0;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    
+    // Tendance (compare le dernier point au premier)
+    const isUp = values.length > 1 ? values[values.length - 1] >= values[0] : true;
+    const trendDiff = values.length > 1 ? Math.abs(values[values.length - 1] - values[0]) : 0;
 
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: chartType === "pie" || chartType === "doughnut",
-        position: "bottom" as const,
-        labels: {
-          boxWidth: 12,
-          padding: 8,
-          font: { size: 10 },
+    // Configuration ChartJS
+    const data = {
+      labels,
+      datasets: [
+        {
+          label: localTitle,
+          data: values,
+          borderWidth: 2,
+          tension: 0.4, // Courbe lissée
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          // Gestion dynamique des couleurs selon le type
+          backgroundColor: (context: ScriptableContext<"line">) => {
+            const type = localType; // Utilise le type local (même en preview avant save)
+            
+            // Logique pour le dégradé "Area"
+            if (type === "area") {
+              const ctx = context.chart.ctx;
+              const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+              gradient.addColorStop(0, "rgba(59, 130, 246, 0.5)");
+              gradient.addColorStop(1, "rgba(59, 130, 246, 0.0)");
+              return gradient;
+            }
+            if (type === "line") return "rgba(59, 130, 246, 0.1)";
+            // Pour Pie/Doughnut/Bar, on retourne le tableau de couleurs
+            return labels.map((_, i) => COLORS[i % COLORS.length]);
+          },
+          borderColor: (context: ScriptableContext<"line">) => {
+             const type = localType;
+             if (type === "line" || type === "area") return "rgb(59, 130, 246)"; // Bleu uni pour les lignes
+             // Bordures légèrement plus opaques pour les barres/camemberts
+             return labels.map((_, i) => COLORS[i % COLORS.length].replace("0.8", "1"));
+          },
+          fill: localType === "area", // Active le remplissage pour "Area"
         },
-      },
-      tooltip: {
-        enabled: true,
-        backgroundColor: "rgba(0, 0, 0, 0.8)",
-        padding: 8,
-        cornerRadius: 6,
-      },
-    },
-    scales: chartType !== "pie" && chartType !== "doughnut" ? {
-      y: {
-        beginAtZero: true,
-        grid: {
-          color: "rgba(156, 163, 175, 0.1)",
-        },
-        ticks: {
-          font: { size: 10 },
-        },
-      },
-      x: {
-        grid: {
-          display: false,
-        },
-        ticks: {
-          font: { size: 10 },
-        },
-      },
-    } : undefined,
-  };
+      ],
+    };
 
-  const renderChart = () => {
-    switch (chartType) {
-      case "line":
-      case "area":
-        return <Line data={chartData} options={chartOptions} />;
-      case "pie":
-        return <Pie data={chartData} options={chartOptions} />;
-      case "doughnut":
-        return <Doughnut data={chartData} options={chartOptions} />;
-      case "bar":
-      default:
-        return <Bar data={chartData} options={chartOptions} />;
-    }
-  };
+    return { 
+      chartData: data, 
+      stats: { avg, min, max }, 
+      trend: { isUp, diff: trendDiff } 
+    };
+  }, [options.labels, options.values, localType, localTitle, runtimeLabels, runtimeValues]); // Dépendances strictes
 
-  const handleSaveConfig = async () => {
-    const labels = labelsInput
-      .split(",")
-      .map((l) => l.trim())
-      .filter(Boolean);
-    const values = valuesInput
-      .split(",")
-      .map((v) => Number(v.trim()))
-      .filter((v) => !Number.isNaN(v));
+  // --- ACTIONS ---
 
-    if (labels.length === 0 || values.length === 0 || labels.length !== values.length) {
-      setValidationError(
-        "Veuillez fournir le même nombre de labels et de valeurs (séparés par des virgules)."
-      );
+  const handleSave = async () => {
+    setError(null);
+    const cleanLabels = labelsInput.split(",").map((l) => l.trim()).filter(Boolean);
+    const cleanValues = valuesInput.split(",").map((v) => parseFloat(v.trim())).filter((v) => !isNaN(v));
+
+    if (cleanLabels.length === 0 || cleanValues.length === 0) {
+      setError("Les données ne peuvent pas être vides.");
       return;
     }
-
-    const newData = labels.map((label, i) => ({ label, value: values[i] }));
-    setData(newData);
-    setIsEditing(false);
+    if (cleanLabels.length !== cleanValues.length) {
+      setError(`Décalage : ${cleanLabels.length} labels pour ${cleanValues.length} valeurs.`);
+      return;
+    }
 
     try {
       await updateWidget(widget.id, {
         options: {
           ...widget.options,
-          labels,
-          values,
+          title: localTitle,
+          chartType: localType,
+          labels: cleanLabels,
+          values: cleanValues,
+          dataSourceUrl: dataSourceUrl || undefined,
+          pollInterval: pollInterval || undefined,
         },
       });
-    } catch (error) {
-      console.error("Erreur lors de la sauvegarde du graphique", error);
+      setIsEditing(false);
+    } catch (e) {
+      setError("Erreur lors de la sauvegarde.");
     }
   };
 
+  const handleCancel = () => {
+    // Reset aux valeurs originales
+    setLocalTitle(options.title || "Statistiques");
+    setLocalType(options.chartType || "bar");
+    setLabelsInput((options.labels || []).join(", "));
+    setValuesInput((options.values || []).join(", "));
+    setDataSourceUrl(options.dataSourceUrl || "");
+    setPollInterval(options.pollInterval || 0);
+    setIsEditing(false);
+    setError(null);
+  };
+
+  // Fetch runtime data from configured data source
+  useEffect(() => {
+    let mounted = true;
+    let controller: AbortController | null = null;
+
+    async function fetchOnce() {
+      if (!dataSourceUrl) return;
+      controller = new AbortController();
+      try {
+        const res = await fetch(dataSourceUrl, { signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+
+        // Try to parse common shapes
+        if (Array.isArray(json)) {
+          // array of numbers or objects
+          if (json.every(i => typeof i === 'number')) {
+            if (!mounted) return;
+            setRuntimeLabels(json.map((_, i) => `#${i+1}`));
+            setRuntimeValues(json as number[]);
+            return;
+          }
+          if (json.every(i => typeof i === 'object' && i !== null)) {
+            // attempt to extract label/value pairs
+            const keys = Object.keys(json[0] || {});
+            const possibleLabel = keys.find(k => /label|name|key|date/i.test(k));
+            const possibleValue = keys.find(k => /value|count|amount|y|v|score/i.test(k));
+            if (possibleLabel && possibleValue) {
+              if (!mounted) return;
+              setRuntimeLabels(json.map((it: any) => String(it[possibleLabel])));
+              setRuntimeValues(json.map((it: any) => Number(it[possibleValue] || 0)));
+              return;
+            }
+          }
+        }
+
+        if (json && typeof json === 'object') {
+          if (Array.isArray(json.labels) && Array.isArray(json.values)) {
+            if (!mounted) return;
+            setRuntimeLabels(json.labels.map((l: any) => String(l)));
+            setRuntimeValues(json.values.map((v: any) => Number(v || 0)));
+            return;
+          }
+          // object of key:number
+          const entries = Object.entries(json).filter(([, v]) => typeof v === 'number');
+          if (entries.length) {
+            if (!mounted) return;
+            setRuntimeLabels(entries.map(e => String(e[0])));
+            setRuntimeValues(entries.map(e => Number(e[1])));
+            return;
+          }
+        }
+
+        // fallback: clear runtime
+        if (mounted) {
+          setRuntimeLabels(null);
+          setRuntimeValues(null);
+        }
+      } catch (e) {
+        if (mounted) {
+          console.warn('ChartWidget fetch error', e);
+          setRuntimeLabels(null);
+          setRuntimeValues(null);
+        }
+      }
+    }
+
+    // initial fetch
+    fetchOnce();
+    // polling
+    let intervalId: any;
+    if (pollInterval && pollInterval > 0 && dataSourceUrl) {
+      intervalId = setInterval(fetchOnce, pollInterval * 1000);
+    }
+
+    return () => {
+      mounted = false;
+      if (controller) controller.abort();
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [dataSourceUrl, pollInterval]);
+
+  // --- RENDER CONFIG ---
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: ["pie", "doughnut"].includes(localType),
+        position: "bottom" as const,
+        labels: { boxWidth: 10, padding: 10, font: { size: 10 } },
+      },
+      tooltip: {
+        backgroundColor: "rgba(17, 24, 39, 0.9)",
+        padding: 10,
+        cornerRadius: 8,
+        displayColors: false, // Cache le carré de couleur dans le tooltip
+        callbacks: {
+            label: function(context: any) {
+                return `${context.dataset.label}: ${context.parsed.y !== undefined ? context.parsed.y : context.parsed}`;
+            }
+        }
+      },
+    },
+    scales: ["pie", "doughnut"].includes(localType) ? undefined : {
+      x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+      y: { 
+        beginAtZero: true, 
+        grid: { color: "rgba(107, 114, 128, 0.1)", borderDash: [4, 4] }, // Grille en pointillés
+        ticks: { font: { size: 10 } } 
+      },
+    },
+  };
+
   return (
-    <div className="p-4 h-full flex flex-col">
-      <div className="flex items-center justify-between mb-3 gap-2">
-        <div className="text-sm font-medium truncate">{options.title || "📊 Statistiques"}</div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-            onClick={() => setIsEditing((v) => !v)}
-          >
-            <Settings className="h-3 w-3" />
-            Config
-          </button>
-        {(chartType === "line" || chartType === "area" || chartType === "bar") && (
-          <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
-            trend ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"
-          }`}>
-            {trend ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-            {trendValue.toFixed(1)}
+    <div className="flex flex-col h-full p-4 relative group">
+      
+      {/* HEADER */}
+      <div className="flex items-center justify-between mb-2 shrink-0">
+        <div className="flex items-center gap-2 overflow-hidden">
+          <div className="p-1.5 bg-primary/10 rounded-md text-primary">
+             {localType === 'pie' || localType === 'doughnut' ? <PieChart className="w-4 h-4"/> : 
+              localType === 'line' || localType === 'area' ? <Activity className="w-4 h-4"/> : 
+              <BarChart3 className="w-4 h-4"/>}
           </div>
-        )}
+          <h3 className="font-semibold text-sm truncate" title={localTitle}>
+            {localTitle}
+          </h3>
+        </div>
+
+        {/* Bouton Edit (visible au survol ou si editing) */}
+        <div className={`flex items-center gap-1 transition-opacity ${isEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+           {!isEditing && (
+             <button onClick={() => setIsEditing(true)} className="p-1.5 hover:bg-accent rounded-md text-muted-foreground transition-colors">
+               <Settings className="w-4 h-4" />
+             </button>
+           )}
         </div>
       </div>
 
-      {isEditing && (
-        <div className="mb-3 space-y-2 text-xs">
-          <div className="space-y-1">
-            <div className="font-medium">Labels (séparés par des virgules)</div>
-            <input
-              value={labelsInput}
-              onChange={(e) => {
-                setLabelsInput(e.target.value);
-                if (validationError) setValidationError(null);
-              }}
-              className="w-full rounded border px-2 py-1 bg-background"
-              placeholder="Jan, Fév, Mar"
-            />
+      {/* MODE ÉDITION */}
+      {isEditing ? (
+        <div className="absolute inset-0 bg-card/95 backdrop-blur-sm z-20 p-4 flex flex-col gap-3 overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium text-xs uppercase tracking-wider text-muted-foreground">Configuration</h4>
+            <button onClick={handleCancel} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4"/></button>
           </div>
-          <div className="space-y-1">
-            <div className="font-medium">Valeurs (séparées par des virgules)</div>
-            <input
-              value={valuesInput}
-              onChange={(e) => {
-                setValuesInput(e.target.value);
-                if (validationError) setValidationError(null);
-              }}
-              className="w-full rounded border px-2 py-1 bg-background"
-              placeholder="10, 20, 15"
-            />
+          
+          <div className="space-y-3 flex-1">
+            <div>
+              <label className="text-xs font-medium mb-1 block">Titre</label>
+              <input 
+                className="w-full text-xs p-2 rounded border bg-background" 
+                value={localTitle} 
+                onChange={e => setLocalTitle(e.target.value)} 
+              />
+            </div>
+            
+            <div>
+              <label className="text-xs font-medium mb-1 block">Type</label>
+              <div className="grid grid-cols-5 gap-1">
+                {(['bar', 'line', 'area', 'pie', 'doughnut'] as ChartType[]).map(t => (
+                  <button
+                    key={t}
+                    onClick={() => setLocalType(t)}
+                    className={`text-[10px] py-1 rounded border capitalize ${localType === t ? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:bg-accent'}`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium mb-1 block">Labels (CSV)</label>
+              <textarea 
+                className="w-full text-xs p-2 rounded border bg-background resize-none h-16 font-mono" 
+                value={labelsInput} 
+                onChange={e => setLabelsInput(e.target.value)} 
+                placeholder="Jan, Fév, Mar..."
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium mb-1 block">Valeurs (CSV)</label>
+              <textarea 
+                className="w-full text-xs p-2 rounded border bg-background resize-none h-16 font-mono" 
+                value={valuesInput} 
+                onChange={e => setValuesInput(e.target.value)} 
+                placeholder="10, 20, 30..."
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium mb-1 block">Source de données (URL JSON)</label>
+              <input
+                className="w-full text-xs p-2 rounded border bg-background"
+                value={dataSourceUrl}
+                onChange={e => setDataSourceUrl(e.target.value)}
+                placeholder="https://api.example.com/metrics"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Format attendu JSON simple: {`{ labels: [...], values: [...] }`} ou un tableau de nombres.</p>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium mb-1 block">Intervalle de rafraîchissement (sec, 0 = désactivé)</label>
+              <input
+                type="number"
+                min={0}
+                className="w-32 text-xs p-2 rounded border bg-background"
+                value={pollInterval}
+                onChange={e => setPollInterval(Number(e.target.value))}
+              />
+            </div>
           </div>
-          {validationError && (
-            <div className="text-[11px] text-red-500 bg-red-500/5 border border-red-500/30 rounded px-2 py-1">
-              {validationError}
+
+          {error && <div className="text-[10px] text-red-500 font-medium">{error}</div>}
+
+          <button 
+            onClick={handleSave} 
+            className="w-full py-1.5 bg-primary text-primary-foreground rounded text-xs font-medium flex items-center justify-center gap-2 hover:opacity-90"
+          >
+            <Save className="w-3 h-3" /> Sauvegarder
+          </button>
+        </div>
+      ) : (
+        /* MODE AFFICHAGE */
+        <>
+          <div className="flex-1 min-h-0 relative">
+            {/* On utilise localType ici pour permettre la preview instantanée si on changeait la logique */}
+            {localType === "line" || localType === "area" ? <Line ref={chartRef} data={chartData} options={chartOptions} /> :
+             localType === "pie" ? <Pie ref={chartRef} data={chartData} options={chartOptions} /> :
+             localType === "doughnut" ? <Doughnut ref={chartRef} data={chartData} options={chartOptions} /> :
+             <Bar ref={chartRef} data={chartData} options={chartOptions} />}
+          </div>
+
+          {/* FOOTER STATS (Uniquement pour graphiques non circulaires) */}
+          {!["pie", "doughnut"].includes(localType) && (
+            <div className="mt-3 pt-2 border-t flex items-center justify-between text-xs text-muted-foreground">
+              <div className="flex gap-3">
+                <span title="Moyenne">x̄ {stats.avg.toFixed(1)}</span>
+                <span title="Maximum" className="text-green-600/80">↑ {stats.max}</span>
+              </div>
+              
+              <div className={`flex items-center gap-1 font-medium ${trend.isUp ? 'text-green-600' : 'text-red-600'}`}>
+                {trend.isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                <span>{trend.diff.toFixed(1)}</span>
+              </div>
             </div>
           )}
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="text-xs px-2 py-1 rounded border border-input text-muted-foreground hover:bg-accent"
-              onClick={() => setIsEditing(false)}
-            >
-              <X className="h-3 w-3 mr-1 inline" />
-              Annuler
-            </button>
-            <button
-              type="button"
-              className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:opacity-90 flex items-center gap-1"
-              onClick={handleSaveConfig}
-            >
-              <Save className="h-3 w-3" />
-              Appliquer
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="flex-1 min-h-0">
-        {renderChart()}
-      </div>
-
-      {(chartType === "line" || chartType === "area" || chartType === "bar") && data.length > 0 && (
-        <div className="mt-2 flex justify-center gap-4 text-xs text-muted-foreground border-t pt-2">
-          <span>Moy: {(data.reduce((acc, d) => acc + d.value, 0) / data.length).toFixed(1)}</span>
-          <span>Max: {Math.max(...data.map(d => d.value)).toFixed(1)}</span>
-          <span>Min: {Math.min(...data.map(d => d.value)).toFixed(1)}</span>
-        </div>
+        </>
       )}
     </div>
   );

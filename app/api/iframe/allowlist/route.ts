@@ -10,7 +10,7 @@ export async function GET() {
     const rows = await db.select().from(iframeAllowlist).where(eq(iframeAllowlist.removed, false));
     const origins = rows.map(r => r.origin);
     return NextResponse.json({ origins });
-  } catch (err) {
+  } catch (err: any) {
     console.error('Erreur GET /api/iframe/allowlist', err?.message || err);
     // If DB is not available (dev), return empty list so middleware and UI can continue.
     return NextResponse.json({ origins: [] });

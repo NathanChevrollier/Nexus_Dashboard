@@ -89,13 +89,24 @@ async function fetchTMDB<T>(endpoint: string, params: Record<string, string> = {
       ...params
     });
 
-    const url = `${TMDB_PROXY_BASE}${endpoint}?${searchParams.toString()}`;
+    const relativeUrl = `${TMDB_PROXY_BASE}${endpoint}?${searchParams.toString()}`;
 
-    // Some server runtimes (Node) require absolute URLs for fetch().
-    // When running server-side prefix with the configured NEXTAUTH_URL (fallback to localhost).
+    // Some server runtimes (Node) require absolute URLs for fetch(). Prefer calling TMDb
+    // directly from the server when an API key is available to avoid proxying to localhost
+    // during build-time (which can produce ECONNREFUSED if Next dev server isn't running).
     const isServer = typeof window === 'undefined';
-    const base = process.env.NEXTAUTH_URL || process.env.VERCEL_URL || 'http://localhost:3000';
-    const finalUrl = isServer && url.startsWith('/') ? `${base.replace(/\/$/, '')}${url}` : url;
+
+    let finalUrl: string;
+    const serverApiKey = process.env.TMDB_API_KEY || process.env.NEXT_PUBLIC_TMDB_API_KEY;
+    if (isServer && serverApiKey) {
+      // Query TMDb directly from the server using the API key
+      finalUrl = `https://api.themoviedb.org/3${endpoint}?${searchParams.toString()}&api_key=${encodeURIComponent(serverApiKey)}`;
+    } else {
+      // Fallback to proxying through the app (useful for client-side or when no server key present)
+      const url = relativeUrl;
+      const base = process.env.NEXTAUTH_URL || process.env.VERCEL_URL || 'http://localhost:3000';
+      finalUrl = isServer && url.startsWith('/') ? `${base.replace(/\/$/, '')}${url}` : url;
+    }
 
     // On utilise le cache de Next.js pour éviter de spammer l'API
     const response = await fetch(finalUrl, {

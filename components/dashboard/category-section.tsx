@@ -87,9 +87,27 @@ export function CategorySection({
           
           {/* Poignée de drag (si props fournies par le parent draggable) */}
           {isEditMode && dragHandleProps && (
-            <div 
-              className="cursor-grab active:cursor-grabbing p-1.5 rounded-md hover:bg-background text-muted-foreground"
+            <div
+              className="cursor-grab active:cursor-grabbing p-1.5 rounded-md hover:bg-background text-muted-foreground z-20"
               {...dragHandleProps}
+              onPointerDown={(e) => {
+                // Empêcher le toggle de la section lors d'un clic sur la poignée
+                e.stopPropagation();
+                // Appeler le handler d'origine si présent (compatibilité avec hello-pangea/dnd)
+                try {
+                  const fn = (dragHandleProps as any)?.onPointerDown || (dragHandleProps as any)?.onMouseDown;
+                  if (typeof fn === 'function') fn(e);
+                } catch (err) {
+                  // ignore
+                }
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                try {
+                  const fn = (dragHandleProps as any)?.onMouseDown || (dragHandleProps as any)?.onPointerDown;
+                  if (typeof fn === 'function') fn(e);
+                } catch (err) {}
+              }}
             >
               <GripVertical className="h-4 w-4" />
             </div>

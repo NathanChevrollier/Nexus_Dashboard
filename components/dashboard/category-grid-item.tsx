@@ -38,7 +38,7 @@ export function CategoryGridItem({
 }: CategoryGridItemProps) {
   const [containerWidth, setContainerWidth] = useState(400);
   const { isDragging, draggedWidget, endDrag, sourceCategoryId } = useCrossGridDrag();
-  const [isHovered, setIsHovered] = useState(false); // État de survol global
+  const [isHovered, setIsHovered] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const COLS = 6;
@@ -74,148 +74,149 @@ export function CategoryGridItem({
     onWidgetLayoutChange(category.id, updates);
   };
 
-  // --- LOGIQUE DE DROP ---
   const handleDrop = (e: React.MouseEvent | React.PointerEvent) => {
     e.stopPropagation();
     e.preventDefault();
-
     if (!isDragging || !draggedWidget) return;
 
-    // IMPORTANT : On vérifie l'action AVANT de terminer le drag
     const isExiting = sourceCategoryId === category.id;
     const isEntering = sourceCategoryId !== category.id;
 
     const result = endDrag();
     if (!result) return;
 
-    if (isEntering) {
-      onWidgetDropIn?.(result.widget.id, category.id);
-    } else if (isExiting) {
-      onWidgetDropOut?.(result.widget.id);
-    }
+    if (isEntering) onWidgetDropIn?.(result.widget.id, category.id);
+    else if (isExiting) onWidgetDropOut?.(result.widget.id);
 
     setIsHovered(false);
   };
 
-  // --- CONDITIONS D'AFFICHAGE ---
   const isValidDropTarget = isEditMode && isDragging && draggedWidget && sourceCategoryId !== category.id;
   const isValidExitTarget = isEditMode && isDragging && draggedWidget && sourceCategoryId === category.id;
   const showOverlay = (isValidDropTarget || isValidExitTarget) && isHovered;
+  
+  const accentColor = category.color || "hsl(var(--primary))";
 
   return (
     <div 
       ref={containerRef}
       className={cn(
-        "h-full w-full rounded-xl flex flex-col shadow-sm border transition-all duration-300 relative overflow-hidden group",
-        isHovered && (isValidDropTarget || isValidExitTarget) ? "ring-2 ring-primary ring-offset-2 scale-[1.01]" : "hover:shadow-md"
+        "w-full h-full rounded-2xl flex flex-col shadow-sm border bg-card transition-all duration-300 relative overflow-hidden group isolate",
+        showOverlay ? "ring-2 ring-primary ring-offset-2 scale-[1.005]" : "hover:shadow-md"
       )}
       style={{
-        background: category.color 
-          ? `linear-gradient(145deg, ${category.color}05 0%, ${category.color}15 100%)`
-          : 'var(--card)',
-        borderColor: category.color ? `${category.color}40` : 'var(--border)',
+        borderColor: isHovered ? accentColor : undefined,
       }}
-      // Détection de survol globale sur le conteneur
       onPointerEnter={() => setIsHovered(true)}
       onPointerLeave={() => setIsHovered(false)}
     >
       
-      {/* --- OVERLAY DE DROP (ZONE GÉANTE) --- */}
-      {/* Cet overlay couvre tout et capture explicitement le pointerUp */}
-      {(isValidDropTarget || isValidExitTarget) && (
+      {/* ZONE DE DROP (z-index max pour passer au dessus de tout) */}
+      {showOverlay && (
         <div 
-          className={cn(
-            "absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm transition-all duration-200 border-2 border-dashed rounded-xl cursor-copy",
-            isHovered 
-              ? "opacity-100 border-primary bg-primary/5 pointer-events-auto" // ACTIVE
-              : "opacity-0 pointer-events-none" // INACTIVE
-          )}
-          // C'est ICI que la magie opère : on écoute le drop sur l'overlay lui-même
+          className="absolute inset-0 z-[100] flex items-center justify-center bg-background/90 backdrop-blur-md animate-in fade-in duration-200 border-2 border-dashed border-primary rounded-2xl cursor-copy"
           onPointerUp={handleDrop}
         >
-          <div className="flex flex-col items-center gap-3 p-6 text-center animate-in zoom-in-95 duration-200 select-none">
-            <div className={cn(
-              "h-16 w-16 rounded-full flex items-center justify-center shadow-lg transition-colors",
-              isValidExitTarget ? "bg-orange-100 text-orange-600" : "bg-primary/10 text-primary"
-            )}>
-              {isValidExitTarget ? <LogOut className="h-8 w-8 ml-1" /> : <ArrowDownToLine className="h-8 w-8" />}
+          <div className="flex flex-col items-center gap-3 p-6 text-center select-none pointer-events-none">
+            <div className={cn("h-16 w-16 rounded-full flex items-center justify-center shadow-lg transform scale-110", isValidExitTarget ? "bg-orange-100 text-orange-600" : "bg-primary/10 text-primary")}>
+              {isValidExitTarget ? <LogOut className="h-8 w-8" /> : <ArrowDownToLine className="h-8 w-8" />}
             </div>
             <div>
-              <h3 className="text-lg font-bold text-foreground">
-                {isValidExitTarget ? "Sortir de la catégorie" : "Déposer ici"}
+              <h3 className="text-xl font-bold text-foreground">
+                {isValidExitTarget ? "Sortir le widget" : "Déposer ici"}
               </h3>
-              <p className="text-sm text-muted-foreground">
-                {isValidExitTarget 
-                  ? "Relâchez pour renvoyer vers la grille principale" 
-                  : `Ajouter à "${category.name}"`
-                }
-              </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Header */}
+      {/* HEADER SOLIDE (z-index élevé pour rester au dessus du contenu) */}
       <div 
-        className="flex items-center justify-between px-3 py-2 border-b bg-card/50 backdrop-blur-sm sticky top-0 z-20"
-        style={{ borderBottomColor: category.color ? `${category.color}20` : 'var(--border)' }}
+        className="flex-none relative flex items-center justify-between px-6 py-4 bg-card z-50 select-none" 
+        style={{ 
+          background: `linear-gradient(90deg, ${accentColor}08 0%, transparent 100%)`,
+        }}
       >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+        <div className="flex items-center gap-5 min-w-0 flex-1">
           {isEditMode && (
             <div 
-              className="category-drag-handle cursor-grab active:cursor-grabbing p-1 rounded-md hover:bg-muted/50 text-muted-foreground/50 hover:text-foreground transition-colors"
-              onPointerUp={(e) => e.stopPropagation()} // Empêche le drop involontaire si on clique juste
+              className="category-drag-handle cursor-grab active:cursor-grabbing p-2.5 rounded-xl hover:bg-background/80 text-muted-foreground/50 hover:text-foreground transition-all hover:scale-110 shadow-sm border border-transparent hover:border-border/50"
+              onPointerUp={(e) => e.stopPropagation()}
             >
-              <GripVertical className="h-4 w-4" />
+              <GripVertical className="h-6 w-6" />
             </div>
           )}
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-xl flex-shrink-0 filter drop-shadow-sm">{category.icon || <Folder className="h-4 w-4 text-primary" />}</span>
-            <span className="font-semibold text-sm truncate">{category.name}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/50 text-muted-foreground font-mono">
-              {widgets.length}
-            </span>
+
+          <div 
+            className="h-14 w-14 rounded-2xl flex items-center justify-center shadow-sm border border-white/10 text-3xl transition-transform duration-300 group-hover:scale-105 shrink-0 bg-background"
+            style={{ 
+              color: accentColor,
+              boxShadow: `0 4px 12px ${accentColor}15`
+            }}
+          >
+            {category.icon || <Folder className="h-7 w-7" />}
+          </div>
+
+          <div className="flex flex-col justify-center min-w-0 h-full py-0.5">
+            <h3 className="font-bold text-xl text-foreground/90 truncate leading-none tracking-tight mb-1.5">
+              {category.name}
+            </h3>
+            <div className="flex items-center gap-2">
+              <span className={cn("inline-block h-2 w-2 rounded-full", isCollapsed ? "bg-muted-foreground/30" : "bg-emerald-500 animate-pulse")} />
+              <span className="text-sm font-medium text-muted-foreground/70 leading-none">
+                {widgets.length} {widgets.length > 1 ? "éléments" : "élément"}
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 pl-2 z-30">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={(e) => { e.stopPropagation(); onToggleCollapse(); }}
-          >
-            {isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-          </Button>
-          
+        <div className="flex items-center gap-3 pl-4 z-30">
           {isEditMode && onCategoryDelete && (
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              className="h-10 w-10 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all hover:scale-110"
               onClick={(e) => { e.stopPropagation(); onCategoryDelete(category.id); }}
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-5 w-5" />
             </Button>
           )}
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 rounded-full bg-background/50 hover:bg-background border border-border/20 hover:border-border/50 shadow-sm transition-all hover:scale-110"
+            onClick={(e) => { e.stopPropagation(); onToggleCollapse(); }}
+          >
+            {isCollapsed ? <ChevronDown className="h-6 w-6 text-muted-foreground" /> : <ChevronUp className="h-6 w-6 text-muted-foreground" />}
+          </Button>
         </div>
       </div>
 
-      {/* Contenu */}
-      <div className={cn("flex-1 relative transition-all duration-300", isCollapsed ? "h-0 overflow-hidden" : "h-auto")}>
+      {/* SÉPARATEUR EXPLICITE (La barre bleue) */}
+      {/* On la sort du header pour éviter les glitchs visuels */}
+      <div className="w-full h-[1px] relative z-40" style={{ backgroundColor: `${accentColor}30` }} />
+
+      {/* CONTENU (z-index bas pour passer dessous) */}
+      <div 
+        className={cn(
+          "flex-1 relative transition-all duration-300 bg-background/30 w-full overflow-hidden z-0", 
+          isCollapsed ? "hidden" : "block"
+        )}
+      >
         {widgets.length > 0 ? (
-          <div className="p-2 h-full overflow-hidden">
+          <div className="p-4 h-full w-full relative">
             <CustomGridLayout
               layout={internalLayout}
               cols={COLS}
               rowHeight={ROW_HEIGHT}
-              width={containerWidth}
+              width={containerWidth - 32}
               isDraggable={isEditMode}
               isResizable={isEditMode}
               compactType="vertical"
               preventCollision={true}
               onLayoutChange={handleInternalLayoutChange}
-              margin={[10, 10]}
+              margin={[16, 16]}
               containerPadding={[0, 0]}
             >
               {widgets.map((widget) => (
@@ -233,12 +234,12 @@ export function CategoryGridItem({
             </CustomGridLayout>
           </div>
         ) : (
-          !isCollapsed && (
-            <div className="h-32 flex flex-col items-center justify-center text-muted-foreground/40 border-2 border-dashed border-muted/20 m-2 rounded-lg bg-muted/5">
-              <Plus className="h-8 w-8 mb-2 opacity-50" />
-              <p className="text-xs font-medium">Glissez un widget ici</p>
+          <div className="h-40 flex flex-col items-center justify-center text-muted-foreground/40 border-2 border-dashed border-muted/20 m-4 rounded-2xl bg-muted/5 transition-colors hover:bg-muted/10">
+            <div className="h-12 w-12 rounded-full bg-muted/20 flex items-center justify-center mb-3">
+               <Plus className="h-6 w-6 opacity-50" />
             </div>
-          )
+            <p className="text-sm font-medium">Glissez un widget ici pour commencer</p>
+          </div>
         )}
       </div>
     </div>

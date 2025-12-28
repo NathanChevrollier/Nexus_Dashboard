@@ -1,83 +1,52 @@
-/**
- * UNIVERSAL CALENDAR WIDGET
- * Le widget calendrier ultime qui combine:
- * - Anime & Manga (AniList API)
- * - Films & Séries TV (TMDb API)
- * - Événements personnels (DB)
- * 
- * Features:
- * - Vue mois / semaine / liste
- * - Filtres par type de contenu
- * - Customisation des couleurs
- * - Ajout/édition/suppression d'événements
- * - Export/import
- * - Synchronisation temps réel
- */
-
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import {
-  Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
   Plus,
   Settings,
-  Filter,
-  Download,
-  Upload,
-  Tv,
-  Film,
-  BookOpen,
-  Star,
-  Clock,
-  X,
-  Edit,
-  Trash2,
-  Check,
-  RefreshCw,
   List,
   CalendarDays,
   Grid3x3,
-  Eye,
-  EyeOff,
+  RefreshCw,
+  Clock,
+  ExternalLink,
+  Trash2,
+  MapPin,
+  Star,
+  Tv,
+  Film,
+  BookOpen,
+  PlayCircle
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-// API imports
-import { getAiringThisWeek, getReleasingManga, type AnimeSchedule, type MangaRelease } from '@/lib/api/anilist';
-import { getUpcomingMovies, getTVOnTheAir, type TMDbMovie, type TMDbTVShow, getTMDbImageUrl } from '@/lib/api/tmdb';
-import {
-  getUserEvents,
-  createEvent,
-  updateEvent,
-  deleteEvent,
-} from '@/lib/actions/calendar-events';
-import type { CalendarEvent } from '@/lib/db/schema';
+// --- IMPORTS API RÉELS ---
+import { getAiringThisWeek, getReleasingManga } from '@/lib/api/anilist';
+import { getUpcomingMovies, getTVOnTheAir, getTMDbImageUrl } from '@/lib/api/tmdb';
+import { getUserEvents, createEvent, deleteEvent } from '@/lib/actions/calendar-events';
 
-// Types unifiés
+// --- TYPES ---
 interface UnifiedEvent {
   id: string;
   title: string;
   date: Date;
-  endDate?: Date;
   type: 'anime' | 'manga' | 'movie' | 'tv' | 'personal';
   description?: string;
   imageUrl?: string;
   externalUrl?: string;
-  metadata?: any;
-  completed?: boolean;
   color?: string;
+  metadata?: any;
 }
 
 interface CalendarViewProps {
@@ -103,44 +72,28 @@ export function UniversalCalendarWidget({ options }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<'month' | 'week' | 'list'>(options?.calendarView || 'month');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [events, setEvents] = useState<UnifiedEvent[]>([]);
 
-  // Données
-  const [animeData, setAnimeData] = useState<AnimeSchedule[]>([]);
-  const [mangaData, setMangaData] = useState<MangaRelease[]>([]);
-  const [movieData, setMovieData] = useState<TMDbMovie[]>([]);
-  const [tvData, setTVData] = useState<TMDbTVShow[]>([]);
-  const [personalEvents, setPersonalEvents] = useState<CalendarEvent[]>([]);
-
-  // Filtres et paramètres
+  // Configuration
   const [enabledSources, setEnabledSources] = useState({
-    anime: true,
-    manga: true,
-    movie: true,
-    tv: true,
-    personal: true,
+    anime: true, manga: true, movie: true, tv: true, personal: true,
   });
-  
   const [sourceColors, setSourceColors] = useState(options?.sourceColors || DEFAULT_COLORS);
   const [showWeekends, setShowWeekends] = useState(options?.showWeekends !== false);
   const [compactMode, setCompactMode] = useState(options?.compactMode || false);
   
-  // Dialogs
-  const [showSettings, setShowSettings] = useState(false);
-  const [showAddEvent, setShowAddEvent] = useState(false);
+  // États d'interface (Modales)
   const [selectedEvent, setSelectedEvent] = useState<UnifiedEvent | null>(null);
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null); // Pour la pop-up "Voir la journée"
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
-  // Charger toutes les données
-  useEffect(() => {
-    loadAllData();
-  }, [currentDate]);
-
-  async function loadAllData() {
+  // --- CHARGEMENT DES DONNÉES (API RÉELLES) ---
+  const loadData = async () => {
     setLoading(true);
-    setError(null);
-
     try {
-      const [anime, manga, movies, tv, personal] = await Promise.all([
+      // 1. Appels parallèles aux API si la source est activée
+      const [animeData, mangaData, movieData, tvData, personalData] = await Promise.all([
         enabledSources.anime ? getAiringThisWeek() : Promise.resolve([]),
         enabledSources.manga ? getReleasingManga(1, 20) : Promise.resolve([]),
         enabledSources.movie ? getUpcomingMovies() : Promise.resolve([]),
@@ -148,487 +101,355 @@ export function UniversalCalendarWidget({ options }: CalendarViewProps) {
         enabledSources.personal ? getUserEvents() : Promise.resolve([]),
       ]);
 
-      setAnimeData(anime);
-      setMangaData(manga);
-      setMovieData(movies);
-      setTVData(tv);
-      setPersonalEvents(personal);
-    } catch (err) {
-      console.error('Error loading calendar data:', err);
-      setError('Failed to load calendar data');
+      const newEvents: UnifiedEvent[] = [];
+
+      // 2. Transformation : Anime
+      if (animeData) {
+        animeData.forEach((anime: any) => {
+          if (anime.nextAiringEpisode) {
+            newEvents.push({
+              id: `anime-${anime.id}`,
+              title: anime.title.english || anime.title.romaji,
+              date: new Date(anime.nextAiringEpisode.airingAt * 1000),
+              type: 'anime',
+              imageUrl: anime.coverImage.medium,
+              externalUrl: anime.siteUrl,
+              color: sourceColors.anime,
+              description: `Épisode ${anime.nextAiringEpisode.episode}`,
+              metadata: { score: anime.averageScore, genres: anime.genres }
+            });
+          }
+        });
+      }
+
+      // 3. Transformation : Manga
+      if (mangaData) {
+        mangaData.forEach((manga: any) => {
+          newEvents.push({
+            id: `manga-${manga.id}`,
+            title: manga.title.english || manga.title.romaji,
+            date: new Date(), // Manga = Date du jour par défaut (souvent imprécis)
+            type: 'manga',
+            imageUrl: manga.coverImage.medium,
+            externalUrl: manga.siteUrl,
+            color: sourceColors.manga,
+            description: manga.chapters ? `Chapitre ${manga.chapters}` : 'Nouveau volume',
+            metadata: { score: manga.averageScore, genres: manga.genres }
+          });
+        });
+      }
+
+      // 4. Transformation : Films
+      if (movieData) {
+        movieData.forEach((movie: any) => {
+          if (movie.release_date) {
+            newEvents.push({
+              id: `movie-${movie.id}`,
+              title: movie.title,
+              date: new Date(movie.release_date),
+              type: 'movie',
+              imageUrl: getTMDbImageUrl(movie.poster_path, 'w500'),
+              description: movie.overview,
+              color: sourceColors.movie,
+              metadata: { rating: movie.vote_average }
+            });
+          }
+        });
+      }
+
+      // 5. Transformation : Séries TV
+      if (tvData) {
+        tvData.forEach((show: any) => {
+          if (show.first_air_date) {
+            newEvents.push({
+              id: `tv-${show.id}`,
+              title: show.name,
+              date: new Date(show.first_air_date),
+              type: 'tv',
+              imageUrl: getTMDbImageUrl(show.poster_path, 'w500'),
+              description: show.overview,
+              color: sourceColors.tv,
+              metadata: { rating: show.vote_average }
+            });
+          }
+        });
+      }
+
+      // 6. Transformation : Personnel
+      if (personalData) {
+        personalData.forEach((event: any) => {
+          newEvents.push({
+            id: `personal-${event.id}`,
+            title: event.title,
+            date: new Date(event.startDate),
+            type: 'personal',
+            description: event.description,
+            color: event.color || sourceColors.personal,
+          });
+        });
+      }
+
+      setEvents(newEvents);
+    } catch (error) {
+      console.error("Erreur chargement calendrier:", error);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  // Convertir toutes les sources en événements unifiés
-  const unifiedEvents = useMemo(() => {
-    const events: UnifiedEvent[] = [];
+  useEffect(() => {
+    loadData();
+  }, [currentDate, enabledSources]); // Recharge si on change de mois ou de filtres
 
-    // Anime
-    if (enabledSources.anime) {
-      animeData.forEach(anime => {
-        if (anime.nextAiringEpisode) {
-          events.push({
-            id: `anime-${anime.id}`,
-            title: anime.title.english || anime.title.romaji,
-            date: new Date(anime.nextAiringEpisode.airingAt * 1000),
-            type: 'anime',
-            imageUrl: anime.coverImage.medium,
-            externalUrl: anime.siteUrl,
-            metadata: {
-              episode: anime.nextAiringEpisode.episode,
-              score: anime.averageScore,
-              genres: anime.genres,
-            },
-            color: sourceColors.anime,
-          });
-        }
-      });
+  // --- ACTIONS ---
+
+  const handleDeleteEvent = async (id: string) => {
+    // On ne supprime que les événements personnels (ceux qui ont un ID type 'personal-123')
+    if (id.startsWith('personal-')) {
+      const realId = id.replace('personal-', '');
+      await deleteEvent(realId);
+      loadData(); // Recharger
+      setSelectedEvent(null);
     }
+  };
 
-    // Manga
-    if (enabledSources.manga) {
-      mangaData.forEach(manga => {
-        events.push({
-          id: `manga-${manga.id}`,
-          title: manga.title.english || manga.title.romaji,
-          date: new Date(), // Les manga n'ont pas de date précise, on les met aujourd'hui
-          type: 'manga',
-          imageUrl: manga.coverImage.medium,
-          externalUrl: manga.siteUrl,
-          metadata: {
-            chapters: manga.chapters,
-            score: manga.averageScore,
-            genres: manga.genres,
-          },
-          color: sourceColors.manga,
-        });
-      });
+  const navigate = (direction: 'prev' | 'next' | 'today') => {
+    const newDate = new Date(currentDate);
+    if (direction === 'today') {
+      setCurrentDate(new Date());
+      return;
     }
-
-    // Films
-    if (enabledSources.movie) {
-      movieData.forEach(movie => {
-        if (movie.release_date) {
-          events.push({
-            id: `movie-${movie.id}`,
-            title: movie.title,
-            date: new Date(movie.release_date),
-            type: 'movie',
-            description: movie.overview,
-            imageUrl: getTMDbImageUrl(movie.poster_path, 'w500'),
-            metadata: {
-              rating: movie.vote_average,
-              genres: movie.genre_ids,
-            },
-            color: sourceColors.movie,
-          });
-        }
-      });
-    }
-
-    // Séries TV
-    if (enabledSources.tv) {
-      tvData.forEach(show => {
-        if (show.first_air_date) {
-          events.push({
-            id: `tv-${show.id}`,
-            title: show.name,
-            date: new Date(show.first_air_date),
-            type: 'tv',
-            description: show.overview,
-            imageUrl: getTMDbImageUrl(show.poster_path, 'w500'),
-            metadata: {
-              rating: show.vote_average,
-              genres: show.genre_ids,
-            },
-            color: sourceColors.tv,
-          });
-        }
-      });
-    }
-
-    // Événements personnels
-    if (enabledSources.personal) {
-      personalEvents.forEach(event => {
-        events.push({
-          id: `personal-${event.id}`,
-          title: event.title,
-          date: new Date(event.startDate),
-          endDate: event.endDate ? new Date(event.endDate) : undefined,
-          type: 'personal',
-          description: event.description || undefined,
-          completed: event.completed ?? undefined,
-          color: event.color || sourceColors.personal,
-          metadata: event.metadata,
-        });
-      });
-    }
-
-    // Trier par date
-    return events.sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [animeData, mangaData, movieData, tvData, personalEvents, enabledSources, sourceColors]);
-
-  // Navigation
-  const goToPreviousMonth = () => {
-    setCurrentDate(prev => {
-      const newDate = new Date(prev);
-      newDate.setMonth(newDate.getMonth() - 1);
-      return newDate;
-    });
+    const modifier = direction === 'next' ? 1 : -1;
+    if (view === 'month') newDate.setMonth(newDate.getMonth() + modifier);
+    else if (view === 'week') newDate.setDate(newDate.getDate() + (modifier * 7));
+    setCurrentDate(newDate);
   };
 
-  const goToNextMonth = () => {
-    setCurrentDate(prev => {
-      const newDate = new Date(prev);
-      newDate.setMonth(newDate.getMonth() + 1);
-      return newDate;
-    });
-  };
-
-  const goToToday = () => {
-    setCurrentDate(new Date());
-  };
-
-  const goToPreviousWeek = () => {
-    setCurrentDate(prev => {
-      const newDate = new Date(prev);
-      newDate.setDate(newDate.getDate() - 7);
-      return newDate;
-    });
-  };
-
-  const goToNextWeek = () => {
-    setCurrentDate(prev => {
-      const newDate = new Date(prev);
-      newDate.setDate(newDate.getDate() + 7);
-      return newDate;
-    });
-  };
-
-  // Toggle source
-  const toggleSource = (source: keyof typeof enabledSources) => {
-    setEnabledSources(prev => ({
-      ...prev,
-      [source]: !prev[source],
-    }));
-  };
-
-  if (loading) {
-    return (
-      <Card className="w-full h-full p-6 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-2">
-          <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Chargement du calendrier...</p>
-        </div>
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card className="w-full h-full p-6 flex flex-col items-center justify-center gap-3">
-        <CalendarIcon className="h-12 w-12 text-destructive" />
-        <p className="text-sm text-muted-foreground">{error}</p>
-        <Button onClick={loadAllData} variant="outline" size="sm">
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Réessayer
-        </Button>
-      </Card>
-    );
-  }
+  const filteredEvents = useMemo(() => {
+    return events.filter(e => enabledSources[e.type]);
+  }, [events, enabledSources]);
 
   return (
-    <Card className="w-full h-full flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="p-4 border-b flex items-center justify-between gap-2 flex-wrap">
+    <Card className="w-full h-full flex flex-col bg-card/50 overflow-hidden relative group">
+      
+      {/* HEADER */}
+      <div className="flex items-center justify-between px-4 py-3 border-b bg-card/80 backdrop-blur-sm z-10 shrink-0 h-16">
         <div className="flex items-center gap-2">
-          <CalendarIcon className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold">Calendrier Universel</h3>
-          <Badge variant="outline" className="text-xs">
-            {unifiedEvents.length} événements
-          </Badge>
+           <Button variant="ghost" size="icon" onClick={() => navigate('prev')}>
+             <ChevronLeft className="h-5 w-5" />
+           </Button>
+           <Button variant="ghost" size="sm" className="font-bold text-lg min-w-[140px] capitalize" onClick={() => navigate('today')}>
+             {view === 'month' && currentDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+             {view === 'week' && `Sem. ${currentDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`}
+             {view === 'list' && "Agenda"}
+           </Button>
+           <Button variant="ghost" size="icon" onClick={() => navigate('next')}>
+             <ChevronRight className="h-5 w-5" />
+           </Button>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Vue Switcher */}
-          <div className="flex gap-1 border rounded-md p-1">
-            <Button
-              variant={view === 'month' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setView('month')}
-              className="h-7 px-2"
+        <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg border">
+          {(['month', 'week', 'list'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={cn(
+                "p-2 rounded-md transition-all",
+                view === v ? "bg-background shadow-sm text-primary" : "text-muted-foreground hover:text-foreground"
+              )}
+              title={v === 'month' ? 'Mois' : v === 'week' ? 'Semaine' : 'Liste'}
             >
-              <Grid3x3 className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={view === 'week' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setView('week')}
-              className="h-7 px-2"
-            >
-              <CalendarDays className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={view === 'list' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setView('list')}
-              className="h-7 px-2"
-            >
-              <List className="h-4 w-4" />
-            </Button>
+              {v === 'month' && <Grid3x3 className="h-4 w-4" />}
+              {v === 'week' && <CalendarDays className="h-4 w-4" />}
+              {v === 'list' && <List className="h-4 w-4" />}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-1">
+           <Button variant="default" size="icon" onClick={() => setIsAddOpen(true)} className="rounded-full shadow-md">
+             <Plus className="h-5 w-5" />
+           </Button>
+           <Button variant="ghost" size="icon" onClick={() => setShowSettings(true)}>
+             <Settings className="h-5 w-5 text-muted-foreground" />
+           </Button>
+        </div>
+      </div>
+
+      {/* CONTENU PRINCIPAL */}
+      <div className="flex-1 bg-background/20 overflow-hidden relative">
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-20 backdrop-blur-sm">
+            <RefreshCw className="h-8 w-8 animate-spin text-primary" />
           </div>
-
-          {/* Actions */}
-          <Dialog open={showAddEvent} onOpenChange={setShowAddEvent}>
-            <DialogTrigger asChild>
-              <Button size="sm" variant="default">
-                <Plus className="h-4 w-4 mr-1" />
-                Ajouter
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <AddEventDialog onClose={() => setShowAddEvent(false)} onSave={loadAllData} />
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={showSettings} onOpenChange={setShowSettings}>
-            <DialogTrigger asChild>
-              <Button size="sm" variant="outline">
-                <Settings className="h-4 w-4" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <CalendarSettings
-                enabledSources={enabledSources}
-                sourceColors={sourceColors}
-                showWeekends={showWeekends}
-                compactMode={compactMode}
-                onToggleSource={toggleSource}
-                onChangeColor={(source: string, color: string) => setSourceColors(prev => ({ ...prev, [source]: color }))}
-                onToggleWeekends={() => setShowWeekends(!showWeekends)}
-                onToggleCompact={() => setCompactMode(!compactMode)}
-              />
-            </DialogContent>
-          </Dialog>
-
-          <Button size="sm" variant="ghost" onClick={loadAllData}>
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Source Filters */}
-      <div className="px-4 py-2 border-b flex flex-wrap gap-2">
-        {Object.entries(enabledSources).map(([source, enabled]) => (
-          <Button
-            key={source}
-            variant={enabled ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => toggleSource(source as keyof typeof enabledSources)}
-            className="h-7"
-            style={enabled ? { backgroundColor: sourceColors[source as keyof typeof sourceColors] } : undefined}
-          >
-            {enabled ? <Eye className="h-3 w-3 mr-1" /> : <EyeOff className="h-3 w-3 mr-1" />}
-            {source === 'anime' && 'Anime'}
-            {source === 'manga' && 'Manga'}
-            {source === 'movie' && 'Films'}
-            {source === 'tv' && 'Séries'}
-            {source === 'personal' && 'Personnel'}
-          </Button>
-        ))}
-      </div>
-
-      {/* Navigation */}
-      <div className="px-4 py-2 border-b flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={view === 'week' ? goToPreviousWeek : goToPreviousMonth}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="outline" onClick={goToToday}>
-            Aujourd'hui
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={view === 'week' ? goToNextWeek : goToNextMonth}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <div className="font-semibold">
-          {view === 'list' && 'Tous les événements'}
-          {view === 'week' && `Semaine du ${currentDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`}
-          {view === 'month' && currentDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
-        </div>
-      </div>
-
-      {/* Calendar Views */}
-      <ScrollArea className="flex-1 p-4">
-        {view === 'month' && (
-          <MonthView
-            currentDate={currentDate}
-            events={unifiedEvents}
-            showWeekends={showWeekends}
-            compactMode={compactMode}
-            onEventClick={setSelectedEvent}
-          />
         )}
-        {view === 'week' && (
-          <WeekView
-            currentDate={currentDate}
-            events={unifiedEvents}
-            compactMode={compactMode}
-            onEventClick={setSelectedEvent}
-          />
-        )}
-        {view === 'list' && (
-          <ListView
-            events={unifiedEvents}
-            onEventClick={setSelectedEvent}
-          />
-        )}
-      </ScrollArea>
 
-      {/* Event Details Dialog */}
-      {selectedEvent && (
-        <Dialog open={!!selectedEvent} onOpenChange={() => setSelectedEvent(null)}>
-          <DialogContent className="max-w-md">
-            <EventDetailsDialog
-              event={selectedEvent}
-              onClose={() => setSelectedEvent(null)}
-              onDelete={() => {
-                // Handle delete
-                setSelectedEvent(null);
-                loadAllData();
-              }}
+        <div className="h-full p-4 overflow-y-auto">
+          {view === 'month' && (
+            <MonthView 
+              date={currentDate} 
+              events={filteredEvents} 
+              showWeekends={showWeekends} 
+              compact={compactMode}
+              onSelectEvent={setSelectedEvent}
+              onSelectDay={setSelectedDay}
             />
-          </DialogContent>
-        </Dialog>
+          )}
+          {view === 'week' && (
+            <WeekView 
+              date={currentDate} 
+              events={filteredEvents} 
+              onSelectEvent={setSelectedEvent}
+            />
+          )}
+          {view === 'list' && (
+            <ListView 
+              events={filteredEvents} 
+              onSelectEvent={setSelectedEvent}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* --- DIALOGS --- */}
+      
+      {/* 1. Paramètres */}
+      <Dialog open={showSettings} onOpenChange={setShowSettings}>
+        <DialogContent className="sm:max-w-[320px]">
+          <DialogHeader><DialogTitle>Affichage</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Sources</Label>
+              {Object.entries(enabledSources).map(([source, enabled]) => (
+                <div key={source} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm capitalize">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: sourceColors[source as keyof typeof sourceColors] }} />
+                    {source}
+                  </div>
+                  <Switch checked={enabled} onCheckedChange={(c) => setEnabledSources(p => ({...p, [source]: c}))} />
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-between border-t pt-4">
+              <Label>Week-ends</Label>
+              <Switch checked={showWeekends} onCheckedChange={setShowWeekends} />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label>Mode Compact</Label>
+              <Switch checked={compactMode} onCheckedChange={setCompactMode} />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 2. Ajout Rapide */}
+      <AddEventDialog open={isAddOpen} onOpenChange={setIsAddOpen} onSave={loadData} />
+      
+      {/* 3. Détails Événement */}
+      {selectedEvent && (
+        <EventDetailsDialog 
+          event={selectedEvent} 
+          onClose={() => setSelectedEvent(null)} 
+          onDelete={() => handleDeleteEvent(selectedEvent.id)} 
+        />
       )}
+
+      {/* 4. Détails JOURNÉE (Le remède aux "50 trucs") */}
+      {selectedDay && (
+        <DayDetailsDialog 
+          date={selectedDay}
+          events={filteredEvents.filter(e => e.date.toDateString() === selectedDay.toDateString())}
+          onClose={() => setSelectedDay(null)}
+          onSelectEvent={(e) => { setSelectedEvent(e); setSelectedDay(null); }}
+        />
+      )}
+
     </Card>
   );
 }
 
-// ============= COMPOSANTS AUXILIAIRES =============
+// =======================
+// VUE MOIS (Optimisée)
+// =======================
+function MonthView({ date, events, showWeekends, compact, onSelectEvent, onSelectDay }: any) {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const firstDay = new Date(year, month, 1).getDay(); 
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const startOffset = (firstDay === 0 ? 6 : firstDay - 1); // Lun=0
+  const totalSlots = startOffset + daysInMonth;
+  const rows = Math.ceil(totalSlots / 7);
 
-/**
- * Vue Mois - Grille de calendrier classique
- */
-function MonthView({
-  currentDate,
-  events,
-  showWeekends,
-  compactMode,
-  onEventClick,
-}: {
-  currentDate: Date;
-  events: UnifiedEvent[];
-  showWeekends: boolean;
-  compactMode: boolean;
-  onEventClick: (event: UnifiedEvent) => void;
-}) {
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
+  const days = Array.from({ length: rows * 7 }, (_, i) => {
+    const dayNum = i - startOffset + 1;
+    if (dayNum <= 0 || dayNum > daysInMonth) return null;
+    return new Date(year, month, dayNum);
+  });
 
-  // Calculer les jours du mois
-  const firstDayOfMonth = new Date(year, month, 1);
-  const lastDayOfMonth = new Date(year, month + 1, 0);
-  const daysInMonth = lastDayOfMonth.getDate();
-  const startDayOfWeek = firstDayOfMonth.getDay(); // 0 = dimanche
-
-  // Créer la grille
-  const days: (Date | null)[] = [];
-  
-  // Jours vides avant le 1er du mois
-  for (let i = 0; i < startDayOfWeek; i++) {
-    days.push(null);
-  }
-  
-  // Jours du mois
-  for (let i = 1; i <= daysInMonth; i++) {
-    days.push(new Date(year, month, i));
-  }
-
-  const weekDays = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-  const filteredWeekDays = showWeekends ? weekDays : weekDays.slice(1, 6);
+  const weekDays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
   return (
-    <div className="space-y-2">
-      {/* En-têtes des jours */}
-      <div className={`grid ${showWeekends ? 'grid-cols-7' : 'grid-cols-5'} gap-2`}>
-        {filteredWeekDays.map(day => (
-          <div key={day} className="text-center text-sm font-semibold text-muted-foreground">
-            {day}
-          </div>
-        ))}
+    <div className="flex flex-col h-full min-h-[600px]">
+      <div className="grid grid-cols-7 mb-2">
+        {weekDays.map((d, i) => {
+          if (!showWeekends && i > 4) return null;
+          return <div key={d} className="text-center text-xs font-bold text-muted-foreground uppercase">{d}</div>
+        })}
       </div>
+      
+      <div className={cn("grid gap-2 flex-1 auto-rows-fr", showWeekends ? "grid-cols-7" : "grid-cols-5")}>
+        {days.map((day, i) => {
+          const dayOfWeek = (i % 7);
+          if (!showWeekends && dayOfWeek > 4) return null;
 
-      {/* Grille des jours */}
-      <div className={`grid ${showWeekends ? 'grid-cols-7' : 'grid-cols-5'} gap-2`}>
-        {days.map((day, index) => {
-          if (!day) {
-            return <div key={`empty-${index}`} className="aspect-square" />;
-          }
+          if (!day) return <div key={i} className="bg-transparent" />;
 
-          // Filtrer les événements de ce jour
-          const dayEvents = events.filter(event => {
-            const eventDate = new Date(event.date);
-            return (
-              eventDate.getDate() === day.getDate() &&
-              eventDate.getMonth() === day.getMonth() &&
-              eventDate.getFullYear() === day.getFullYear()
-            );
-          });
-
-          const isToday = 
-            day.getDate() === new Date().getDate() &&
-            day.getMonth() === new Date().getMonth() &&
-            day.getFullYear() === new Date().getFullYear();
-
-          const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-
-          if (!showWeekends && isWeekend) return null;
+          const isToday = day.toDateString() === new Date().toDateString();
+          const dayEvents = events.filter((e: UnifiedEvent) => e.date.toDateString() === day.toDateString());
+          
+          // Limite d'affichage : 3 en normal, 2 en compact
+          const MAX_VISIBLE = compact ? 2 : 3; 
+          const hiddenCount = dayEvents.length - MAX_VISIBLE;
 
           return (
-            <div
-              key={day.toISOString()}
-              className={`
-                aspect-square border rounded-lg p-2 relative overflow-hidden
-                ${isToday ? 'border-primary border-2 bg-primary/5' : 'border-border'}
-                ${compactMode ? 'p-1' : 'p-2'}
-              `}
-            >
-              <div className={`text-sm ${isToday ? 'font-bold text-primary' : 'text-muted-foreground'}`}>
-                {day.getDate()}
-              </div>
-
-              {dayEvents.length > 0 && (
-                <div className="mt-1 space-y-1">
-                  {dayEvents.slice(0, compactMode ? 2 : 3).map(event => (
-                    <button
-                      key={event.id}
-                      onClick={() => onEventClick(event)}
-                      className="w-full text-left text-xs truncate px-1 py-0.5 rounded hover:opacity-80 transition-opacity"
-                      style={{ backgroundColor: event.color, color: 'white' }}
-                      title={event.title}
-                    >
-                      {event.title}
-                    </button>
-                  ))}
-                  {dayEvents.length > (compactMode ? 2 : 3) && (
-                    <div className="text-xs text-muted-foreground px-1">
-                      +{dayEvents.length - (compactMode ? 2 : 3)} plus
-                    </div>
-                  )}
-                </div>
+            <div 
+              key={i} 
+              className={cn(
+                "relative p-1.5 rounded-xl border bg-card hover:border-primary/50 transition-all flex flex-col group overflow-hidden cursor-pointer",
+                isToday ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "border-border/60"
               )}
+              onClick={() => onSelectDay(day)} // Ouvre le détail complet du jour
+            >
+              <div className="flex justify-between items-start mb-1">
+                <span className={cn(
+                  "text-sm font-bold w-7 h-7 flex items-center justify-center rounded-full transition-colors",
+                  isToday ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground group-hover:bg-muted"
+                )}>
+                  {day.getDate()}
+                </span>
+                {dayEvents.length > 0 && <span className="text-[10px] text-muted-foreground font-medium">{dayEvents.length}</span>}
+              </div>
+              
+              <div className="flex-1 flex flex-col gap-1 w-full">
+                {dayEvents.slice(0, MAX_VISIBLE).map((event: UnifiedEvent) => (
+                  <button
+                    key={event.id}
+                    onClick={(e) => { e.stopPropagation(); onSelectEvent(event); }}
+                    className="flex items-center w-full gap-1.5 px-1.5 py-0.5 rounded-md hover:brightness-95 transition-all text-left group/evt"
+                    style={{ backgroundColor: `${event.color}15`, borderLeft: `3px solid ${event.color}` }}
+                  >
+                    <span className="text-[10px] font-medium truncate flex-1 text-foreground/90 leading-tight">
+                      {event.title}
+                    </span>
+                  </button>
+                ))}
+                
+                {hiddenCount > 0 && (
+                  <div className="mt-auto w-full text-[10px] font-semibold text-center py-0.5 bg-muted/50 text-muted-foreground rounded">
+                    + {hiddenCount} autres...
+                  </div>
+                )}
+              </div>
             </div>
           );
         })}
@@ -637,94 +458,122 @@ function MonthView({
   );
 }
 
-/**
- * Vue Semaine - Timeline horaire
- */
-function WeekView({
-  currentDate,
-  events,
-  compactMode,
-  onEventClick,
-}: {
-  currentDate: Date;
-  events: UnifiedEvent[];
-  compactMode: boolean;
-  onEventClick: (event: UnifiedEvent) => void;
-}) {
-  // Obtenir les 7 jours de la semaine
-  const startOfWeek = new Date(currentDate);
-  startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+// =======================
+// DIALOGUE DÉTAIL JOUR (POUR VOIR TOUS LES ÉVÉNEMENTS)
+// =======================
+function DayDetailsDialog({ date, events, onClose, onSelectEvent }: any) {
+  return (
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[400px] h-[80vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogHeader className="p-4 border-b bg-muted/20">
+          <DialogTitle className="text-xl flex items-center gap-2">
+            <span className="text-4xl font-bold text-primary">{date.getDate()}</span>
+            <div className="flex flex-col">
+              <span className="text-sm font-medium uppercase text-muted-foreground">
+                {date.toLocaleDateString('fr-FR', { weekday: 'long' })}
+              </span>
+              <span className="text-sm text-foreground">
+                {date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+              </span>
+            </div>
+          </DialogTitle>
+        </DialogHeader>
+        
+        <ScrollArea className="flex-1 bg-background/50 p-4">
+          <div className="space-y-3">
+            {events.length === 0 ? (
+              <p className="text-center text-muted-foreground py-10">Rien de prévu ce jour-là.</p>
+            ) : (
+              events.map((event: UnifiedEvent) => (
+                <div 
+                  key={event.id}
+                  onClick={() => onSelectEvent(event)}
+                  className="flex items-start gap-3 p-3 rounded-xl border bg-card hover:bg-accent cursor-pointer transition-all shadow-sm hover:shadow-md group"
+                >
+                  <div className="mt-1 w-3 h-3 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: event.color }} />
+                  
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-sm leading-tight group-hover:text-primary transition-colors">{event.title}</h4>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <Badge variant="outline" className="text-[10px] h-5 px-1.5 border-0" style={{ backgroundColor: `${event.color}15`, color: event.color }}>
+                        {event.type}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {event.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    {event.description && <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{event.description}</p>}
+                  </div>
+                  
+                  {event.imageUrl && (
+                    <img src={event.imageUrl} className="w-12 h-16 object-cover rounded-md shadow-sm" alt="" />
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </ScrollArea>
+        
+        <div className="p-3 border-t bg-background flex justify-end">
+          <Button onClick={onClose} variant="outline">Fermer</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// =======================
+// VUE SEMAINE
+// =======================
+function WeekView({ date, events, onSelectEvent }: any) {
+  const startOfWeek = new Date(date);
+  const day = startOfWeek.getDay();
+  const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1); 
+  startOfWeek.setDate(diff);
 
   const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const day = new Date(startOfWeek);
-    day.setDate(startOfWeek.getDate() + i);
-    return day;
+    const d = new Date(startOfWeek);
+    d.setDate(startOfWeek.getDate() + i);
+    return d;
   });
 
   return (
-    <div className="space-y-4">
-      {weekDays.map(day => {
-        const dayEvents = events.filter(event => {
-          const eventDate = new Date(event.date);
-          return (
-            eventDate.getDate() === day.getDate() &&
-            eventDate.getMonth() === day.getMonth() &&
-            eventDate.getFullYear() === day.getFullYear()
-          );
-        });
-
-        const isToday = 
-          day.getDate() === new Date().getDate() &&
-          day.getMonth() === new Date().getMonth() &&
-          day.getFullYear() === new Date().getFullYear();
-
+    <div className="grid grid-cols-7 gap-3 h-full min-h-[400px]">
+      {weekDays.map((day) => {
+        const isToday = day.toDateString() === new Date().toDateString();
+        const dayEvents = events.filter((e: UnifiedEvent) => e.date.toDateString() === day.toDateString());
+        
         return (
-          <div key={day.toISOString()} className="border rounded-lg p-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className={`font-semibold ${isToday ? 'text-primary' : ''}`}>
-                {day.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+          <div key={day.toISOString()} className={cn(
+            "flex flex-col rounded-xl border bg-card/40 overflow-hidden",
+            isToday && "ring-2 ring-primary/20 border-primary"
+          )}>
+            <div className={cn("text-center py-2 border-b bg-muted/30", isToday && "bg-primary/10")}>
+              <div className="text-[10px] font-bold uppercase text-muted-foreground mb-0.5">{day.toLocaleDateString('fr-FR', { weekday: 'short' })}</div>
+              <div className={cn(
+                "text-lg font-bold w-8 h-8 flex items-center justify-center rounded-full mx-auto",
+                isToday ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground"
+              )}>
+                {day.getDate()}
               </div>
-              <Badge variant="outline">{dayEvents.length}</Badge>
             </div>
-
-            {dayEvents.length > 0 ? (
-              <div className="space-y-2">
-                {dayEvents.map(event => (
-                  <button
-                    key={event.id}
-                    onClick={() => onEventClick(event)}
-                    className="w-full text-left p-2 rounded-lg border hover:bg-accent transition-colors flex items-center gap-3"
-                  >
-                    {event.imageUrl && !compactMode && (
-                      <img
-                        src={event.imageUrl}
-                        alt={event.title}
-                        className="w-12 h-16 object-cover rounded"
-                      />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{event.title}</div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge
-                          variant="secondary"
-                          className="text-xs"
-                          style={{ backgroundColor: event.color, color: 'white' }}
-                        >
-                          {event.type}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {event.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                Aucun événement
-              </p>
-            )}
+            
+            <div className="flex-1 p-1.5 space-y-1.5 overflow-y-auto custom-scrollbar">
+              {dayEvents.map((event: UnifiedEvent) => (
+                <button
+                  key={event.id}
+                  onClick={() => onSelectEvent(event)}
+                  className="w-full text-left p-2 rounded-lg bg-card border text-xs hover:border-primary/50 transition-all shadow-sm group relative overflow-hidden"
+                >
+                  <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: event.color }} />
+                  <div className="pl-2 font-medium truncate text-foreground group-hover:text-primary">{event.title}</div>
+                  <div className="pl-2 text-[9px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                    {event.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         );
       })}
@@ -732,350 +581,194 @@ function WeekView({
   );
 }
 
-/**
- * Vue Liste - Tous les événements dans l'ordre chronologique
- */
-function ListView({
-  events,
-  onEventClick,
-}: {
-  events: UnifiedEvent[];
-  onEventClick: (event: UnifiedEvent) => void;
-}) {
-  // Grouper par date
-  const eventsByDate = events.reduce((acc, event) => {
-    const dateKey = event.date.toLocaleDateString('fr-FR');
-    if (!acc[dateKey]) {
-      acc[dateKey] = [];
-    }
-    acc[dateKey].push(event);
-    return acc;
-  }, {} as Record<string, UnifiedEvent[]>);
+// =======================
+// VUE LISTE
+// =======================
+function ListView({ events, onSelectEvent }: any) {
+  const sorted = [...events].sort((a: any, b: any) => a.date - b.date);
+  
+  if (sorted.length === 0) return <div className="text-center text-muted-foreground py-10 text-sm">Aucun événement à venir</div>;
 
   return (
-    <div className="space-y-4">
-      {Object.entries(eventsByDate).map(([dateKey, dayEvents]) => (
-        <div key={dateKey} className="space-y-2">
-          <div className="font-semibold text-sm text-muted-foreground sticky top-0 bg-background py-1">
-            {dateKey} ({dayEvents.length})
+    <div className="space-y-3 max-w-3xl mx-auto">
+      {sorted.map((event: UnifiedEvent) => (
+        <div 
+          key={event.id} 
+          onClick={() => onSelectEvent(event)}
+          className="flex items-center gap-4 p-3 rounded-xl border bg-card hover:bg-accent/50 cursor-pointer transition-all hover:shadow-md group"
+        >
+          {/* Date Box */}
+          <div className="flex flex-col items-center justify-center w-14 h-14 rounded-xl bg-muted/40 border shrink-0">
+            <span className="text-[10px] text-muted-foreground uppercase font-bold">{event.date.toLocaleDateString('fr-FR', { month: 'short' })}</span>
+            <span className="text-xl font-bold leading-none text-foreground">{event.date.getDate()}</span>
           </div>
-          <div className="space-y-2">
-            {dayEvents.map(event => (
-              <button
-                key={event.id}
-                onClick={() => onEventClick(event)}
-                className="w-full text-left p-3 rounded-lg border hover:bg-accent transition-colors flex items-center gap-3"
-              >
-                {event.imageUrl && (
-                  <img
-                    src={event.imageUrl}
-                    alt={event.title}
-                    className="w-16 h-20 object-cover rounded"
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium line-clamp-2">{event.title}</div>
-                  {event.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
-                      {event.description}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <Badge
-                      variant="secondary"
-                      style={{ backgroundColor: event.color, color: 'white' }}
-                    >
-                      {event.type}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {event.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                    {event.metadata?.score && (
-                      <span className="text-xs text-yellow-500 flex items-center gap-1">
-                        <Star className="h-3 w-3 fill-current" />
-                        {event.metadata.score / 10}/10
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </button>
-            ))}
+
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <Badge variant="outline" className="text-[9px] h-4 px-1.5 py-0 border-0" style={{ backgroundColor: `${event.color}15`, color: event.color }}>
+                {event.type}
+              </Badge>
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {event.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+            <h4 className="font-semibold text-base truncate group-hover:text-primary transition-colors">{event.title}</h4>
+            {event.description && <p className="text-xs text-muted-foreground truncate opacity-70">{event.description}</p>}
           </div>
+
+          {/* Image */}
+          {event.imageUrl && (
+            <img src={event.imageUrl} alt="" className="w-12 h-16 object-cover rounded-lg shadow-sm group-hover:scale-105 transition-transform" />
+          )}
         </div>
       ))}
-      {Object.keys(eventsByDate).length === 0 && (
-        <p className="text-center text-muted-foreground py-8">
-          Aucun événement à afficher
-        </p>
-      )}
     </div>
   );
 }
 
-/**
- * Dialog pour ajouter un événement
- */
-function AddEventDialog({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
+// =======================
+// DIALOGUES DIVERS
+// =======================
+
+function AddEventDialog({ open, onOpenChange, onSave }: any) {
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
-  const [color, setColor] = useState('#f59e0b');
-  const [allDay, setAllDay] = useState(false);
+  const [desc, setDesc] = useState('');
   const [saving, setSaving] = useState(false);
-
+  
   const handleSubmit = async () => {
     if (!title || !date) return;
-
     setSaving(true);
     try {
       const eventDate = new Date(date + (time ? `T${time}` : 'T00:00'));
-      
       await createEvent({
         title,
-        description: description || null,
+        description: desc,
         startDate: eventDate,
         endDate: null,
-        allDay,
         type: 'personal',
-        color,
+        color: DEFAULT_COLORS.personal,
+        allDay: !time,
         location: null,
         url: null,
         metadata: null,
         recurring: 'none',
         notifyBefore: null,
-        completed: false,
+        completed: false
       });
-
       onSave();
-      onClose();
-    } catch (error) {
-      console.error('Error creating event:', error);
+      onOpenChange(false);
+      setTitle(''); setDesc(''); setDate(''); setTime('');
+    } catch (e) {
+      console.error(e);
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <>
-      <DialogHeader>
-        <DialogTitle>Ajouter un événement</DialogTitle>
-      </DialogHeader>
-      <div className="space-y-4 py-4">
-        <div>
-          <Label>Titre *</Label>
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Titre de l'événement"
-          />
-        </div>
-
-        <div>
-          <Label>Description</Label>
-          <Textarea
-            value={description}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
-            placeholder="Description (optionnel)"
-            rows={3}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label>Date *</Label>
-            <Input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle>Nouvel événement</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label>Titre</Label>
+            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Réunion" />
           </div>
-          <div>
-            <Label>Heure</Label>
-            <Input
-              type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              disabled={allDay}
-            />
+          <div className="space-y-1.5">
+            <Label>Description</Label>
+            <Textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Détails..." rows={2} />
           </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Switch checked={allDay} onCheckedChange={setAllDay} />
-          <Label>Toute la journée</Label>
-        </div>
-
-        <div>
-          <Label>Couleur</Label>
-          <div className="flex gap-2 mt-2">
-            {['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'].map(c => (
-              <button
-                key={c}
-                className={`w-8 h-8 rounded-full border-2 ${color === c ? 'border-primary' : 'border-transparent'}`}
-                style={{ backgroundColor: c }}
-                onClick={() => setColor(c)}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2 pt-4">
-          <Button variant="outline" onClick={onClose}>
-            Annuler
-          </Button>
-          <Button onClick={handleSubmit} disabled={!title || !date || saving}>
-            {saving ? 'Enregistrement...' : 'Créer'}
-          </Button>
-        </div>
-      </div>
-    </>
-  );
-}
-
-/**
- * Dialog de paramètres du calendrier
- */
-function CalendarSettings({
-  enabledSources,
-  sourceColors,
-  showWeekends,
-  compactMode,
-  onToggleSource,
-  onChangeColor,
-  onToggleWeekends,
-  onToggleCompact,
-}: any) {
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle>Paramètres du calendrier</DialogTitle>
-      </DialogHeader>
-      <div className="space-y-6 py-4">
-        <div>
-          <h4 className="font-medium mb-3">Sources de données</h4>
-          <div className="space-y-2">
-            {Object.entries(enabledSources).map(([source, enabled]) => (
-              <div key={source} className="flex items-center justify-between">
-                <Label className="capitalize">{source}</Label>
-                <Switch
-                  checked={enabled as boolean}
-                  onCheckedChange={() => onToggleSource(source)}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <h4 className="font-medium mb-3">Couleurs</h4>
-          <div className="space-y-2">
-            {Object.entries(sourceColors).map(([source, color]) => (
-              <div key={source} className="flex items-center justify-between">
-                <Label className="capitalize">{source}</Label>
-                <Input
-                  type="color"
-                  value={color as string}
-                  onChange={(e) => onChangeColor(source, e.target.value)}
-                  className="w-20 h-8"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <h4 className="font-medium mb-3">Affichage</h4>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Afficher les week-ends</Label>
-              <Switch checked={showWeekends} onCheckedChange={onToggleWeekends} />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Date</Label>
+              <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
             </div>
-            <div className="flex items-center justify-between">
-              <Label>Mode compact</Label>
-              <Switch checked={compactMode} onCheckedChange={onToggleCompact} />
+            <div className="space-y-1.5">
+              <Label>Heure</Label>
+              <Input type="time" value={time} onChange={e => setTime(e.target.value)} />
             </div>
           </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-/**
- * Dialog de détails d'un événement
- */
-function EventDetailsDialog({
-  event,
-  onClose,
-  onDelete,
-}: {
-  event: UnifiedEvent;
-  onClose: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle>{event.title}</DialogTitle>
-      </DialogHeader>
-      <div className="space-y-4 py-4">
-        {event.imageUrl && (
-          <img
-            src={event.imageUrl}
-            alt={event.title}
-            className="w-full h-48 object-cover rounded-lg"
-          />
-        )}
-
-        <div className="flex items-center gap-2">
-          <Badge
-            variant="secondary"
-            style={{ backgroundColor: event.color, color: 'white' }}
-          >
-            {event.type}
-          </Badge>
-          <span className="text-sm text-muted-foreground">
-            {event.date.toLocaleString('fr-FR', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </span>
-        </div>
-
-        {event.description && (
-          <p className="text-sm text-muted-foreground">{event.description}</p>
-        )}
-
-        {event.metadata?.score && (
-          <div className="flex items-center gap-2">
-            <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
-            <span className="text-sm font-medium">{event.metadata.score / 10}/10</span>
-          </div>
-        )}
-
-        {event.externalUrl && (
-          <Button asChild variant="outline" className="w-full">
-            <a href={event.externalUrl} target="_blank" rel="noopener noreferrer">
-              Voir plus
-            </a>
-          </Button>
-        )}
-
-        {event.type === 'personal' && (
-          <div className="flex gap-2 pt-4">
-            <Button variant="outline" className="flex-1" onClick={onDelete}>
-              <Trash2 className="h-4 w-4 mr-2" />
-              Supprimer
+          <div className="flex justify-end pt-2">
+            <Button onClick={handleSubmit} disabled={!title || !date || saving}>
+              {saving ? '...' : 'Créer'}
             </Button>
           </div>
-        )}
-      </div>
-    </>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EventDetailsDialog({ event, onClose, onDelete }: any) {
+  return (
+    <Dialog open={!!event} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden gap-0">
+        
+        {/* Header Image */}
+        <div className="h-32 relative flex items-end p-4 overflow-hidden bg-muted">
+          {event.imageUrl ? (
+            <>
+              <div className="absolute inset-0 bg-cover bg-center blur-md opacity-40 scale-110" style={{ backgroundImage: `url(${event.imageUrl})` }} />
+              <img src={event.imageUrl} alt={event.title} className="absolute right-4 bottom-[-20px] w-20 h-28 object-cover rounded-lg shadow-xl z-20 border-2 border-background" />
+            </>
+          ) : (
+            <div className="absolute inset-0 opacity-20" style={{ backgroundColor: event.color }} />
+          )}
+          
+          <div className="flex flex-col z-10 w-3/4">
+            <Badge variant="secondary" className="w-fit mb-1.5 uppercase tracking-wide text-[10px]" style={{ color: event.color, backgroundColor: 'white' }}>
+              {event.type}
+            </Badge>
+            <h2 className="text-lg font-bold leading-tight line-clamp-2">{event.title}</h2>
+          </div>
+        </div>
+
+        <div className="p-5 pt-6 space-y-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/30 p-2 rounded-lg">
+            <Clock className="h-4 w-4 text-primary" />
+            <span className="capitalize font-medium text-foreground">
+              {event.date.toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+
+          {event.description ? (
+            <div className="text-sm leading-relaxed text-foreground/80">
+              {event.description}
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground/50 italic flex items-center gap-2">
+              <MapPin className="h-3 w-3" /> Pas de description
+            </div>
+          )}
+
+          {event.metadata?.rating && (
+            <div className="flex items-center gap-2 text-yellow-500 font-bold text-sm">
+              <Star className="h-4 w-4 fill-current" /> {event.metadata.rating}/10
+            </div>
+          )}
+
+          <div className="pt-4 flex gap-2 border-t mt-4">
+            {event.externalUrl && (
+              <Button asChild variant="default" className="flex-1">
+                <a href={event.externalUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink className="mr-2 h-4 w-4" /> Voir détails
+                </a>
+              </Button>
+            )}
+            {event.type === 'personal' && (
+              <Button variant="destructive" className="flex-1" onClick={onDelete}>
+                <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+              </Button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

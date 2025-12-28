@@ -68,7 +68,7 @@ function DashboardViewInner({
   const [saving, setSaving] = useState(false);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [responsiveCols, setResponsiveCols] = useState(12);
-  const [currentTime, setCurrentTime] = useState<Date | null>(null); // Null initialement pour éviter hydration mismatch
+  const [currentTime, setCurrentTime] = useState<Date | null>(null); 
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
   // --- EFFETS ---
@@ -87,7 +87,6 @@ function DashboardViewInner({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         cancelDrag();
-        // Nettoyage visuel forcé
         document.querySelectorAll('[data-cross-grid-drag="true"]').forEach((el) => {
           if (el instanceof HTMLElement) {
             delete el.dataset.crossGridDrag;
@@ -123,14 +122,14 @@ function DashboardViewInner({
       setResponsiveCols(cols);
     };
 
-    handleResize(); // Appel initial
+    handleResize(); 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [dashboard?.format]);
 
   // 4. Horloge
   useEffect(() => {
-    setCurrentTime(new Date()); // Init côté client
+    setCurrentTime(new Date()); 
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
@@ -147,11 +146,10 @@ function DashboardViewInner({
     });
   }, []);
 
-  // Algorithme de recherche de place libre (Spirale optimisée)
+  // Algorithme de recherche de place libre
   const findFreePosition = useCallback((startX: number, startY: number, w: number = 2, h: number = 2) => {
     const occupied = new Set<string>();
     
-    // Mapper l'occupation actuelle (Catégories + Widgets de premier niveau)
     [...categories, ...widgets.filter(w => !w.categoryId)].forEach((item) => {
       for (let y = item.y; y < item.y + item.h; y++) {
         for (let x = item.x; x < item.x + item.w; x++) {
@@ -161,7 +159,7 @@ function DashboardViewInner({
     });
 
     let radius = 0;
-    while (radius < 50) { // Limite de sécurité
+    while (radius < 50) { 
       for (let dy = -radius; dy <= radius; dy++) {
         for (let dx = -radius; dx <= radius; dx++) {
           const x = Math.max(0, Math.min(responsiveCols - w, startX + dx));
@@ -184,24 +182,39 @@ function DashboardViewInner({
       radius++;
     }
     
-    // Fallback en bas de page
     const maxY = Math.max(0, ...[...categories, ...widgets].map(i => i.y + i.h));
     return { x: 0, y: maxY };
   }, [categories, widgets, responsiveCols]);
 
 
-  // Gestion du Layout Principal (Catégories + Widgets orphelins)
-  const categoryLayout = categories.map((cat) => ({
-    i: `cat-${cat.id}`,
-    x: cat.x,
-    y: cat.y,
-    w: cat.w || 12,
-    h: collapsedCategories.has(cat.id) ? 1 : (cat.h || 4),
-    static: !isEditMode,
-    minW: 3,
-    maxW: responsiveCols,
-    minH: 1,
-  }));
+  // --- CALCUL DYNAMIQUE DU LAYOUT ---
+  const categoryLayout = categories.map((cat) => {
+    const isCollapsed = collapsedCategories.has(cat.id);
+
+    // 1. Calculer la hauteur réelle nécessaire pour le contenu de la catégorie
+    const catWidgets = widgets.filter(w => w.categoryId === cat.id);
+    
+    // On cherche le widget le plus bas dans cette catégorie (Y + Hauteur)
+    const maxWidgetY = Math.max(0, ...catWidgets.map(w => (w.categoryY || 0) + w.h));
+    
+    // On ajoute +1 pour le header. Minimum 4 lignes pour l'esthétique.
+    const expandedHeight = Math.max(4, maxWidgetY + 1);
+
+    // 2. Si plié = hauteur 1. Si déplié = hauteur calculée.
+    const currentHeight = isCollapsed ? 1 : expandedHeight;
+
+    return {
+      i: `cat-${cat.id}`,
+      x: cat.x,
+      y: cat.y,
+      w: cat.w || 12,
+      h: currentHeight, // C'est ici que la magie opère
+      static: !isEditMode,
+      minW: 3,
+      maxW: responsiveCols,
+      minH: 1,
+    };
+  });
 
   const uncategorizedWidgets = widgets.filter((w) => !w.categoryId);
   const widgetLayout = uncategorizedWidgets.map((w) => ({
@@ -220,15 +233,14 @@ function DashboardViewInner({
   const handleLayoutChange = (newLayout: GridItem[]) => {
     if (!isEditMode) return;
 
-    // Mise à jour des catégories
     const updatedCats = categories.map((cat) => {
       const item = newLayout.find((l) => l.i === `cat-${cat.id}`);
-      return item ? { ...cat, x: item.x, y: item.y, w: item.w, h: item.h } : cat;
+      // On ne met à jour que X et Y, la hauteur est gérée dynamiquement
+      return item ? { ...cat, x: item.x, y: item.y, w: item.w } : cat;
     });
 
-    // Mise à jour des widgets orphelins
     const updatedWidgets = widgets.map((w) => {
-      if (w.categoryId) return w; // On ne touche pas aux widgets dans les catégories
+      if (w.categoryId) return w; 
       const item = newLayout.find((l) => l.i === `widget-${w.id}`);
       return item ? { ...w, x: item.x, y: item.y, w: item.w, h: item.h } : w;
     });
@@ -242,7 +254,6 @@ function DashboardViewInner({
   const saveLayout = async () => {
     setSaving(true);
     try {
-      // Sauvegarde des widgets (position globale OU relative à la catégorie)
       const widgetUpdates = widgets.map((w) => ({
         id: w.id,
         x: w.x, y: w.y, w: w.w, h: w.h,
@@ -252,7 +263,6 @@ function DashboardViewInner({
       }));
       await updateWidgetPositions(widgetUpdates);
 
-      // Sauvegarde des catégories
       const categoryUpdates = categories.map((c) => ({
         id: c.id, x: c.x, y: c.y, w: c.w, h: c.h,
       }));
@@ -267,7 +277,6 @@ function DashboardViewInner({
     }
   };
 
-  // Drag & Drop Cross-Grid Handlers
   const handleCategoryWidgetLayoutChange = useCallback((categoryId: string, layouts: any[]) => {
     setWidgets(prev => prev.map(w => {
       if (w.categoryId !== categoryId) return w;
@@ -282,7 +291,7 @@ function DashboardViewInner({
   const handleWidgetDropIn = useCallback((widgetId: string, categoryId: string) => {
     setWidgets(prev => prev.map(w => {
       if (w.id !== widgetId) return w;
-      return { ...w, categoryId, categoryX: 0, categoryY: 0 }; // Position par défaut (sera ajustée par le layout auto)
+      return { ...w, categoryId, categoryX: 0, categoryY: 0 }; 
     }));
   }, []);
 
@@ -298,7 +307,6 @@ function DashboardViewInner({
     });
   }, [findFreePosition]);
 
-  // CRUD Operations
   const handleDeleteWidget = async (widgetId: string) => {
     if (await confirm("Supprimer ce widget ?")) {
       try {
@@ -318,8 +326,6 @@ function DashboardViewInner({
     }
   };
 
-  // --- RENDER HELPERS ---
-
   const formatDate = () => {
     if (!currentTime) return "...";
     return currentTime.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -333,7 +339,6 @@ function DashboardViewInner({
   return (
     <div className="h-[calc(100vh-64px)] flex flex-col overflow-hidden relative bg-background">
       
-      {/* Ghost Widget (Drag & Drop) */}
       {isDragging && draggedWidget && (
         <div 
           className="fixed pointer-events-none z-[9999] animate-in fade-in duration-150"
@@ -346,11 +351,8 @@ function DashboardViewInner({
         </div>
       )}
       
-      {/* HEADER */}
       {isOwner && (
         <div className="border-b bg-card/50 backdrop-blur-md px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-4 z-10 shrink-0">
-          
-          {/* Titre & Stats */}
           <div className="flex items-center gap-4 w-full sm:w-auto">
             <div className="h-10 w-1 bg-primary rounded-full hidden sm:block" />
             <div>
@@ -362,13 +364,11 @@ function DashboardViewInner({
             </div>
           </div>
 
-          {/* Horloge Centrale */}
           <div className="hidden lg:flex flex-col items-center justify-center absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2">
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-0.5">{formatDate()}</div>
             <div className="text-2xl font-bold font-mono leading-none tracking-tight text-foreground/80">{formatTime()}</div>
           </div>
 
-          {/* Boutons Actions */}
           <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
             <Button size="sm" variant="outline" onClick={() => setShowShareDialog(true)}>Partager</Button>
             
@@ -393,10 +393,7 @@ function DashboardViewInner({
         </div>
       )}
 
-      {/* ZONE DE CONTENU (GRILLE) */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6" id="dashboard-scroll-area">
-        
-        {/* Guide Rapide en Mode Édition */}
         {isEditMode && (
           <div className="mb-6 p-4 rounded-xl border border-primary/20 bg-primary/5 flex items-start gap-3 animate-in slide-in-from-top-2">
             <div className="p-2 bg-primary/10 rounded-full text-primary">💡</div>
@@ -412,7 +409,6 @@ function DashboardViewInner({
           </div>
         )}
 
-        {/* Grille Vide ? */}
         {mainLayout.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center opacity-60">
             <div className="p-4 bg-muted rounded-full mb-4"><Layers className="w-8 h-8" /></div>
@@ -421,10 +417,9 @@ function DashboardViewInner({
           </div>
         )}
 
-        {/* GRILLE PRINCIPALE */}
         {mainLayout.length > 0 && (
           <CustomGridLayout
-            className="layout main-grid pb-20" // Padding bottom pour le scroll
+            className="layout main-grid pb-20" 
             layout={mainLayout}
             cols={responsiveCols}
             rowHeight={80}
@@ -432,12 +427,11 @@ function DashboardViewInner({
             isDraggable={isEditMode}
             isResizable={isEditMode}
             compactType="vertical"
-            preventCollision={true} // Important pour la stabilité
+            preventCollision={true} 
             onLayoutChange={handleLayoutChange}
             margin={[16, 16]}
             containerPadding={[0, 0]}
           >
-            {/* 1. CATÉGORIES */}
             {categories.map((category) => {
               const catWidgets = widgets.filter(w => w.categoryId === category.id);
               return (
@@ -459,7 +453,6 @@ function DashboardViewInner({
               );
             })}
 
-            {/* 2. WIDGETS ORPHELINS */}
             {uncategorizedWidgets.map((widget) => (
               <div key={`widget-${widget.id}`} className="h-full w-full">
                 <WidgetComponent
@@ -475,7 +468,6 @@ function DashboardViewInner({
         )}
       </div>
 
-      {/* DIALOGUES */}
       <AddWidgetDialogModern
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
@@ -486,7 +478,7 @@ function DashboardViewInner({
         open={showAddCategoryDialog}
         onOpenChange={setShowAddCategoryDialog}
         dashboardId={dashboard.id}
-        onCategoryAdded={() => window.location.reload()} // Reload simple pour maj les catégories
+        onCategoryAdded={() => window.location.reload()} 
       />
       <EditWidgetDialog
         widget={editingWidget}
@@ -497,11 +489,9 @@ function DashboardViewInner({
         onWidgetUpdated={(id, newCatId, oldCatId, opts) => {
           setWidgets(prev => prev.map(w => {
             if (w.id !== id) return w;
-            // Mise à jour locale optimiste
             const updated = { ...w, options: opts || w.options };
             if (newCatId !== undefined && newCatId !== oldCatId) {
               updated.categoryId = newCatId;
-              // Reset position si changement de conteneur
               updated.x = 0; updated.y = 0; updated.categoryX = 0; updated.categoryY = 0;
             }
             return updated;
