@@ -30,6 +30,12 @@ export function middleware(request: NextRequest) {
     socketConnectSources += ' http://localhost:4001 ws://localhost:4001 wss://localhost:4001';
   }
 
+  // Also allow localhost socket origins just in case the client attempts to connect
+  // to a local socket server (some deployments or docker setups use localhost).
+  if (!socketConnectSources.includes('localhost')) {
+    socketConnectSources += ' http://localhost:4001 ws://localhost:4001 wss://localhost:4001';
+  }
+
   // Content Security Policy
   const cspHeader = `
     default-src 'self';
