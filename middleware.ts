@@ -45,7 +45,7 @@ export function middleware(request: NextRequest) {
     style-src 'self' 'unsafe-inline';
     img-src 'self' blob: data: https://openweathermap.org https://s4.anilist.co https://media.kitsu.io https://image.tmdb.org;
     font-src 'self';
-    connect-src 'self' https://openweathermap.org https://graphql.anilist.co ${socketConnectSources};
+    connect-src 'self' https://openweathermap.org https://graphql.anilist.co ${socketConnectSources} http://localhost:4001 ws://localhost:4001 wss://localhost:4001 data: blob:;
     frame-src 'self' https://www.youtube.com https://player.vimeo.com https://codesandbox.io;
     object-src 'none';
     base-uri 'self';
