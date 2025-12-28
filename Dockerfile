@@ -29,6 +29,7 @@ FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
+RUN apk add --no-cache curl
 ENV NEXT_TELEMETRY_DISABLED 1
 
 RUN addgroup --system --gid 1001 nodejs
@@ -51,7 +52,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/scripts/docker-entrypoint.sh ./sc
 RUN chmod +x ./scripts/docker-entrypoint.sh || true
 
 # Install drizzle-kit, tsx and dotenv for database operations
-RUN npm install drizzle-kit tsx dotenv bcryptjs --production=false
+RUN npm install drizzle-kit tsx dotenv bcryptjs --omit=dev
 
 USER nextjs
 
