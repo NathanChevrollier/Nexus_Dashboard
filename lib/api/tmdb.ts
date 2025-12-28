@@ -4,7 +4,8 @@
  */
 
 const TMDB_API_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY || 'demo_key';
-const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+// Use server-side proxy for client requests to avoid CSP issues
+const TMDB_PROXY_BASE = '/api/proxy/tmdb/3';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
 export interface TMDbMovie {
@@ -114,7 +115,7 @@ const TV_GENRES: Record<number, string> = {
 export async function getUpcomingMovies(page = 1): Promise<TMDbMovie[]> {
   try {
     const response = await fetch(
-      `${TMDB_BASE_URL}/movie/upcoming?api_key=${TMDB_API_KEY}&language=fr-FR&page=${page}&region=FR`,
+      `${TMDB_PROXY_BASE}/movie/upcoming?language=fr-FR&page=${page}&region=FR`,
       {
         method: 'GET',
         headers: {
@@ -143,7 +144,7 @@ export async function getUpcomingMovies(page = 1): Promise<TMDbMovie[]> {
 export async function getTrendingMovies(timeWindow: 'day' | 'week' = 'week'): Promise<TMDbMovie[]> {
   try {
     const response = await fetch(
-      `${TMDB_BASE_URL}/trending/movie/${timeWindow}?api_key=${TMDB_API_KEY}&language=fr-FR`,
+      `${TMDB_PROXY_BASE}/trending/movie/${timeWindow}?language=fr-FR`,
       {
         method: 'GET',
         headers: {
@@ -172,7 +173,7 @@ export async function getTrendingMovies(timeWindow: 'day' | 'week' = 'week'): Pr
 export async function getTVAiringToday(): Promise<TMDbTVShow[]> {
   try {
     const response = await fetch(
-      `${TMDB_BASE_URL}/tv/airing_today?api_key=${TMDB_API_KEY}&language=fr-FR&page=1`,
+      `${TMDB_PROXY_BASE}/tv/airing_today?language=fr-FR&page=1`,
       {
         method: 'GET',
         headers: {
@@ -201,7 +202,7 @@ export async function getTVAiringToday(): Promise<TMDbTVShow[]> {
 export async function getTVOnTheAir(): Promise<TMDbTVShow[]> {
   try {
     const response = await fetch(
-      `${TMDB_BASE_URL}/tv/on_the_air?api_key=${TMDB_API_KEY}&language=fr-FR&page=1`,
+      `${TMDB_PROXY_BASE}/tv/on_the_air?language=fr-FR&page=1`,
       {
         method: 'GET',
         headers: {
@@ -230,7 +231,7 @@ export async function getTVOnTheAir(): Promise<TMDbTVShow[]> {
 export async function getTrendingTVShows(timeWindow: 'day' | 'week' = 'week'): Promise<TMDbTVShow[]> {
   try {
     const response = await fetch(
-      `${TMDB_BASE_URL}/trending/tv/${timeWindow}?api_key=${TMDB_API_KEY}&language=fr-FR`,
+      `${TMDB_PROXY_BASE}/trending/tv/${timeWindow}?language=fr-FR`,
       {
         method: 'GET',
         headers: {
@@ -259,7 +260,7 @@ export async function getTrendingTVShows(timeWindow: 'day' | 'week' = 'week'): P
 export async function getTVShowDetails(showId: number) {
   try {
     const response = await fetch(
-      `${TMDB_BASE_URL}/tv/${showId}?api_key=${TMDB_API_KEY}&language=fr-FR`
+      `${TMDB_PROXY_BASE}/tv/${showId}?language=fr-FR`
     );
     
     if (!response.ok) throw new Error('Failed to fetch TV show details');
@@ -277,7 +278,7 @@ export async function getTVShowDetails(showId: number) {
 export async function getUpcomingEpisodes(showId: number, seasonNumber: number) {
   try {
     const response = await fetch(
-      `${TMDB_BASE_URL}/tv/${showId}/season/${seasonNumber}?api_key=${TMDB_API_KEY}&language=fr-FR`
+      `${TMDB_PROXY_BASE}/tv/${showId}/season/${seasonNumber}?language=fr-FR`
     );
     
     if (!response.ok) throw new Error('Failed to fetch episodes');
@@ -313,17 +314,21 @@ export function getTVGenres(genreIds: number[]): string[] {
  * Formate une date pour l'affichage
  */
 export function formatReleaseDate(dateString: string): string {
-  if (!dateString) return 'TBA';
-  
+  if (!dateString) return 'Date inconnue';
+
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'Date inconnue';
+
   const now = new Date();
-  const diffTime = date.getTime() - now.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
+  // Normalize to local midnight for day difference
+  const utc1 = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const utc2 = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round((utc2 - utc1) / (1000 * 60 * 60 * 24));
+
   if (diffDays === 0) return "Aujourd'hui";
   if (diffDays === 1) return 'Demain';
   if (diffDays > 0 && diffDays <= 7) return `Dans ${diffDays} jours`;
-  
+
   return date.toLocaleDateString('fr-FR', {
     day: 'numeric',
     month: 'long',

@@ -3,7 +3,8 @@
  * Documentation: https://anilist.gitbook.io/anilist-apiv2-docs/
  */
 
-const ANILIST_API_URL = 'https://graphql.anilist.co';
+// Use server-side proxy to avoid CSP/client-side direct calls
+const ANILIST_API_URL = '/api/proxy/anilist';
 
 export interface AnimeSchedule {
   id: number;
@@ -294,14 +295,16 @@ export function formatTimeUntilAiring(seconds: number): string {
  * Get day color for styling
  */
 export function getDayColor(dayName: string): string {
+  // Return a combined background + text class so consumers can apply both
   const colors: Record<string, string> = {
-    Monday: 'text-blue-500',
-    Tuesday: 'text-green-500',
-    Wednesday: 'text-yellow-500',
-    Thursday: 'text-purple-500',
-    Friday: 'text-pink-500',
-    Saturday: 'text-red-500',
-    Sunday: 'text-orange-500',
+    Monday: 'bg-blue-500/10 text-blue-500',
+    Tuesday: 'bg-green-500/10 text-green-500',
+    Wednesday: 'bg-yellow-500/10 text-yellow-500',
+    Thursday: 'bg-purple-500/10 text-purple-500',
+    Friday: 'bg-pink-500/10 text-pink-500',
+    Saturday: 'bg-red-500/10 text-red-500',
+    Sunday: 'bg-orange-500/10 text-orange-500',
   };
-  return colors[dayName] || 'text-gray-500';
+
+  return colors[dayName] || 'bg-gray-500/10 text-gray-500';
 }

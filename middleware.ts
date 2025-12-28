@@ -37,7 +37,7 @@ export function middleware(request: NextRequest) {
       process.env.NODE_ENV === 'production' ? '' : "'unsafe-eval'"
     };
     style-src 'self' 'unsafe-inline';
-    img-src 'self' blob: data: https://openweathermap.org https://s4.anilist.co https://media.kitsu.io;
+    img-src 'self' blob: data: https://openweathermap.org https://s4.anilist.co https://media.kitsu.io https://image.tmdb.org;
     font-src 'self';
     connect-src 'self' https://openweathermap.org https://graphql.anilist.co ${socketConnectSources};
     frame-src 'self' https://www.youtube.com https://player.vimeo.com https://codesandbox.io;

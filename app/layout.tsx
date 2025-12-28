@@ -97,9 +97,10 @@ export default async function RootLayout({
               })();
             `,
           }}
+          suppressHydrationWarning
         />
       </head>
-      <body className={inter.className}>
+      <body className={inter.className} suppressHydrationWarning={true}>
         <Providers>
           {children}
         </Providers>
