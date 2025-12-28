@@ -19,11 +19,21 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") return;
 
     let mounted = true;
-    const url = (process.env.NEXT_PUBLIC_SOCKET_SERVER_URL as string) || "http://localhost:4001";
+    const rawEnvUrl = (process.env.NEXT_PUBLIC_SOCKET_SERVER_URL as string) || "";
+    const enableSockets = (process.env.NEXT_PUBLIC_ENABLE_SOCKETS || "true").toLowerCase() !== "false";
 
-    // Simple guard: if the socket host is localhost and we're in production-like env
-    // don't aggressively auto-connect; wait for a manual connect or until a later retry.
-    const unsafeLocalHost = url.includes("localhost") || url.includes("127.0.0.1");
+    if (!enableSockets) return;
+
+    // Determine socket URL:
+    // - prefer explicit NEXT_PUBLIC_SOCKET_SERVER_URL when provided
+    // - otherwise default to same origin as the page (so we don't ship a hardcoded localhost)
+    const url = rawEnvUrl.trim()
+      ? rawEnvUrl.trim()
+      : (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.host}` : "");
+
+    // If the url points at localhost/127.0.0.1 in production, avoid aggressive autoConnect
+    const isProd = process.env.NODE_ENV === "production";
+    const unsafeLocalHost = isProd && (url.includes("localhost") || url.includes("127.0.0.1"));
 
     // Dynamically import socket.io-client so the server build doesn't try to resolve it
     (async () => {
@@ -31,6 +41,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         const mod = await import("socket.io-client");
         const io = (mod && (mod.io || mod.default || mod)) as any;
         if (!io) return;
+        if (!url) return;
         // If socket is local and server likely unavailable in production, disable autoConnect
         const socket = io(url, { autoConnect: !unsafeLocalHost });
         socketRef.current = socket;

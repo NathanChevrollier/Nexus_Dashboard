@@ -61,6 +61,12 @@ services:
       SOCKET_SERVER_URL: http://socket-server:4001
     networks:
       - nexus-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:4001/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
 volumes:
   mysql_data:
