@@ -86,42 +86,43 @@ export default async function SettingsPage() {
       {/* Contenu principal */}
       <div className="container mx-auto py-6 sm:py-8 px-4 sm:px-6 max-w-5xl">
         <Tabs defaultValue="appearance" className="mt-2">
-          <TabsList className="mb-6 bg-card/50 backdrop-blur-sm border border-border/50 p-1 grid grid-cols-2 sm:grid-cols-4 w-full gap-1">
+          <TabsList className="mb-6 bg-card/50 backdrop-blur-sm border border-border/50 p-1 w-full overflow-x-auto flex gap-2 snap-x snap-mandatory touch-pan-x sm:grid sm:grid-cols-4 sm:gap-1">
             <TabsTrigger 
               value="appearance" 
-              className="gap-1 sm:gap-2 text-xs sm:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-primary/80 data-[state=active]:text-primary-foreground"
+              className="min-w-[78px] sm:min-w-[110px] flex-shrink-0 px-2 sm:px-3 py-2 rounded-md flex items-center justify-center gap-1 sm:gap-2 text-[11px] sm:text-sm snap-center data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-primary/80 data-[state=active]:text-primary-foreground"
             >
-              <Palette className="h-3 sm:h-4 w-3 sm:w-4" />
+              <Palette className="h-4 sm:h-4 w-4 sm:w-4" />
               <span className="hidden sm:inline">Apparence</span>
             </TabsTrigger>
+
             <TabsTrigger 
               value="integrations"
-              className="gap-1 sm:gap-2 text-xs sm:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-primary/80 data-[state=active]:text-primary-foreground"
+              className="min-w-[78px] sm:min-w-[110px] flex-shrink-0 px-2 sm:px-3 py-2 rounded-md flex items-center justify-center gap-1 sm:gap-2 text-[11px] sm:text-sm snap-center data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-primary/80 data-[state=active]:text-primary-foreground"
             >
-              <Plug className="h-3 sm:h-4 w-3 sm:w-4" />
+              <Plug className="h-4 sm:h-4 w-4 sm:w-4" />
               <span className="hidden sm:inline">Intégrations</span>
             </TabsTrigger>
-            {session.user.role === "ADMIN" && (
-              <TabsTrigger 
-                value="users" 
-                className="gap-1 sm:gap-2 text-xs sm:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-primary/80 data-[state=active]:text-primary-foreground"
-              >
-                <Users className="h-3 sm:h-4 w-3 sm:w-4" />
-                <span className="hidden sm:inline">Utilisateurs</span>
-              </TabsTrigger>
-            )}
+
+            <TabsTrigger 
+              value="users" 
+              className="min-w-[78px] sm:min-w-[110px] flex-shrink-0 px-2 sm:px-3 py-2 rounded-md flex items-center justify-center gap-1 sm:gap-2 text-[11px] sm:text-sm snap-center data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-primary/80 data-[state=active]:text-primary-foreground"
+            >
+              <Users className="h-4 sm:h-4 w-4 sm:w-4" />
+              <span className="hidden sm:inline">Utilisateurs</span>
+            </TabsTrigger>
+
             <TabsTrigger 
               value="account"
-              className="gap-1 sm:gap-2 text-xs sm:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-primary/80 data-[state=active]:text-primary-foreground"
+              className="min-w-[78px] sm:min-w-[110px] flex-shrink-0 px-2 sm:px-3 py-2 rounded-md flex items-center justify-center gap-1 sm:gap-2 text-[11px] sm:text-sm snap-center data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-primary/80 data-[state=active]:text-primary-foreground"
             >
-              <SettingsIcon className="h-3 sm:h-4 w-3 sm:w-4" />
+              <SettingsIcon className="h-4 sm:h-4 w-4 sm:w-4" />
               <span className="hidden sm:inline">Compte</span>
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="appearance" className="space-y-6">
             <div className="rounded-xl border bg-card/50 backdrop-blur-sm shadow-lg overflow-hidden">
-              <ThemeSettingsEnhanced user={session.user} dashboardId={currentDashboard.id} />
+              <ThemeSettingsEnhanced user={{ role: session.user.role as any }} dashboardId={currentDashboard.id} />
             </div>
           </TabsContent>
 

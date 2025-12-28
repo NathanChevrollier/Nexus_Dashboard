@@ -13,6 +13,7 @@ export default function NewDashboardPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [isPublic, setIsPublic] = useState(false);
+  const [format, setFormat] = useState<'desktop'|'mobile'>('desktop');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [available, setAvailable] = useState<{ public: any[]; shared: any[] } | null>(null);
@@ -64,7 +65,7 @@ export default function NewDashboardPage() {
       const response = await fetch("/api/dashboards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, isPublic }),
+        body: JSON.stringify({ name, isPublic, format }),
       });
 
       const data = await response.json();
@@ -151,6 +152,20 @@ export default function NewDashboardPage() {
                   required
                   disabled={loading}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Format par défaut</Label>
+                <div className="flex gap-2">
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="format" value="desktop" checked={format === 'desktop'} onChange={() => setFormat('desktop')} />
+                    <span className="text-sm">Desktop (large)</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="format" value="mobile" checked={format === 'mobile'} onChange={() => setFormat('mobile')} />
+                    <span className="text-sm">Mobile (narrow)</span>
+                  </label>
+                </div>
               </div>
 
               <div className="flex items-center space-x-2">

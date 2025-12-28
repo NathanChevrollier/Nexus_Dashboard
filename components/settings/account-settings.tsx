@@ -133,11 +133,10 @@ export function AccountSettings() {
               <div className="text-sm text-muted-foreground">E-mail</div>
               <div className="font-medium">{session?.user?.email || "-"}</div>
             </div>
-            <div className="flex gap-2 mt-4">
-                <Button onClick={handleGoInvitations}>Invitations</Button>
-                <Button variant="outline" onClick={() => setEditOpen(true)}>Modifier mes informations</Button>
-                <Button variant="outline" onClick={handleResetSelf} disabled={loading}>{loading ? "..." : "Réinitialiser mon dashboard"}</Button>
-                <Button variant="secondary" onClick={handleExport} disabled={exporting}>{exporting ? "..." : "Exporter mes dashboards"}</Button>
+            <div className="flex flex-col sm:flex-row gap-2 mt-4">
+              <Button variant="outline" onClick={() => setEditOpen(true)} className="w-full sm:w-auto">Modifier mes informations</Button>
+              <Button variant="outline" onClick={handleResetSelf} disabled={loading} className="w-full sm:w-auto">{loading ? "..." : "Réinitialiser mon dashboard"}</Button>
+              <Button variant="secondary" onClick={handleExport} disabled={exporting} className="w-full sm:w-auto">{exporting ? "..." : "Exporter mes dashboards"}</Button>
             </div>
           </div>
         </CardContent>

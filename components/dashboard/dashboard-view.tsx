@@ -103,6 +103,13 @@ function DashboardViewInner({
   const getResponsiveCols = () => {
     if (typeof window === 'undefined') return 12;
     const width = window.innerWidth;
+    const isMobileFormat = dashboard?.format === 'mobile';
+    if (isMobileFormat) {
+      if (width < 640) return 2;    // Mobile formatted dashboard: 2 columns
+      if (width < 1024) return 4;   // Tablet sized: 4 columns
+      return 6;                     // Desktop: 6 columns
+    }
+
     if (width < 640) return 4;    // Mobile: 4 columns
     if (width < 1024) return 8;   // Tablet: 8 columns
     return 12;                     // Desktop: 12 columns

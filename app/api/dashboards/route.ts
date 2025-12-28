@@ -8,6 +8,7 @@ import { z } from "zod";
 const createDashboardSchema = z.object({
   name: z.string().min(1, "Le nom est requis"),
   isPublic: z.boolean().optional().default(false),
+  format: z.enum(['desktop','mobile']).optional().default('desktop'),
 });
 
 export async function POST(request: Request) {
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { name, isPublic } = validatedData.data;
+    const { name, isPublic, format } = validatedData.data;
     const slug = generateSlug(name);
     const id = generateId();
 
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
       name,
       slug,
       isPublic,
+      format,
       themeConfig: null,
       customCss: null,
     });

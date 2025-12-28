@@ -204,21 +204,22 @@ export function UserManagementSettings() {
               {pendingUsers.map((user) => (
                 <div
                   key={user.id}
-                  className="flex items-center justify-between p-3 border rounded-lg bg-yellow-50/50"
+                  className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border rounded-lg bg-yellow-50/50 gap-3"
                 >
-                  <div>
-                    <p className="font-medium">{user.name}</p>
-                    <p className="text-sm text-muted-foreground">{user.email}</p>
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{user.name}</p>
+                    <p className="text-sm text-muted-foreground truncate">{user.email}</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       Inscription: {new Date(user.createdAt).toLocaleDateString()}
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex w-full sm:w-auto gap-2 flex-col sm:flex-row">
                     <Button
                       size="sm"
                       variant="default"
                       disabled={savingId === user.id || user.id === currentUserId}
                       onClick={() => updateUser(user.id, { status: "ACTIVE" })}
+                      className="w-full sm:w-auto"
                     >
                       <Check className="h-4 w-4 mr-1" />
                       Approuver
@@ -228,6 +229,7 @@ export function UserManagementSettings() {
                       variant="destructive"
                       disabled={savingId === user.id || user.id === currentUserId}
                       onClick={() => updateUser(user.id, { status: "BANNED" })}
+                      className="w-full sm:w-auto"
                     >
                       <X className="h-4 w-4 mr-1" />
                       Refuser
@@ -246,23 +248,23 @@ export function UserManagementSettings() {
           </div>
           <div className="space-y-3">
             {activeUsers.map((user) => (
-              <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="font-medium">{user.name}</p>
+              <div key={user.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border rounded-lg gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <p className="font-medium truncate">{user.name}</p>
                     {roleBadge(user.role)}
                     {statusBadge(user.status)}
                   </div>
-                  <p className="text-sm text-muted-foreground">{user.email}</p>
+                  <p className="text-sm text-muted-foreground truncate">{user.email}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex w-full sm:w-auto gap-2 flex-col sm:flex-row">
                   <select
                     value={user.role}
                     disabled={savingId === user.id || user.id === currentUserId}
                     onChange={(e) =>
                       updateUser(user.id, { role: e.target.value as User["role"] })
                     }
-                    className="px-3 py-1.5 border rounded-md text-sm bg-background"
+                    className="px-3 py-1.5 border rounded-md text-sm bg-background w-full sm:w-auto"
                   >
                     <option value="USER">USER</option>
                     <option value="VIP">VIP</option>
@@ -273,6 +275,7 @@ export function UserManagementSettings() {
                     variant="outline"
                     disabled={savingId === user.id || user.id === currentUserId}
                     onClick={() => updateUser(user.id, { status: "BANNED" })}
+                    className="w-full sm:w-auto"
                   >
                     Bannir
                   </Button>
@@ -281,6 +284,7 @@ export function UserManagementSettings() {
                     variant="destructive"
                     disabled={savingId === user.id || user.id === currentUserId}
                     onClick={() => deleteUser(user.id)}
+                    className="w-full sm:w-auto"
                   >
                     Supprimer
                   </Button>
@@ -289,6 +293,7 @@ export function UserManagementSettings() {
                     variant="secondary"
                     disabled={savingId === user.id || user.id === currentUserId}
                     onClick={() => resetUser(user.id)}
+                    className="w-full sm:w-auto"
                   >
                     Réinitialiser
                   </Button>
@@ -308,17 +313,18 @@ export function UserManagementSettings() {
               {bannedUsers.map((user) => (
                 <div
                   key={user.id}
-                  className="flex items-center justify-between p-3 border rounded-lg bg-red-50/50"
+                  className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border rounded-lg bg-red-50/50 gap-3"
                 >
-                  <div>
-                    <p className="font-medium">{user.name}</p>
-                    <p className="text-sm text-muted-foreground">{user.email}</p>
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{user.name}</p>
+                    <p className="text-sm text-muted-foreground truncate">{user.email}</p>
                   </div>
                   <Button
                     size="sm"
                     variant="outline"
                     disabled={savingId === user.id}
                     onClick={() => updateUser(user.id, { status: "ACTIVE" })}
+                    className="w-full sm:w-auto"
                   >
                     Réactiver
                   </Button>

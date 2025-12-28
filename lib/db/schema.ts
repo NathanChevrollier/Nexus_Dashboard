@@ -98,6 +98,7 @@ export const dashboards = mysqlTable('dashboards', {
   name: varchar('name', { length: 255 }).notNull(),
   slug: varchar('slug', { length: 255 }).notNull(),
   isPublic: boolean('is_public').default(false).notNull(),
+  format: mysqlEnum('dashboard_format', ['desktop', 'mobile']).default('desktop').notNull(),
   themeConfig: json('theme_config').$type<ThemeConfig>(),
   customCss: text('custom_css'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
