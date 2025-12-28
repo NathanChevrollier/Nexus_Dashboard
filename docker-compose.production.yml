@@ -24,7 +24,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-  
+
   socket:
     build:
       context: .
@@ -37,7 +37,7 @@ services:
       SOCKET_PORT: 4001
     command: node ./scripts/socket-server.js
     ports:
-      - "4001:4001"
+      - "127.0.0.1:4001:4001" 
     networks:
       - nexus-public
     deploy:
@@ -63,7 +63,7 @@ services:
     container_name: nexus-app-prod
     restart: always
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     secrets:
       - db_password
       - nextauth_secret
@@ -83,16 +83,8 @@ services:
       - |
         export DATABASE_PASSWORD=$$(cat /run/secrets/db_password)
         export NEXTAUTH_SECRET=$$(cat /run/secrets/nextauth_secret)
-        
-        # Run migrations
         echo "🗄️ Running database migrations..."
         npx drizzle-kit push --config=./drizzle.config.ts || true
-        
-        # Run seed if needed
-        echo "🌱 Seeding database..."
-        npx tsx seed.ts || true
-        
-        # Start the application
         echo "🚀 Starting application..."
         node server.js
     depends_on:
@@ -116,40 +108,14 @@ services:
       retries: 3
       start_period: 40s
 
-  nginx:
-    image: nginx:alpine
-    container_name: nexus-nginx
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-      - nginx_cache:/var/cache/nginx
-      - nginx_logs:/var/log/nginx
-    depends_on:
-      - app
-    networks:
-      - nexus-public
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-
 volumes:
   mysql_data:
-    driver: local
-  nginx_cache:
-    driver: local
-  nginx_logs:
     driver: local
 
 networks:
   nexus-internal:
     driver: bridge
-    internal: true  # Réseau isolé, pas d'accès internet
+    internal: true
   nexus-public:
     driver: bridge
 
