@@ -60,6 +60,8 @@ export function ChartWidget({ widget }: ChartWidgetProps) {
     chartType?: ChartType;
     labels?: string[];
     values?: number[];
+    dataSourceUrl?: string;
+    pollInterval?: number;
   };
 
   // --- STATE ---
@@ -413,10 +415,10 @@ export function ChartWidget({ widget }: ChartWidgetProps) {
         <>
           <div className="flex-1 min-h-0 relative">
             {/* On utilise localType ici pour permettre la preview instantanée si on changeait la logique */}
-            {localType === "line" || localType === "area" ? <Line ref={chartRef} data={chartData} options={chartOptions} /> :
-             localType === "pie" ? <Pie ref={chartRef} data={chartData} options={chartOptions} /> :
-             localType === "doughnut" ? <Doughnut ref={chartRef} data={chartData} options={chartOptions} /> :
-             <Bar ref={chartRef} data={chartData} options={chartOptions} />}
+            {localType === "line" || localType === "area" ? <Line ref={chartRef} data={chartData as any} options={chartOptions as any} /> :
+             localType === "pie" ? <Pie ref={chartRef} data={chartData as any} options={chartOptions as any} /> :
+             localType === "doughnut" ? <Doughnut ref={chartRef} data={chartData as any} options={chartOptions as any} /> :
+             <Bar ref={chartRef} data={chartData as any} options={chartOptions as any} />}
           </div>
 
           {/* FOOTER STATS (Uniquement pour graphiques non circulaires) */}

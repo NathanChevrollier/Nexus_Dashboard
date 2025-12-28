@@ -148,7 +148,7 @@ export function UniversalCalendarWidget({ options }: CalendarViewProps) {
               title: movie.title,
               date: new Date(movie.release_date),
               type: 'movie',
-              imageUrl: getTMDbImageUrl(movie.poster_path, 'w500'),
+              imageUrl: getTMDbImageUrl(movie.poster_path, 'w500') ?? undefined,
               description: movie.overview,
               color: sourceColors.movie,
               metadata: { rating: movie.vote_average }
@@ -166,7 +166,7 @@ export function UniversalCalendarWidget({ options }: CalendarViewProps) {
               title: show.name,
               date: new Date(show.first_air_date),
               type: 'tv',
-              imageUrl: getTMDbImageUrl(show.poster_path, 'w500'),
+              imageUrl: getTMDbImageUrl(show.poster_path, 'w500') ?? undefined,
               description: show.overview,
               color: sourceColors.tv,
               metadata: { rating: show.vote_average }
@@ -360,7 +360,7 @@ export function UniversalCalendarWidget({ options }: CalendarViewProps) {
           date={selectedDay}
           events={filteredEvents.filter(e => e.date.toDateString() === selectedDay.toDateString())}
           onClose={() => setSelectedDay(null)}
-          onSelectEvent={(e) => { setSelectedEvent(e); setSelectedDay(null); }}
+          onSelectEvent={(e: UnifiedEvent) => { setSelectedEvent(e); setSelectedDay(null); }}
         />
       )}
 

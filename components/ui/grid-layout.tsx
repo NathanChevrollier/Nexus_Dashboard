@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import RGL, { WidthProvider, Layout } from 'react-grid-layout';
+import React, { useEffect, useState, useRef } from 'react';
+import RGL, { Layout } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
-// Ajout du WidthProvider pour rendre la grille responsive automatiquement
-const ReactGridLayout = WidthProvider(RGL);
+// Some versions of react-grid-layout no longer export WidthProvider.
+// Implement a lightweight width-provider fallback by measuring the container
+// and passing the measured `width` prop to the grid when one isn't supplied.
+const ReactGridLayout = RGL as any;
 
 export interface AppGridLayoutProps {
   className?: string;
@@ -31,6 +33,7 @@ export default function GridLayout({
   layout,
   cols = 12,
   rowHeight = 80,
+  width,
   isDraggable = true,
   isResizable = true,
   compactType = 'vertical',
@@ -44,11 +47,28 @@ export default function GridLayout({
   ...props
 }: AppGridLayoutProps) {
   const [mounted, setMounted] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [measuredWidth, setMeasuredWidth] = useState<number | undefined>(width);
 
   // Fix pour l'hydratation Next.js
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Measure container width when width prop isn't provided
+  useEffect(() => {
+    if (width) {
+      setMeasuredWidth(width);
+      return;
+    }
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setMeasuredWidth(el.offsetWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [width]);
 
   // Rendu simplifié côté serveur pour éviter le layout shift
   if (!mounted) {
@@ -59,25 +79,30 @@ export default function GridLayout({
     );
   }
 
+  // Use measuredWidth when no explicit width prop provided
+  const resolvedWidth = width ?? measuredWidth;
+
   return (
-    <ReactGridLayout
-      className={className}
-      layout={layout}
-      cols={cols}
-      rowHeight={rowHeight}
-      isDraggable={isDraggable}
-      isResizable={isResizable}
-      compactType={compactType}
-      preventCollision={preventCollision}
-      onLayoutChange={onLayoutChange}
-      draggableHandle={draggableHandle}
-      draggableCancel={draggableCancel}
-      margin={margin}
-      containerPadding={containerPadding}
-      // Props passées (comme width si fourni manuellement)
-      {...props} 
-    >
-      {children}
-    </ReactGridLayout>
+    <div ref={containerRef} className={className} style={{ position: 'relative' }}>
+      <ReactGridLayout
+        layout={layout}
+        cols={cols}
+        rowHeight={rowHeight}
+        isDraggable={isDraggable}
+        isResizable={isResizable}
+        compactType={compactType}
+        preventCollision={preventCollision}
+        onLayoutChange={onLayoutChange}
+        draggableHandle={draggableHandle}
+        draggableCancel={draggableCancel}
+        margin={margin}
+        containerPadding={containerPadding}
+        width={resolvedWidth}
+        // Pass other props through
+        {...props}
+      >
+        {children}
+      </ReactGridLayout>
+    </div>
   );
 }

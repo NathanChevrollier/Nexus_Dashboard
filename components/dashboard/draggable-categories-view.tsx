@@ -83,23 +83,23 @@ export function DraggableCategoriesView({
                 index={index}
                 isDragDisabled={!isEditMode}
               >
-                {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.draggableProps}
-                      className={snapshot.isDragging ? "opacity-50" : ""}
-                    >
+                {(draggableProvided, draggableSnapshot) => (
+                  <div
+                    ref={draggableProvided.innerRef}
+                    {...draggableProvided.draggableProps}
+                    className={draggableSnapshot.isDragging ? "opacity-50" : ""}
+                  >
                     {/* Droppable zone inside category for widgets */}
                     <Droppable 
                       droppableId={category.id} 
                       type="widget"
                       isDropDisabled={!isEditMode}
                     >
-                      {(provided, snapshot) => (
+                      {(droppableProvided, droppableSnapshot) => (
                         <div
-                          ref={provided.innerRef}
-                          {...provided.droppableProps}
-                          className={snapshot.isDraggingOver ? "ring-2 ring-primary rounded-lg" : ""}
+                          ref={droppableProvided.innerRef}
+                          {...droppableProvided.droppableProps}
+                          className={droppableSnapshot.isDraggingOver ? "ring-2 ring-primary rounded-lg" : ""}
                         >
                           <CategorySection
                             category={category}
@@ -107,9 +107,9 @@ export function DraggableCategoriesView({
                             isEditMode={isEditMode}
                             onWidgetDelete={onWidgetDelete}
                             onWidgetEdit={onWidgetEdit}
-                            dragHandleProps={provided.dragHandleProps}
+                            dragHandleProps={draggableProvided.dragHandleProps}
                           />
-                          {provided.placeholder}
+                          {droppableProvided.placeholder}
                         </div>
                       )}
                     </Droppable>

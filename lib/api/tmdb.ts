@@ -116,7 +116,7 @@ async function fetchTMDB<T>(endpoint: string, params: Record<string, string> = {
     });
 
     if (!response.ok) {
-      console.warn(`TMDb Warning [${response.status}]: ${url}`);
+      console.warn(`TMDb Warning [${response.status}]: ${finalUrl}`);
       return null;
     }
 
