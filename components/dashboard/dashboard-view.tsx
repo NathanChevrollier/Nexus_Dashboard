@@ -30,7 +30,6 @@ export function DashboardView({
   initialWidgets = [], 
   initialCategories = [] 
 }: DashboardViewProps) {
-  const alert = useAlert();
   return (
     <CrossGridDragProvider>
       <DashboardViewInner
@@ -50,194 +49,160 @@ function DashboardViewInner({
   initialCategories = [] 
 }: DashboardViewProps) {
   const { isDragging, draggedWidget, cancelDrag } = useCrossGridDrag();
+  const alert = useAlert();
+  const confirm = useConfirm();
+
   const [isEditMode, setIsEditMode] = useState(false);
   const [widgets, setWidgets] = useState<Widget[]>(initialWidgets);
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  
+  // Dialogs
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showAddCategoryDialog, setShowAddCategoryDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingWidget, setEditingWidget] = useState<Widget | null>(null);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  
+  // UI State
   const [saving, setSaving] = useState(false);
   const [containerWidth, setContainerWidth] = useState(1200);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [responsiveCols, setResponsiveCols] = useState(12);
+  const [currentTime, setCurrentTime] = useState<Date | null>(null); // Null initialement pour éviter hydration mismatch
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
-  // Suivre la position de la souris pendant le drag cross-grid
+  // --- EFFETS ---
+
+  // 1. Suivi souris pour le drag visuel
   useEffect(() => {
     if (!isDragging) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePosition({ x: e.clientX, y: e.clientY });
-    };
-
+    const handleMouseMove = (e: MouseEvent) => setMousePosition({ x: e.clientX, y: e.clientY });
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, [isDragging]);
 
-  // Annuler le drag cross-grid avec Échap
+  // 2. Gestion Annulation Drag (Echap)
   useEffect(() => {
     if (!isDragging) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         cancelDrag();
-        // Réinitialiser l'état visuel des éléments en drag
-        const draggedElements = document.querySelectorAll('[data-cross-grid-drag="true"]');
-        draggedElements.forEach((el) => {
+        // Nettoyage visuel forcé
+        document.querySelectorAll('[data-cross-grid-drag="true"]').forEach((el) => {
           if (el instanceof HTMLElement) {
-            el.dataset.crossGridDrag = 'false';
+            delete el.dataset.crossGridDrag;
             el.style.transform = '';
             el.style.boxShadow = '';
           }
         });
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isDragging, cancelDrag]);
 
-  // Calculate responsive grid columns based on screen width
-  const getResponsiveCols = () => {
-    if (typeof window === 'undefined') return 12;
-    const width = window.innerWidth;
-    const isMobileFormat = dashboard?.format === 'mobile';
-    if (isMobileFormat) {
-      if (width < 640) return 2;    // Mobile formatted dashboard: 2 columns
-      if (width < 1024) return 4;   // Tablet sized: 4 columns
-      return 6;                     // Desktop: 6 columns
-    }
-
-    if (width < 640) return 4;    // Mobile: 4 columns
-    if (width < 1024) return 8;   // Tablet: 8 columns
-    return 12;                     // Desktop: 12 columns
-  };
-
-  const [responsiveCols, setResponsiveCols] = useState(12);
-
+  // 3. Gestion Responsive (Resize)
   useEffect(() => {
-    const updateWidth = () => {
-      const width = window.innerWidth - 48;
+    const handleResize = () => {
+      const width = window.innerWidth - 48; // Marge safe
       setContainerWidth(width);
-      setResponsiveCols(getResponsiveCols());
-    };
-    updateWidth();
-    window.addEventListener('resize', updateWidth);
-    return () => window.removeEventListener('resize', updateWidth);
-  }, []);
 
+      // Calcul colonnes
+      let cols = 12;
+      const isMobileFormat = dashboard?.format === 'mobile';
+      
+      if (isMobileFormat) {
+        if (width < 640) cols = 2;
+        else if (width < 1024) cols = 4;
+        else cols = 6;
+      } else {
+        if (width < 640) cols = 4;
+        else if (width < 1024) cols = 8;
+        else cols = 12;
+      }
+      setResponsiveCols(cols);
+    };
+
+    handleResize(); // Appel initial
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [dashboard?.format]);
+
+  // 4. Horloge
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+    setCurrentTime(new Date()); // Init côté client
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Toggle collapse d'une catégorie
+
+  // --- LOGIQUE METIER ---
+
   const toggleCategoryCollapse = useCallback((categoryId: string) => {
     setCollapsedCategories((prev) => {
       const next = new Set(prev);
-      if (next.has(categoryId)) {
-        next.delete(categoryId);
-      } else {
-        next.add(categoryId);
-      }
+      if (next.has(categoryId)) next.delete(categoryId);
+      else next.add(categoryId);
       return next;
     });
   }, []);
 
-  // Trouver une position libre dans la grille
+  // Algorithme de recherche de place libre (Spirale optimisée)
   const findFreePosition = useCallback((startX: number, startY: number, w: number = 2, h: number = 2) => {
-    const occupiedPositions = new Set<string>();
+    const occupied = new Set<string>();
     
-    // Marquer toutes les positions occupées
-    [...categories, ...widgets].forEach((item) => {
+    // Mapper l'occupation actuelle (Catégories + Widgets de premier niveau)
+    [...categories, ...widgets.filter(w => !w.categoryId)].forEach((item) => {
       for (let y = item.y; y < item.y + item.h; y++) {
         for (let x = item.x; x < item.x + item.w; x++) {
-          occupiedPositions.add(`${x},${y}`);
+          occupied.add(`${x},${y}`);
         }
       }
     });
 
-    // Chercher une position libre en spirale
-    let searchRadius = 0;
-    while (searchRadius < 20) {
-      for (let dy = -searchRadius; dy <= searchRadius; dy++) {
-        for (let dx = -searchRadius; dx <= searchRadius; dx++) {
-          const testX = Math.max(0, Math.min(12 - w, startX + dx));
-          const testY = Math.max(0, startY + dy);
+    let radius = 0;
+    while (radius < 50) { // Limite de sécurité
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const x = Math.max(0, Math.min(responsiveCols - w, startX + dx));
+          const y = Math.max(0, startY + dy);
           
-          // Vérifier si toute la zone est libre
-          let isFree = true;
-          for (let y = testY; y < testY + h && isFree; y++) {
-            for (let x = testX; x < testX + w && isFree; x++) {
-              if (occupiedPositions.has(`${x},${y}`)) {
-                isFree = false;
+          let fit = true;
+          for (let cy = 0; cy < h; cy++) {
+            for (let cx = 0; cx < w; cx++) {
+              if (occupied.has(`${x + cx},${y + cy}`)) {
+                fit = false;
+                break;
               }
             }
+            if (!fit) break;
           }
           
-          if (isFree) {
-            return { x: testX, y: testY };
-          }
+          if (fit) return { x, y };
         }
       }
-      searchRadius++;
+      radius++;
     }
     
-    // Fallback: position par défaut
-    return { x: 0, y: Math.max(...[...categories, ...widgets].map(i => i.y + i.h), 0) };
-  }, [categories, widgets]);
+    // Fallback en bas de page
+    const maxY = Math.max(0, ...[...categories, ...widgets].map(i => i.y + i.h));
+    return { x: 0, y: maxY };
+  }, [categories, widgets, responsiveCols]);
 
-  // Repositionner un widget près de sa catégorie
-  const repositionWidgetNearCategory = useCallback((widgetId: string, categoryId: string | null) => {
-    if (!categoryId) return;
-    
-    const category = categories.find((c) => c.id === categoryId);
-    const widget = widgets.find((w) => w.id === widgetId);
-    if (!category || !widget) return;
 
-    // Position cible: juste en dessous de la catégorie
-    const targetX = category.x;
-    const targetY = category.y + category.h;
-    
-    // Trouver une position libre
-    const freePos = findFreePosition(targetX, targetY, widget.w, widget.h);
-    
-    // Mettre à jour la position du widget
-    setWidgets((prev) =>
-      prev.map((w) =>
-        w.id === widgetId ? { ...w, x: freePos.x, y: freePos.y } : w
-      )
-    );
-  }, [categories, widgets, findFreePosition]);
+  // Gestion du Layout Principal (Catégories + Widgets orphelins)
+  const categoryLayout = categories.map((cat) => ({
+    i: `cat-${cat.id}`,
+    x: cat.x,
+    y: cat.y,
+    w: cat.w || 12,
+    h: collapsedCategories.has(cat.id) ? 1 : (cat.h || 4),
+    static: !isEditMode,
+    minW: 3,
+    maxW: responsiveCols,
+    minH: 1,
+  }));
 
-  // Générer le layout pour la grille unique
-  const categoryLayout = categories.map((cat) => {
-    const categoryWidgets = widgets.filter((w) => w.categoryId === cat.id);
-    const isCollapsed = collapsedCategories.has(cat.id);
-    
-    // Hauteur fixe basée sur la configuration de la catégorie
-    const totalHeight = isCollapsed ? 1 : (cat.h || 4);
-    
-    return {
-      i: `cat-${cat.id}`,
-      x: cat.x,
-      y: cat.y,
-      // Laisser la catégorie occuper sa largeur configurée
-      w: cat.w || 12,
-      h: totalHeight,
-      static: !isEditMode,
-      minW: 3,
-      maxW: 12,
-      minH: 1,
-      maxH: isCollapsed ? 1 : 10, // Max 10 lignes pour une catégorie
-    };
-  });
-
-  // SEULEMENT les widgets NON catégorisés sur la grille principale
   const uncategorizedWidgets = widgets.filter((w) => !w.categoryId);
   const widgetLayout = uncategorizedWidgets.map((w) => ({
     i: `widget-${w.id}`,
@@ -252,539 +217,214 @@ function DashboardViewInner({
 
   const mainLayout: GridItem[] = [...categoryLayout, ...widgetLayout];
 
-  // Gérer les changements de layout (drag & drop / resize)
   const handleLayoutChange = (newLayout: GridItem[]) => {
     if (!isEditMode) return;
 
-    const updatedCategories = categories.map((cat) => {
-      const layoutItem = newLayout.find((l) => l.i === `cat-${cat.id}`);
-      if (layoutItem) {
-        return { ...cat, x: layoutItem.x, y: layoutItem.y, w: layoutItem.w, h: layoutItem.h };
-      }
-      return cat;
+    // Mise à jour des catégories
+    const updatedCats = categories.map((cat) => {
+      const item = newLayout.find((l) => l.i === `cat-${cat.id}`);
+      return item ? { ...cat, x: item.x, y: item.y, w: item.w, h: item.h } : cat;
     });
 
+    // Mise à jour des widgets orphelins
     const updatedWidgets = widgets.map((w) => {
-      // Ne mettre à jour que les widgets non catégorisés (sur la grille principale)
-      if (w.categoryId) return w;
-      
-      const layoutItem = newLayout.find((l) => l.i === `widget-${w.id}`);
-      if (layoutItem) {
-        return { ...w, x: layoutItem.x, y: layoutItem.y, w: layoutItem.w, h: layoutItem.h };
-      }
-      return w;
+      if (w.categoryId) return w; // On ne touche pas aux widgets dans les catégories
+      const item = newLayout.find((l) => l.i === `widget-${w.id}`);
+      return item ? { ...w, x: item.x, y: item.y, w: item.w, h: item.h } : w;
     });
 
-    setCategories(updatedCategories);
+    setCategories(updatedCats);
     setWidgets(updatedWidgets);
   };
+
+  // --- ACTIONS ---
 
   const saveLayout = async () => {
     setSaving(true);
     try {
+      // Sauvegarde des widgets (position globale OU relative à la catégorie)
       const widgetUpdates = widgets.map((w) => ({
         id: w.id,
-        x: w.x,
-        y: w.y,
-        w: w.w,
-        h: w.h,
+        x: w.x, y: w.y, w: w.w, h: w.h,
         categoryId: w.categoryId,
         categoryX: w.categoryX ?? undefined,
         categoryY: w.categoryY ?? undefined,
       }));
       await updateWidgetPositions(widgetUpdates);
 
+      // Sauvegarde des catégories
       const categoryUpdates = categories.map((c) => ({
-        id: c.id,
-        x: c.x,
-        y: c.y,
-        w: c.w,
-        h: c.h,
+        id: c.id, x: c.x, y: c.y, w: c.w, h: c.h,
       }));
       await updateCategoryPositions(categoryUpdates);
 
       setIsEditMode(false);
     } catch (error) {
-      console.error("Erreur lors de la sauvegarde:", error);
+      console.error("Save error:", error);
       await alert("Erreur lors de la sauvegarde");
     } finally {
       setSaving(false);
     }
   };
 
-  // Gérer les changements de layout interne des catégories
-  const handleCategoryWidgetLayoutChange = useCallback((categoryId: string, layouts: Array<{id: string, x: number, y: number, w: number, h: number}>) => {
-    setWidgets((prevWidgets) =>
-      prevWidgets.map((widget) => {
-        const layout = layouts.find((l) => l.id === widget.id);
-        if (layout && widget.categoryId === categoryId) {
-          return {
-            ...widget,
-            categoryX: layout.x,
-            categoryY: layout.y,
-            w: layout.w,
-            h: layout.h,
-          };
-        }
-        return widget;
-      })
-    );
+  // Drag & Drop Cross-Grid Handlers
+  const handleCategoryWidgetLayoutChange = useCallback((categoryId: string, layouts: any[]) => {
+    setWidgets(prev => prev.map(w => {
+      if (w.categoryId !== categoryId) return w;
+      const layout = layouts.find(l => l.id === w.id);
+      if (layout) {
+        return { ...w, categoryX: layout.x, categoryY: layout.y, w: layout.w, h: layout.h };
+      }
+      return w;
+    }));
   }, []);
 
-  // Gérer le drop d'un widget DANS une catégorie
   const handleWidgetDropIn = useCallback((widgetId: string, categoryId: string) => {
-    setWidgets((prevWidgets) =>
-      prevWidgets.map((widget) => {
-        if (widget.id === widgetId) {
-          return {
-            ...widget,
-            categoryId: categoryId,
-            categoryX: 0,
-            categoryY: 0,
-          };
-        }
-        return widget;
-      })
-    );
+    setWidgets(prev => prev.map(w => {
+      if (w.id !== widgetId) return w;
+      return { ...w, categoryId, categoryX: 0, categoryY: 0 }; // Position par défaut (sera ajustée par le layout auto)
+    }));
   }, []);
 
-  // Gérer le drop d'un widget HORS d'une catégorie
   const handleWidgetDropOut = useCallback((widgetId: string) => {
-    setWidgets((prevWidgets) =>
-      prevWidgets.map((widget) => {
-        if (widget.id === widgetId) {
-          // Trouver une position libre sur la grille principale
-          const pos = findFreePosition(0, 0, widget.w, widget.h);
-          return {
-            ...widget,
-            categoryId: null,
-            categoryX: null,
-            categoryY: null,
-            x: pos.x,
-            y: pos.y,
-          };
-        }
-        return widget;
-      })
-    );
+    setWidgets(prev => {
+      const widget = prev.find(w => w.id === widgetId);
+      if (!widget) return prev;
+      
+      const pos = findFreePosition(0, 0, widget.w, widget.h);
+      return prev.map(w => w.id === widgetId ? { 
+        ...w, categoryId: null, categoryX: null, categoryY: null, x: pos.x, y: pos.y 
+      } : w);
+    });
   }, [findFreePosition]);
 
-  const confirm = useConfirm();
-
+  // CRUD Operations
   const handleDeleteWidget = async (widgetId: string) => {
-    if (await confirm("Voulez-vous vraiment supprimer ce widget ?")) {
+    if (await confirm("Supprimer ce widget ?")) {
       try {
         await deleteWidget(widgetId);
-        setWidgets(widgets.filter((w) => w.id !== widgetId));
-      } catch (error) {
-        console.error("Erreur:", error);
-        await alert("Erreur lors de la suppression");
-      }
+        setWidgets(prev => prev.filter(w => w.id !== widgetId));
+      } catch (e) { await alert("Erreur suppression"); }
     }
   };
 
   const handleDeleteCategory = async (categoryId: string) => {
-    if (await confirm("Supprimer cette catégorie ? Les widgets seront déplacés hors catégorie.")) {
+    if (await confirm("Supprimer la catégorie ? Les widgets seront libérés.")) {
       try {
         await deleteCategory(categoryId);
-        setCategories(categories.filter((c) => c.id !== categoryId));
-        setWidgets((prev) =>
-          prev.map((w) => (w.categoryId === categoryId ? { ...w, categoryId: null } : w))
-        );
-      } catch (error) {
-        console.error("Erreur:", error);
-        await alert("Erreur lors de la suppression");
-      }
+        setCategories(prev => prev.filter(c => c.id !== categoryId));
+        setWidgets(prev => prev.map(w => w.categoryId === categoryId ? { ...w, categoryId: null } : w));
+      } catch (e) { await alert("Erreur suppression"); }
     }
   };
 
-  const handleEditWidget = (widget: Widget) => {
-    setEditingWidget(widget);
-    setShowEditDialog(true);
-  };
-
-  const handleWidgetUpdated = (
-    widgetId: string,
-    newCategoryId: string | null,
-    oldCategoryId: string | null,
-    updatedOptions?: any
-  ) => {
-    // Mettre à jour localement le widget
-    setWidgets((prevWidgets) => {
-      const widget = prevWidgets.find(w => w.id === widgetId);
-      if (!widget) return prevWidgets;
-
-      return prevWidgets.map((w) => {
-        if (w.id === widgetId) {
-          // Appliquer les options mises à jour tout de suite pour refléter l'UI
-          const withOptions = updatedOptions ? { ...w, options: updatedOptions } : w;
-          // Si on déplace vers une catégorie
-          if (newCategoryId) {
-            // Trouver tous les widgets déjà dans cette catégorie
-            const categoryWidgets = prevWidgets.filter(cw => cw.categoryId === newCategoryId && cw.id !== widgetId);
-            
-            // Fonction pour trouver une position libre
-            const findFreeCategoryPosition = (ww: number, hh: number): { x: number; y: number } => {
-              const COLS = 6;
-              
-              const isPositionFree = (x: number, y: number) => {
-                return !categoryWidgets.some(cw => {
-                  return !(
-                    x + ww <= (cw.categoryX || 0) ||
-                    x >= (cw.categoryX || 0) + cw.w ||
-                    y + hh <= (cw.categoryY || 0) ||
-                    y >= (cw.categoryY || 0) + cw.h
-                  );
-                });
-              };
-
-              for (let y = 0; y < 20; y++) {
-                for (let x = 0; x <= COLS - ww; x++) {
-                  if (isPositionFree(x, y)) {
-                    return { x, y };
-                  }
-                }
-              }
-
-              const maxY = Math.max(0, ...categoryWidgets.map(cw => (cw.categoryY || 0) + cw.h));
-              return { x: 0, y: maxY };
-            };
-
-            const freePos = findFreeCategoryPosition(widget.w, widget.h);
-
-            return {
-              ...withOptions,
-              categoryId: newCategoryId,
-              categoryX: freePos.x,
-              categoryY: freePos.y,
-            };
-          }
-          // Si on retire d'une catégorie (vers la grille principale)
-          else if (oldCategoryId && !newCategoryId) {
-            // Trouver une position libre sur la grille principale
-            const pos = findFreePosition(0, 0, widget.w, widget.h);
-            return {
-              ...withOptions,
-              categoryId: null,
-              categoryX: null,
-              categoryY: null,
-              x: pos.x,
-              y: pos.y,
-            };
-          }
-          // Pas de changement de catégorie: juste mettre à jour les options localement
-          return withOptions;
-        }
-        return w;
-      });
-    });
-  };
-
-  // Gérer le drop d'un widget dans une catégorie (via Ctrl+drag)
-  const handleWidgetDropInCategory = useCallback((widgetId: string, categoryId: string) => {
-    setWidgets((prevWidgets) => {
-      const widget = prevWidgets.find(w => w.id === widgetId);
-      if (!widget) return prevWidgets;
-
-      // Trouver tous les widgets déjà dans cette catégorie
-      const categoryWidgets = prevWidgets.filter(w => w.categoryId === categoryId && w.id !== widgetId);
-      
-      // Fonction pour trouver une position libre dans la catégorie (grille 6 colonnes)
-      const findFreeCategoryPosition = (w: number, h: number): { x: number; y: number } => {
-        const COLS = 6;
-        
-        // Vérifier si une position est libre
-        const isPositionFree = (x: number, y: number) => {
-          return !categoryWidgets.some(cw => {
-            return !(
-              x + w <= (cw.categoryX || 0) ||
-              x >= (cw.categoryX || 0) + cw.w ||
-              y + h <= (cw.categoryY || 0) ||
-              y >= (cw.categoryY || 0) + cw.h
-            );
-          });
-        };
-
-        // Essayer de trouver une position libre
-        for (let y = 0; y < 20; y++) {
-          for (let x = 0; x <= COLS - w; x++) {
-            if (isPositionFree(x, y)) {
-              return { x, y };
-            }
-          }
-        }
-
-        // Si rien n'est libre, mettre à la fin
-        const maxY = Math.max(0, ...categoryWidgets.map(w => (w.categoryY || 0) + w.h));
-        return { x: 0, y: maxY };
-      };
-
-      const freePos = findFreeCategoryPosition(widget.w, widget.h);
-
-      return prevWidgets.map((w) => {
-        if (w.id === widgetId) {
-          return {
-            ...w,
-            categoryId: categoryId,
-            categoryX: freePos.x,
-            categoryY: freePos.y,
-          };
-        }
-        return w;
-      });
-    });
-  }, []);
-
-  // Gérer le drop d'un widget hors d'une catégorie (vers grille principale)
-  const handleWidgetDropOutCategory = useCallback((widgetId: string) => {
-    setWidgets((prevWidgets) =>
-      prevWidgets.map((widget) => {
-        if (widget.id === widgetId) {
-          // Trouver une position libre sur la grille principale
-          const pos = findFreePosition(0, 0, widget.w, widget.h);
-          return {
-            ...widget,
-            categoryId: null,
-            categoryX: null,
-            categoryY: null,
-            x: pos.x,
-            y: pos.y,
-          };
-        }
-        return widget;
-      })
-    );
-  }, [findFreePosition]);
-
-  const handleCategoryAdded = () => {
-    window.location.reload();
-  };
+  // --- RENDER HELPERS ---
 
   const formatDate = () => {
-    const options: Intl.DateTimeFormatOptions = { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    };
-    return currentTime.toLocaleDateString('fr-FR', options);
+    if (!currentTime) return "...";
+    return currentTime.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   };
 
   const formatTime = () => {
-    return currentTime.toLocaleTimeString('fr-FR', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      second: '2-digit'
-    });
+    if (!currentTime) return "...";
+    return currentTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
 
   return (
-    <div className="h-[calc(100vh-64px)] flex flex-col overflow-hidden relative">
-      {/* Widget miniature qui suit la souris pendant le cross-grid drag */}
+    <div className="h-[calc(100vh-64px)] flex flex-col overflow-hidden relative bg-background">
+      
+      {/* Ghost Widget (Drag & Drop) */}
       {isDragging && draggedWidget && (
         <div 
-          className="fixed pointer-events-none z-50 animate-in fade-in duration-150"
-          style={{
-            left: `${mousePosition.x + 15}px`,
-            top: `${mousePosition.y + 15}px`,
-          }}
+          className="fixed pointer-events-none z-[9999] animate-in fade-in duration-150"
+          style={{ left: `${mousePosition.x + 15}px`, top: `${mousePosition.y + 15}px` }}
         >
-          {/* Petit badge compact */}
-          <div className="bg-primary/90 text-primary-foreground rounded-md shadow-lg px-2 py-1 text-xs font-medium flex items-center gap-1.5 border border-primary-foreground/20">
-            <span className="text-sm">🔄</span>
-            <span className="truncate max-w-[100px]">{draggedWidget.options?.title || draggedWidget.type}</span>
+          <div className="bg-primary/90 text-primary-foreground rounded-md shadow-xl px-3 py-2 text-sm font-medium flex items-center gap-2 border border-white/20 backdrop-blur-md">
+            <span>🚀</span>
+            <span className="truncate max-w-[150px]">{draggedWidget.options?.title || draggedWidget.type}</span>
           </div>
         </div>
       )}
       
+      {/* HEADER */}
       {isOwner && (
-        <div className="border-b bg-gradient-to-br from-card/40 via-background to-card/20 backdrop-blur-xl shadow-md px-4 sm:px-6 lg:px-8 py-4 relative overflow-hidden">
-          {/* Effet de fond décoratif */}
-          <div className="absolute inset-0 bg-grid-white/[0.01] pointer-events-none" />
-          <div className="absolute top-0 right-0 w-80 h-80 bg-primary/3 rounded-full blur-3xl pointer-events-none" />
+        <div className="border-b bg-card/50 backdrop-blur-md px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-4 z-10 shrink-0">
           
-          <div className="relative flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-0">
-            {/* Section gauche: Titre + Stats */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 w-full lg:w-auto">
-              {/* Titre Dashboard */}
-              <div className="flex items-center gap-3 sm:gap-4">
-                <div className="relative hidden sm:block">
-                  <div className="absolute inset-0 bg-primary/15 blur-lg rounded-full" />
-                  <div className="relative h-10 w-1 bg-gradient-to-b from-primary via-primary to-primary/40 rounded-full shadow-md shadow-primary/30" />
-                </div>
-                <div>
-                  <h2 className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">
-                    {dashboard.name}
-                  </h2>
-                  <p className="text-xs text-muted-foreground/80 mt-0.5">
-                    {isEditMode ? "✏️ Mode édition actif" : "📊 Tableau de bord"}
-                  </p>
-                </div>
-              </div>
-
-              {/* Stats rapides */}
-              <div className="flex items-center gap-2 sm:gap-3 ml-0 sm:ml-4">
-                <div className="flex items-center gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-card/50 rounded-lg border border-border/30 backdrop-blur-sm">
-                  <Layers className="h-3 sm:h-4 w-3 sm:w-4 text-primary flex-shrink-0" />
-                  <div className="flex flex-col">
-                    <span className="text-xs text-muted-foreground leading-none hidden xs:inline">Widgets</span>
-                    <span className="text-sm font-bold text-foreground">{widgets.length}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-card/50 rounded-lg border border-border/30 backdrop-blur-sm">
-                  <BarChart3 className="h-3 sm:h-4 w-3 sm:w-4 text-primary flex-shrink-0" />
-                  <div className="flex flex-col">
-                    <span className="text-xs text-muted-foreground leading-none hidden xs:inline">Catégories</span>
-                    <span className="text-sm font-bold text-foreground">{categories.length}</span>
-                  </div>
-                </div>
+          {/* Titre & Stats */}
+          <div className="flex items-center gap-4 w-full sm:w-auto">
+            <div className="h-10 w-1 bg-primary rounded-full hidden sm:block" />
+            <div>
+              <h1 className="text-xl font-bold tracking-tight">{dashboard.name}</h1>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                <span className="flex items-center gap-1"><Layers className="w-3 h-3" /> {widgets.length} widgets</span>
+                <span className="flex items-center gap-1"><BarChart3 className="w-3 h-3" /> {categories.length} catégories</span>
               </div>
             </div>
+          </div>
 
-            {/* Section centre: Date et Heure */}
-            <div className="w-full sm:w-auto lg:absolute lg:left-1/2 lg:-translate-x-1/2">
-              <div className="px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-br from-card/80 to-card/40 rounded-xl border border-primary/10 shadow-lg backdrop-blur-md">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="p-1 sm:p-2 bg-primary/10 rounded-lg">
-                    <Calendar className="h-3 sm:h-4 w-3 sm:w-4 text-primary" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="font-semibold text-xs leading-tight line-clamp-1">
-                      {formatDate()}
-                    </span>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <div className="h-1 w-1 rounded-full bg-primary animate-pulse" />
-                      <span className="text-xs font-mono font-medium text-primary/90">
-                        {formatTime()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          {/* Horloge Centrale */}
+          <div className="hidden lg:flex flex-col items-center justify-center absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2">
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-0.5">{formatDate()}</div>
+            <div className="text-2xl font-bold font-mono leading-none tracking-tight text-foreground/80">{formatTime()}</div>
+          </div>
 
-            {/* Actions */}
-            <div className="flex gap-2 w-full lg:w-auto flex-wrap">
-              <Button size="sm" variant="outline" onClick={() => setShowShareDialog(true)} className="gap-2 text-xs sm:text-sm">
-                Partager
-              </Button>
-              <ShareDashboardDialog open={showShareDialog} onOpenChange={setShowShareDialog} dashboardId={dashboard.id} />
-              {isEditMode ? (
-                <>
-                  <Button 
-                    onClick={() => setShowAddDialog(true)} 
-                    variant="outline" 
-                    size="sm" 
-                    className="gap-1 sm:gap-2 border-primary/20 hover:bg-primary/5 hover:border-primary/40 transition-all text-xs sm:text-sm"
-                  >
-                    <Plus className="h-3 sm:h-4 w-3 sm:w-4" />
-                    <span className="font-medium hidden sm:inline">Widget</span>
-                  </Button>
-                  <Button 
-                    onClick={() => setShowAddCategoryDialog(true)}
-                    variant="outline" 
-                    size="sm"
-                    className="gap-1 sm:gap-2 border-primary/20 hover:bg-primary/5 hover:border-primary/40 transition-all text-xs sm:text-sm"
-                  >
-                    <Folder className="h-3 sm:h-4 w-3 sm:w-4" />
-                    <span className="font-medium hidden sm:inline">Catégorie</span>
-                  </Button>
-                  <Button 
-                    onClick={saveLayout} 
-                    disabled={saving} 
-                    size="sm" 
-                    className="gap-1 sm:gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 transition-all text-xs sm:text-sm"
-                  >
-                    <Save className="h-3 sm:h-4 w-3 sm:w-4" />
-                    <span className="font-medium hidden sm:inline">{saving ? "Enregistrement..." : "Enregistrer"}</span>
-                    <span className="font-medium sm:hidden">{saving ? "..." : "OK"}</span>
-                  </Button>
-                  <Button 
-                    onClick={() => setIsEditMode(false)} 
-                    variant="ghost" 
-                    size="sm"
-                    className="hover:bg-destructive/10 hover:text-destructive text-xs sm:text-sm"
-                  >
-                    Annuler
-                  </Button>
-                </>
-              ) : (
-                <Button 
-                  onClick={() => setIsEditMode(true)} 
-                  size="sm" 
-                  className="gap-1 sm:gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 transition-all text-xs sm:text-sm"
-                >
-                  <Edit className="h-3 sm:h-4 w-3 sm:w-4" />
-                  <span className="font-medium hidden sm:inline">Modifier</span>
-                  <span className="font-medium sm:hidden">Éditer</span>
+          {/* Boutons Actions */}
+          <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+            <Button size="sm" variant="outline" onClick={() => setShowShareDialog(true)}>Partager</Button>
+            
+            {isEditMode ? (
+              <>
+                <div className="h-6 w-px bg-border mx-1" />
+                <Button size="sm" variant="secondary" onClick={() => setShowAddDialog(true)}><Plus className="w-4 h-4 mr-1" /> Widget</Button>
+                <Button size="sm" variant="secondary" onClick={() => setShowAddCategoryDialog(true)}><Folder className="w-4 h-4 mr-1" /> Catégorie</Button>
+                <div className="h-6 w-px bg-border mx-1" />
+                <Button size="sm" onClick={saveLayout} disabled={saving}>
+                  {saving ? <span className="animate-spin mr-2">⏳</span> : <Save className="w-4 h-4 mr-2" />}
+                  Sauvegarder
                 </Button>
-              )}
-            </div>
+                <Button size="sm" variant="ghost" onClick={() => setIsEditMode(false)} className="text-muted-foreground hover:text-foreground">Annuler</Button>
+              </>
+            ) : (
+              <Button size="sm" onClick={() => setIsEditMode(true)} className="bg-primary/90 hover:bg-primary">
+                <Edit className="w-4 h-4 mr-2" /> Personnaliser
+              </Button>
+            )}
           </div>
         </div>
       )}
 
-      <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 max-w-full">
-        {/* Message d'aide en mode édition */}
-        {isEditMode && mainLayout.length > 0 && (
-          <div className="mb-4 p-4 bg-gradient-to-br from-primary/8 via-primary/5 to-primary/8 border border-primary/20 rounded-xl backdrop-blur-sm shadow-lg">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 mt-0.5">
-                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary/30 to-primary/50 flex items-center justify-center shadow-lg">
-                  <span className="text-base">💡</span>
-                </div>
-              </div>
-              <div className="flex-1 text-sm space-y-2">
-                <p className="font-bold text-foreground text-base">🎯 Guide d'organisation du dashboard</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                  <div className="space-y-1.5 bg-background/40 p-3 rounded-lg border border-border/50">
-                    <p className="font-semibold text-foreground flex items-center gap-2">
-                      <span className="text-primary">📦</span> Catégories
-                    </p>
-                    <ul className="text-muted-foreground space-y-1 text-xs">
-                      <li>• <strong>Déplacer:</strong> Utilise la poignée ⋮⋮ dans le header</li>
-                      <li>• <strong>Redimensionner:</strong> Tire les coins de la catégorie</li>
-                      <li>• <strong>Replier/Déplier:</strong> Clique sur le chevron (˅/˄)</li>
-                    </ul>
-                  </div>
-                  <div className="space-y-1.5 bg-background/40 p-3 rounded-lg border border-border/50">
-                    <p className="font-semibold text-foreground flex items-center gap-2">
-                      <span className="text-primary">🎨</span> Widgets
-                    </p>
-                    <ul className="text-muted-foreground space-y-1 text-xs">
-                      <li>• <strong>Déplacer:</strong> Glisse-dépose directement sur la grille</li>
-                      <li>• <strong>Changer de catégorie:</strong> Ctrl/Cmd+Clic sur la poignée ⋮⋮ puis dépose sur 📥</li>
-                      <li>• <strong>Annuler:</strong> Appuie sur <kbd className="px-1 py-0.5 bg-muted rounded text-xs">Échap</kbd> pour annuler</li>
-                      <li>• <strong>Ou via menu:</strong> Clique sur ✏️ puis choisis une catégorie</li>
-                      <li>• <strong>Redimensionner:</strong> Tire le coin en bas à droite</li>
-                    </ul>
-                  </div>
-                </div>
-                <div className="mt-3 p-2.5 bg-primary/5 border border-primary/20 rounded-lg">
-                  <p className="text-xs text-muted-foreground">
-                    <strong className="text-primary">💡 Astuce Pro:</strong> Maintiens <kbd className="px-1 py-0.5 bg-primary/10 rounded text-primary font-mono text-[10px]">Ctrl/Cmd</kbd> en cliquant sur la poignée ⋮⋮ d'un widget pour activer le mode cross-grid. Les zones de drop 📥 apparaissent dans les headers de catégories. Appuie sur <kbd className="px-1 py-0.5 bg-primary/10 rounded text-primary font-mono text-[10px]">Échap</kbd> pour annuler !
-                  </p>
-                </div>
-              </div>
+      {/* ZONE DE CONTENU (GRILLE) */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6" id="dashboard-scroll-area">
+        
+        {/* Guide Rapide en Mode Édition */}
+        {isEditMode && (
+          <div className="mb-6 p-4 rounded-xl border border-primary/20 bg-primary/5 flex items-start gap-3 animate-in slide-in-from-top-2">
+            <div className="p-2 bg-primary/10 rounded-full text-primary">💡</div>
+            <div className="text-sm">
+              <p className="font-semibold mb-1">Mode Édition Activé</p>
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1 text-muted-foreground list-disc list-inside">
+                <li>Glissez les widgets pour les déplacer.</li>
+                <li>Utilisez les poignées <span className="inline-block bg-muted px-1 rounded text-xs">⋮⋮</span> pour le drag.</li>
+                <li>Maintenez <kbd className="font-mono text-xs bg-muted px-1 rounded">Ctrl</kbd> pour déplacer un widget <strong>entre</strong> catégories.</li>
+                <li>Redimensionnez via le coin inférieur droit.</li>
+              </ul>
             </div>
           </div>
         )}
 
-        {mainLayout.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <p className="text-muted-foreground mb-4">Aucun widget pour le moment</p>
-              {isOwner && !isEditMode && (
-                <Button onClick={() => setIsEditMode(true)}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  Commencer à personnaliser
-                </Button>
-              )}
-            </div>
+        {/* Grille Vide ? */}
+        {mainLayout.length === 0 && (
+          <div className="h-full flex flex-col items-center justify-center text-center opacity-60">
+            <div className="p-4 bg-muted rounded-full mb-4"><Layers className="w-8 h-8" /></div>
+            <h3 className="text-lg font-medium">C'est un peu vide ici...</h3>
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto mt-2">Commencez par ajouter un widget ou une catégorie via le bouton "Personnaliser".</p>
           </div>
-        ) : (
+        )}
+
+        {/* GRILLE PRINCIPALE */}
+        {mainLayout.length > 0 && (
           <CustomGridLayout
-            className="layout main-dashboard-grid"
+            className="layout main-grid pb-20" // Padding bottom pour le scroll
             layout={mainLayout}
             cols={responsiveCols}
             rowHeight={80}
@@ -792,82 +432,86 @@ function DashboardViewInner({
             isDraggable={isEditMode}
             isResizable={isEditMode}
             compactType="vertical"
-            preventCollision={true}
+            preventCollision={true} // Important pour la stabilité
             onLayoutChange={handleLayoutChange}
             margin={[16, 16]}
             containerPadding={[0, 0]}
           >
+            {/* 1. CATÉGORIES */}
             {categories.map((category) => {
-              const categoryWidgets = widgets.filter((w) => w.categoryId === category.id);
-              
+              const catWidgets = widgets.filter(w => w.categoryId === category.id);
               return (
-                <div 
-                  key={`cat-${category.id}`} 
-                  className="overflow-hidden category-grid-wrapper h-full w-full"
-                >
+                <div key={`cat-${category.id}`} className="h-full w-full">
                   <CategoryGridItem
                     category={category}
-                    widgets={categoryWidgets}
+                    widgets={catWidgets}
                     isCollapsed={collapsedCategories.has(category.id)}
                     isEditMode={isEditMode}
                     onToggleCollapse={() => toggleCategoryCollapse(category.id)}
                     onCategoryDelete={handleDeleteCategory}
-                    onWidgetEdit={handleEditWidget}
+                    onWidgetEdit={(w) => { setEditingWidget(w); setShowEditDialog(true); }}
                     onWidgetDelete={handleDeleteWidget}
                     onWidgetLayoutChange={handleCategoryWidgetLayoutChange}
-                    onWidgetDropIn={handleWidgetDropInCategory}
-                    onWidgetDropOut={handleWidgetDropOutCategory}
+                    onWidgetDropIn={handleWidgetDropIn}
+                    onWidgetDropOut={handleWidgetDropOut}
                   />
                 </div>
               );
             })}
 
-            {/* SEULEMENT les widgets non catégorisés */}
-            {uncategorizedWidgets.map((widget) => {
-              return (
-                <div
-                  key={`widget-${widget.id}`}
-                  className="bg-card border-2 rounded-lg shadow-sm relative overflow-hidden h-full w-full"
-                  style={{
-                    borderColor: 'hsl(var(--border))',
-                  }}
-                >
-                  <WidgetComponent
-                    key={`${widget.id}-${JSON.stringify(widget.options)}`}
-                    widget={widget}
-                    isEditMode={isEditMode}
-                    sourceType="main"
-                    onEdit={() => handleEditWidget(widget)}
-                    onDelete={() => handleDeleteWidget(widget.id)}
-                  />
-                </div>
-              );
-            })}
+            {/* 2. WIDGETS ORPHELINS */}
+            {uncategorizedWidgets.map((widget) => (
+              <div key={`widget-${widget.id}`} className="h-full w-full">
+                <WidgetComponent
+                  widget={widget}
+                  isEditMode={isEditMode}
+                  sourceType="main"
+                  onEdit={() => { setEditingWidget(widget); setShowEditDialog(true); }}
+                  onDelete={() => handleDeleteWidget(widget.id)}
+                />
+              </div>
+            ))}
           </CustomGridLayout>
         )}
       </div>
 
+      {/* DIALOGUES */}
       <AddWidgetDialogModern
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
         dashboardId={dashboard.id}
-        onWidgetAdded={(newWidget: Widget) => setWidgets([...widgets, newWidget])}
+        onWidgetAdded={(w) => setWidgets([...widgets, w])}
       />
-
       <AddCategoryDialog
         open={showAddCategoryDialog}
         onOpenChange={setShowAddCategoryDialog}
         dashboardId={dashboard.id}
-        onCategoryAdded={handleCategoryAdded}
+        onCategoryAdded={() => window.location.reload()} // Reload simple pour maj les catégories
       />
-
       <EditWidgetDialog
         widget={editingWidget}
         categories={categories}
         widgets={widgets}
         open={showEditDialog}
         onOpenChange={setShowEditDialog}
-        onWidgetUpdated={handleWidgetUpdated}
+        onWidgetUpdated={(id, newCatId, oldCatId, opts) => {
+          setWidgets(prev => prev.map(w => {
+            if (w.id !== id) return w;
+            // Mise à jour locale optimiste
+            const updated = { ...w, options: opts || w.options };
+            if (newCatId !== undefined && newCatId !== oldCatId) {
+              updated.categoryId = newCatId;
+              // Reset position si changement de conteneur
+              updated.x = 0; updated.y = 0; updated.categoryX = 0; updated.categoryY = 0;
+            }
+            return updated;
+          }));
+        }}
+      />
+      <ShareDashboardDialog 
+        open={showShareDialog} 
+        onOpenChange={setShowShareDialog} 
+        dashboardId={dashboard.id} 
       />
     </div>
   );

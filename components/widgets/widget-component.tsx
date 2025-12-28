@@ -66,14 +66,7 @@ const WIDGET_REGISTRY: Record<string, React.ComponentType<any>> = {
 
 // Widgets "Seamless" (Sans bordures par le parent)
 const SEAMLESS_WIDGETS = [
-  "link-ping", 
-  "media-requests", 
-  "weather", 
-  "anime-calendar", 
-  "movies-tv-calendar", 
-  "universal-calendar",
-  "iframe",
-  "media-library"
+  "link-ping",
 ];
 
 export const WidgetComponent = memo(function WidgetComponent({ 

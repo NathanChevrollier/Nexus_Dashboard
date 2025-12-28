@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { Widget } from "@/lib/db/schema";
 import { useQuery } from "@tanstack/react-query";
-import { Globe, Loader2, Link as LinkIcon } from "lucide-react";
+import { Globe, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface LinkPingWidgetProps {
@@ -79,62 +79,64 @@ export function LinkPingWidget({ widget }: LinkPingWidgetProps) {
     <div
       onClick={() => { if (target.effectiveUrl) handleOpen(); }}
       className={cn(
-        "group relative h-full w-full flex flex-col overflow-hidden rounded-xl border border-border/50 bg-card transition-all duration-300",
-        target.effectiveUrl ? 'cursor-pointer hover:border-primary/50 hover:shadow-lg' : ''
+        "group relative h-full w-full flex flex-col p-1 rounded-xl bg-card border border-border/50 shadow-sm transition-all duration-300",
+        target.effectiveUrl ? 'cursor-pointer hover:border-primary/50 hover:shadow-md' : ''
       )}
     >
-      
-      {/* --- HEADER : Titre avec overlay sombre --- */}
-      <div className="absolute top-0 inset-x-0 z-20 p-3 bg-gradient-to-b from-black/80 via-black/40 to-transparent">
-        <h3 className="text-xs font-bold text-white text-center truncate drop-shadow-md">
-          {title || target.effectiveHost || "Service"}
-        </h3>
-      </div>
+      {/* Conteneur interne pour l'image (arrondi légèrement plus petit) */}
+      <div className="relative h-full w-full overflow-hidden rounded-lg bg-background/50 flex items-center justify-center">
+        
+        {/* --- HEADER : Titre avec overlay sombre --- */}
+        <div className="absolute top-0 inset-x-0 z-20 p-2 bg-gradient-to-b from-black/70 via-black/30 to-transparent">
+          <h3 className="text-[11px] font-bold text-white text-center truncate drop-shadow-md tracking-wide">
+            {title || target.effectiveHost || "Service"}
+          </h3>
+        </div>
 
-      {/* --- BACKGROUND : Image ou Icône --- */}
-      <div className="absolute inset-0 z-0 bg-background/50">
-        {iconUrl ? (
-          <img
-            src={iconUrl}
-            alt="icon"
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/50 transition-transform duration-500 group-hover:scale-105">
-            {icon ? (
-              <span className="text-6xl filter drop-shadow-sm">{icon}</span>
-            ) : (
-              <Globe className="h-16 w-16 text-muted-foreground/30" />
-            )}
+        {/* --- BACKGROUND : Image ou Icône --- */}
+        <div className="absolute inset-0 z-0 flex items-center justify-center p-2">
+          {iconUrl ? (
+            <img
+              src={iconUrl}
+              alt="icon"
+              className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/50 transition-transform duration-500 group-hover:scale-105 rounded-md">
+              {icon ? (
+                <span className="text-5xl filter drop-shadow-sm">{icon}</span>
+              ) : (
+                <Globe className="h-12 w-12 text-muted-foreground/30" />
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* --- FOOTER : La fameuse "Pillule" (Status + Latency) --- */}
+        <div className="absolute bottom-2 right-2 z-20">
+          <div className="flex items-center gap-1.5 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10 shadow-lg">
+            
+            {/* Le Point de couleur */}
+            <span className={cn("h-1.5 w-1.5 rounded-full shadow-[0_0_6px_currentColor]", getStatusDotColor())} />
+            
+            {/* Le Texte (ms) */}
+            <span className="text-[9px] font-bold text-white/90 tabular-nums leading-none">
+              {isLoading ? (
+                <Loader2 className="h-2 w-2 animate-spin" />
+              ) : error || !isUp ? (
+                "OFF"
+              ) : (
+                `${latency}ms`
+              )}
+            </span>
           </div>
+        </div>
+
+        {/* Petit indicateur de lien au survol */}
+        {target.effectiveUrl && (
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors z-10" />
         )}
       </div>
-
-      {/* --- FOOTER : La fameuse "Pillule" (Status + Latency) --- */}
-      <div className="absolute bottom-2 right-2 z-20">
-        <div className="flex items-center gap-1.5 bg-black/70 backdrop-blur-md px-2 py-1 rounded-full border border-white/10 shadow-lg">
-          
-          {/* Le Point de couleur */}
-          <span className={cn("h-2 w-2 rounded-full shadow-[0_0_8px_currentColor]", getStatusDotColor())} />
-          
-          {/* Le Texte (ms) */}
-          <span className="text-[10px] font-bold text-white/90 tabular-nums leading-none">
-            {isLoading ? (
-              <Loader2 className="h-2.5 w-2.5 animate-spin" />
-            ) : error || !isUp ? (
-              "OFF"
-            ) : (
-              `${latency}ms`
-            )}
-          </span>
-        </div>
-      </div>
-
-      {/* Petit indicateur de lien au survol (optionnel mais sympa) */}
-      {target.effectiveUrl && (
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors z-10" />
-      )}
-
     </div>
   );
 }

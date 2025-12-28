@@ -1,23 +1,28 @@
-import React from 'react';
-import RGL from 'react-grid-layout';
-import type { Layout } from 'react-grid-layout';
+"use client";
 
-const ReactGridLayout: any = RGL;
+import React, { useEffect, useState } from 'react';
+import RGL, { WidthProvider, Layout } from 'react-grid-layout';
+import 'react-grid-layout/css/styles.css';
+import 'react-resizable/css/styles.css';
+
+// Ajout du WidthProvider pour rendre la grille responsive automatiquement
+const ReactGridLayout = WidthProvider(RGL);
 
 export interface AppGridLayoutProps {
   className?: string;
-  // react-grid-layout Layout is an array of LayoutItem
-  layout: Layout;
+  layout: Layout[];
   cols?: number;
   rowHeight?: number;
-  width?: number;
+  width?: number; // Optionnel maintenant grâce au WidthProvider
   isDraggable?: boolean;
   isResizable?: boolean;
   compactType?: 'vertical' | 'horizontal' | null;
   preventCollision?: boolean;
-  onLayoutChange?: (layout: Layout) => void;
+  onLayoutChange?: (layout: Layout[]) => void;
   draggableHandle?: string;
   draggableCancel?: string;
+  margin?: [number, number];
+  containerPadding?: [number, number];
   children: React.ReactNode;
 }
 
@@ -26,23 +31,40 @@ export default function GridLayout({
   layout,
   cols = 12,
   rowHeight = 80,
-  width = 1200,
   isDraggable = true,
   isResizable = true,
   compactType = 'vertical',
   preventCollision = false,
   onLayoutChange,
-  draggableHandle,
-  draggableCancel,
+  draggableHandle = ".widget-drag-handle", // Défaut utile
+  draggableCancel = ".widget-no-drag", // Défaut utile
+  margin = [10, 10],
+  containerPadding = [10, 10],
   children,
+  ...props
 }: AppGridLayoutProps) {
+  const [mounted, setMounted] = useState(false);
+
+  // Fix pour l'hydratation Next.js
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Rendu simplifié côté serveur pour éviter le layout shift
+  if (!mounted) {
+    return (
+      <div className={className} style={{ position: 'relative' }}>
+        {children}
+      </div>
+    );
+  }
+
   return (
     <ReactGridLayout
       className={className}
       layout={layout}
       cols={cols}
       rowHeight={rowHeight}
-      width={width}
       isDraggable={isDraggable}
       isResizable={isResizable}
       compactType={compactType}
@@ -50,6 +72,10 @@ export default function GridLayout({
       onLayoutChange={onLayoutChange}
       draggableHandle={draggableHandle}
       draggableCancel={draggableCancel}
+      margin={margin}
+      containerPadding={containerPadding}
+      // Props passées (comme width si fourni manuellement)
+      {...props} 
     >
       {children}
     </ReactGridLayout>

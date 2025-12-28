@@ -669,3 +669,12 @@
     background-size: 20px 20px;
   }
 }
+
+/* Cache la scrollbar quand elle n'est pas utilisée */
+[data-radix-scroll-area-viewport] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+[data-radix-scroll-area-viewport]::-webkit-scrollbar {
+  display: none;
+}
