@@ -7,12 +7,12 @@ import { z } from 'zod';
 
 const patchSchema = z.object({ name: z.string().min(1).optional(), position: z.number().int().optional() });
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, context: any) {
   try {
     const session = await auth();
     if (!session) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
 
-    const id = params.id;
+    const id = context?.params?.id as string
     const body = await request.json().catch(() => ({}));
     const parsed = patchSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: 'Données invalides' }, { status: 400 });
@@ -38,12 +38,12 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, context: any) {
   try {
     const session = await auth();
     if (!session) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
 
-    const id = params.id;
+    const id = context?.params?.id as string
     const [d] = await db.select().from(dashboards).where(eq(dashboards.id, id)).limit(1);
     if (!d) return NextResponse.json({ error: 'Dashboard introuvable' }, { status: 404 });
     if (d.userId !== session.user.id) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });

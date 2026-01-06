@@ -29,8 +29,6 @@ interface AddWidgetDialogProps {
   dashboardId: string;
   onWidgetAdded?: (widget: Widget) => void;
 }
-
-type WidgetType = "link" | "ping" | "link-ping" | "iframe" | "datetime" | "weather" | "notes" | "chart" | "anime-calendar" | "todo-list" | "watchlist" | "timer" | "bookmarks" | "quote" | "countdown" | "universal-calendar" | "movies-tv-calendar" | "media-requests" | "torrent-overview" | "monitoring" | "media-library";
 type WidgetType = "link" | "ping" | "link-ping" | "iframe" | "datetime" | "weather" | "notes" | "chart" | "anime-calendar" | "todo-list" | "watchlist" | "timer" | "bookmarks" | "quote" | "countdown" | "universal-calendar" | "movies-tv-calendar" | "media-requests" | "torrent-overview" | "monitoring" | "media-library" | "library";
 
 const widgetDefinitions = [

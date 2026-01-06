@@ -27,7 +27,7 @@ export function AccountSettings() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [dashboardsList, setDashboardsList] = useState<Array<any> | null>(null);
+  const [dashboardsList, setDashboardsList] = useState<Array<any>>([]);
 
   const handleGoInvitations = () => {
     router.push("/dashboard/invitations");
