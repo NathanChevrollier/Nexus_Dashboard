@@ -59,7 +59,11 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'anime' | 'manga'>('anime');
-  const [selectedDay, setSelectedDay] = useState<string>('All');
+  const getToday = () => {
+    const d = new Date();
+    return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
+  };
+  const [selectedDay, setSelectedDay] = useState<string>(getToday());
   const [sonarrIntegration, setSonarrIntegration] = useState<any>(null);
   const [addingToSonarr, setAddingToSonarr] = useState<Record<string, boolean>>({});
 

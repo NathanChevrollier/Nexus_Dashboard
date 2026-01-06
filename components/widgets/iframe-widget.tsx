@@ -1,16 +1,22 @@
 import { Widget } from "@/lib/db/schema";
 import { AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePrompt, useAlert } from "@/components/ui/confirm-provider";
 
 interface IframeWidgetProps {
   widget: Widget;
 }
 
 export function IframeWidget({ widget }: IframeWidgetProps) {
-  const { title, iframeUrl } = widget.options;
+  const { title } = widget.options || {};
+  const opts = (widget.options || {}) as any;
+  let iframeUrl = opts?.iframeUrl || opts?.url || null;
   const [hasError, setHasError] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [requestSent, setRequestSent] = useState<string | null>(null);
+  const prompt = usePrompt();
+  const alert = useAlert();
 
   if (!iframeUrl) {
     return (
@@ -20,14 +26,18 @@ export function IframeWidget({ widget }: IframeWidgetProps) {
     );
   }
 
-  // Basic URL validation
-  let isValidUrl = false;
+  // Normalize URL: allow entering host without protocol (e.g. example.com)
+  let normalizedUrl: string | null = null;
   try {
-    new URL(iframeUrl);
-    isValidUrl = true;
+    normalizedUrl = new URL(iframeUrl).toString();
   } catch {
-    isValidUrl = false;
+    try {
+      normalizedUrl = new URL(`https://${iframeUrl}`).toString();
+    } catch {
+      normalizedUrl = null;
+    }
   }
+  const isValidUrl = !!normalizedUrl;
 
   if (!isValidUrl) {
     return (
@@ -44,6 +54,7 @@ export function IframeWidget({ widget }: IframeWidgetProps) {
       <div className="flex flex-col items-center justify-center h-full p-4 gap-2">
         <AlertCircle className="h-6 w-6 text-red-500" />
         <p className="text-xs text-muted-foreground">Erreur lors du chargement</p>
+        {errorText && <p className="text-xs text-muted-foreground text-center">{errorText}</p>}
         <button
           onClick={() => setHasError(false)}
           className="text-xs text-blue-500 hover:underline mt-1"
@@ -54,6 +65,41 @@ export function IframeWidget({ widget }: IframeWidgetProps) {
     );
   }
 
+  // Check embeddability on mount and when URL changes
+  useEffect(() => {
+    let mounted = true;
+    async function check() {
+      setErrorText(null);
+      try {
+        const res = await fetch('/api/iframe/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: normalizedUrl }) });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setHasError(true);
+          setErrorText(body.error || 'Erreur lors de la vérification');
+          return;
+        }
+        if (body && body.embeddable === false) {
+          if (mounted) {
+            setHasError(true);
+            setErrorText(body.reason || 'Le site refuse d\'être embarqué (X-Frame-Options/CSP).');
+          }
+        } else {
+          // clear any previous error
+          setHasError(false);
+          setErrorText(null);
+        }
+      } catch (e) {
+        console.error('check iframe error', e);
+      }
+    }
+    if (normalizedUrl) check();
+
+    // refresh when admin approves requests (allowlist changes)
+    const handler = () => { if (normalizedUrl) check(); };
+    window.addEventListener('iframe-requests-changed', handler as EventListener);
+    return () => { mounted = false; window.removeEventListener('iframe-requests-changed', handler as EventListener); };
+  }, [normalizedUrl]);
+
   return (
     <div className="h-full w-full bg-background">
       <div className="p-2 flex items-center justify-end gap-2">
@@ -61,20 +107,21 @@ export function IframeWidget({ widget }: IframeWidgetProps) {
           className="text-xs text-primary hover:underline"
           onClick={async () => {
             if (!iframeUrl) return;
-            const reason = window.prompt('Raison de la demande (optionnel)');
+            const reason = await prompt('Raison de la demande (optionnel)', '');
             setRequesting(true);
             try {
               const res = await fetch('/api/iframe/request', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: iframeUrl, reason }),
+                body: JSON.stringify({ url: normalizedUrl || iframeUrl, reason }),
               });
               const body = await res.json();
               if (res.ok && body.id) {
                 setRequestSent('Demande envoyée');
                 setTimeout(() => setRequestSent(null), 4000);
               } else {
-                setRequestSent('Erreur lors de l\'envoi');
+                const errMsg = (body && (body.error || body.message)) ? (body.error || body.message) : 'Erreur lors de l\'envoi';
+                setRequestSent(errMsg);
                 console.error('Request iframe failed', body);
               }
             } catch (e) {
@@ -91,7 +138,7 @@ export function IframeWidget({ widget }: IframeWidgetProps) {
         {requestSent && <span className="text-xs text-muted-foreground">{requestSent}</span>}
       </div>
       <iframe
-        src={iframeUrl}
+        src={normalizedUrl || iframeUrl}
         title={title || "Iframe"}
         className="w-full h-full border-0"
         sandbox="allow-scripts allow-same-origin allow-popups allow-forms"

@@ -9,7 +9,7 @@ interface State {
   error?: any;
 }
 
-export class ErrorBoundaryInner extends React.Component<{ children: React.ReactNode }, State> {
+export class ErrorBoundaryInner extends React.Component<{ children: React.ReactNode; isWidget?: boolean }, State> {
   constructor(props: any) {
     super(props);
     this.state = { hasError: false };
@@ -30,6 +30,23 @@ export class ErrorBoundaryInner extends React.Component<{ children: React.ReactN
 
   render() {
     if (this.state.hasError) {
+      const isWidget = !!(this.props as any).isWidget;
+
+      if (isWidget) {
+        return (
+          <div className="h-full w-full flex items-center justify-center p-2">
+            <div className="w-full h-full flex items-center justify-center">
+              <div className="flex flex-col items-center gap-2 bg-card/70 border border-border rounded-md p-3 text-center max-w-xs">
+                <AlertCircle className="h-6 w-6 text-red-400" />
+                <div className="text-sm font-medium">Erreur du widget</div>
+                <div className="text-xs text-muted-foreground">Le widget a crasché — vérifiez la console.</div>
+                <Button variant="outline" size="sm" onClick={this.handleReload}>Recharger</Button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="h-full w-full flex items-center justify-center p-4">
           <div className="max-w-sm w-full bg-card/80 border border-border rounded-md p-4 text-center">
@@ -56,6 +73,6 @@ export class ErrorBoundaryInner extends React.Component<{ children: React.ReactN
   }
 }
 
-export default function ErrorBoundary({ children }: { children: React.ReactNode }) {
-  return <ErrorBoundaryInner>{children}</ErrorBoundaryInner>;
+export default function ErrorBoundary({ children, isWidget }: { children: React.ReactNode; isWidget?: boolean }) {
+  return <ErrorBoundaryInner isWidget={isWidget}>{children}</ErrorBoundaryInner>;
 }

@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { iframeRequests } from '@/lib/db/schema';
-import { v4 as uuidv4 } from 'uuid';
+import { iframeRequests, users } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
 
 const bodySchema = z.object({
-  url: z.string().url(),
+  url: z.string().min(3),
   reason: z.string().optional(),
 });
 
@@ -15,11 +15,37 @@ export async function POST(request: Request) {
     const session = await auth();
     if (!session) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
 
-    const json = await request.json();
+    const json = await request.json().catch(() => ({}));
     const parsed = bodySchema.safeParse(json);
     if (!parsed.success) return NextResponse.json({ error: 'Données invalides' }, { status: 400 });
 
-    const { url, reason } = parsed.data;
+    let { url, reason } = parsed.data;
+
+    // Allow URLs without protocol by trying to normalize
+    try {
+      new URL(url);
+    } catch (e) {
+      try {
+        url = `https://${url}`;
+        new URL(url);
+      } catch (e2) {
+        return NextResponse.json({ error: 'URL invalide' }, { status: 400 });
+      }
+    }
+
+    // Prevent duplicate pending requests for same origin
+    let origin = '';
+    try {
+      const u = new URL(url);
+      origin = `${u.protocol}//${u.host}`;
+    } catch (e) {
+      origin = url;
+    }
+
+    const existing = await db.select().from(iframeRequests).where(eq(iframeRequests.url, url)).limit(1).catch(() => []);
+    if (existing && existing.length > 0) {
+      return NextResponse.json({ error: 'Une demande pour cette URL existe déjà' }, { status: 409 });
+    }
 
     const id = `ifr-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
 
@@ -31,7 +57,31 @@ export async function POST(request: Request) {
       status: 'PENDING',
     });
 
-    return NextResponse.json({ ok: true, id });
+    // Notify admins via socket server (best-effort)
+    (async () => {
+      try {
+        const socketUrl = process.env.SOCKET_SERVER_URL || process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || 'http://localhost:4001';
+        // fetch admin users
+        const adminRows = await db.select().from(users).where(eq(users.role, 'ADMIN'));
+        const payload = { id, url, userId: session.user.id, reason: reason || null };
+        for (const a of adminRows) {
+          try {
+            await fetch(`${socketUrl.replace(/\/$/, '')}/emit`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ event: 'iframe_request', targetUserId: a.id, payload }),
+            });
+          } catch (e) {
+            // ignore individual notify errors
+            console.debug('notify admin failed', e);
+          }
+        }
+      } catch (e) {
+        console.debug('Failed to notify admins about iframe request', e);
+      }
+    })();
+
+    return NextResponse.json({ ok: true, id, origin });
   } catch (err) {
     console.error('Erreur POST /api/iframe/request', err);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });

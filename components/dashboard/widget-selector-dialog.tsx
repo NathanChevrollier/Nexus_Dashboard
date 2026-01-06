@@ -11,7 +11,8 @@ import { createWidget } from "@/lib/actions/widgets";
 import { 
   Link as LinkIcon, Activity, Frame, Clock, Cloud, StickyNote, BarChart3, 
   Calendar, CheckSquare, Eye, Timer, Bookmark, Quote, CalendarClock, 
-  Film, CalendarRange 
+  Film, CalendarRange, 
+  BookOpen
 } from "lucide-react";
 import type { Widget, Category } from "@/lib/db/schema";
 import { useAlert } from "@/components/ui/confirm-provider";
@@ -45,6 +46,7 @@ const widgetTypes = [
   { type: "universal-calendar", icon: CalendarRange, label: "Calendrier Universel", description: "Tous vos médias et événements" },
   { type: "movies-tv-calendar", icon: Film, label: "Films & Séries", description: "Sorties cinéma et TV" },
   { type: "media-library", icon: Film, label: "Médiathèque", description: "Page complète films/séries/musiques" },
+  { type: "library", icon: BookOpen, label: "Bibliothèque", description: "Bibliothèque" },
 ] as const;
 
 export function WidgetSelectorDialog({ open, onOpenChange, dashboardId, categories = [], onWidgetAdded }: WidgetSelectorDialogProps) {

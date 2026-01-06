@@ -26,7 +26,7 @@ export function NotesWidget({ widget }: NotesWidgetProps) {
   useEffect(() => {
     setContent(options.content || "");
     setTextColor((options as any).textColor || "#000000");
-  }, [options.content]);
+  }, [options.content, (options as any).textColor]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -51,7 +51,7 @@ export function NotesWidget({ widget }: NotesWidgetProps) {
   };
 
   return (
-    <div className="p-4 h-full flex flex-col">
+    <div className="p-4 h-full flex flex-col min-h-0">
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-medium flex items-center gap-2">
           <FileText className="h-4 w-4" />
@@ -109,11 +109,11 @@ export function NotesWidget({ widget }: NotesWidgetProps) {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="edit" className="flex-1 mt-0">
+          <TabsContent value="edit" className="flex-1 mt-0 min-h-0 flex flex-col">
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="w-full h-full p-3 text-sm border rounded-md bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary font-mono"
+              className="w-full flex-1 min-h-0 p-3 text-sm border rounded-md bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary font-mono overflow-auto"
               placeholder="# Titre
 
 **Gras** _italique_ ~~barré~~
@@ -155,10 +155,10 @@ Tableau :
             </div>
           </TabsContent>
 
-          <TabsContent value="preview" className="flex-1 mt-0 overflow-auto">
+          <TabsContent value="preview" className="flex-1 mt-0 overflow-auto min-h-0">
             <div className="prose prose-sm dark:prose-invert max-w-none p-3 border rounded-md bg-accent/20">
               {content ? (
-                <div style={{ color: textColor }}>
+                <div style={{ color: textColor }} className="text-[inherit]">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {content}
                   </ReactMarkdown>

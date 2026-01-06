@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import IframeRequestsAdmin from "@/components/admin/iframe-requests-admin";
+import IframeAllowlistAdmin from "@/components/admin/iframe-allowlist-admin";
 import { useSession } from "next-auth/react";
 import { User } from "@/lib/db/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -148,7 +149,14 @@ export function UserManagement({ users: initialUsers }: UserManagementProps) {
             <CardTitle className="flex items-center gap-2">🌐 Demandes d'iframes</CardTitle>
           </CardHeader>
           <CardContent>
-            <IframeRequestsAdmin />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <IframeRequestsAdmin />
+              </div>
+              <div>
+                <IframeAllowlistAdmin />
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}

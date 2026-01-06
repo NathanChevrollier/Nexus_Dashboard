@@ -21,6 +21,7 @@ import {
   Calendar, CheckSquare, Eye, Timer, Bookmark, Quote, CalendarClock, 
   CalendarRange, Film, ArrowLeft, Check, ListChecks, Download, Server, Loader2
 } from "lucide-react";
+  import { BookOpen } from "lucide-react";
 
 interface AddWidgetDialogProps {
   open: boolean;
@@ -30,6 +31,7 @@ interface AddWidgetDialogProps {
 }
 
 type WidgetType = "link" | "ping" | "link-ping" | "iframe" | "datetime" | "weather" | "notes" | "chart" | "anime-calendar" | "todo-list" | "watchlist" | "timer" | "bookmarks" | "quote" | "countdown" | "universal-calendar" | "movies-tv-calendar" | "media-requests" | "torrent-overview" | "monitoring" | "media-library";
+type WidgetType = "link" | "ping" | "link-ping" | "iframe" | "datetime" | "weather" | "notes" | "chart" | "anime-calendar" | "todo-list" | "watchlist" | "timer" | "bookmarks" | "quote" | "countdown" | "universal-calendar" | "movies-tv-calendar" | "media-requests" | "torrent-overview" | "monitoring" | "media-library" | "library";
 
 const widgetDefinitions = [
   { type: "link", icon: LinkIcon, name: "Lien", description: "Raccourci vers un site", color: "from-blue-500 to-blue-600" },
@@ -51,6 +53,7 @@ const widgetDefinitions = [
   { type: "movies-tv-calendar", icon: Film, name: "Cinéma & TV", description: "Sorties TMDb", color: "from-rose-500 to-red-600" },
   { type: "media-requests", icon: ListChecks, name: "Media Requests", description: "Overseerr / Jellyseerr", color: "from-emerald-500 to-teal-600" },
   { type: "media-library", icon: Film, name: "Médiathèque", description: "Accès bibliothèque", color: "from-fuchsia-500 to-indigo-500" },
+  { type: "library", icon: BookOpen, name: "Library", description: "Gérer ta collection", color: "from-fuchsia-500 to-pink-500" },
   { type: "torrent-overview", icon: Download, name: "Torrent Overview", description: "Client Torrent", color: "from-blue-500 to-cyan-500" },
   { type: "monitoring", icon: Server, name: "Monitoring", description: "Ressources Serveur", color: "from-amber-500 to-orange-500" },
 ];
@@ -143,6 +146,7 @@ export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWid
          "media-requests": { w: 4, h: 4 },
          "torrent-overview": { w: 4, h: 4 },
          "media-library": { w: 4, h: 3 },
+         "library": { w: 4, h: 3 },
          "monitoring": { w: 4, h: 3 },
          "chart": { w: 5, h: 3 },
          "anime-calendar": { w: 4, h: 4 },

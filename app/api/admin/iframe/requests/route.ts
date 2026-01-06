@@ -10,7 +10,7 @@ export async function GET() {
     if (!session) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
     if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
 
-    const rows = await db.select().from(iframeRequests).orderBy(iframeRequests.createdAt);
+    const rows = await db.select().from(iframeRequests).where(eq(iframeRequests.status, 'PENDING')).orderBy(iframeRequests.createdAt);
     return NextResponse.json({ requests: rows });
   } catch (err) {
     console.error('Erreur GET /api/admin/iframe/requests', err);

@@ -308,3 +308,59 @@ export function getDayColor(dayName: string): string {
 
   return colors[dayName] || 'bg-gray-500/10 text-gray-500';
 }
+
+// GraphQL search query for media by text
+const SEARCH_MEDIA_QUERY = `
+query ($search: String, $type: MediaType, $page: Int, $perPage: Int) {
+  Page(page: $page, perPage: $perPage) {
+    pageInfo { total, currentPage, lastPage }
+    media(search: $search, type: $type, sort: POPULARITY_DESC) {
+      id
+      title { romaji english native }
+      coverImage { large medium color }
+      format
+      status
+      episodes
+      chapters
+      volumes
+      genres
+      averageScore
+      siteUrl
+    }
+  }
+}
+`;
+
+/**
+ * Search media on AniList (anime/manga)
+ */
+export async function searchMedia(
+  search: string,
+  type: 'ANIME' | 'MANGA' | undefined = undefined,
+  page: number = 1,
+  perPage: number = 10
+): Promise<any[]> {
+  try {
+    const response = await fetch(ANILIST_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        query: SEARCH_MEDIA_QUERY,
+        variables: { search, type, page, perPage },
+      }),
+    });
+
+    if (!response.ok) throw new Error(`AniList API error: ${response.status}`);
+
+    const data = await response.json();
+    if (data.errors) throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+
+    return data.data.Page.media;
+  } catch (error) {
+    console.error('AniList search failed:', error);
+    throw error;
+  }
+}

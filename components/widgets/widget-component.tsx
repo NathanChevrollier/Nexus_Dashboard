@@ -30,6 +30,7 @@ import { MediaRequestsWidget } from "./media-requests-widget";
 import { TorrentOverviewWidget } from "./torrent-overview-widget";
 import { MonitoringWidget } from "./monitoring-widget";
 import { MediaLibraryWidget } from "./media-library-widget";
+import { LibraryWidget } from './library-widget';
 
 interface WidgetComponentProps {
   widget: Widget;
@@ -62,6 +63,7 @@ const WIDGET_REGISTRY: Record<string, React.ComponentType<any>> = {
   "torrent-overview": TorrentOverviewWidget,
   "monitoring": MonitoringWidget,
   "media-library": MediaLibraryWidget,
+  "library": LibraryWidget,
 };
 
 // Widgets "Seamless" (Sans bordures par le parent)
@@ -160,7 +162,7 @@ export const WidgetComponent = memo(function WidgetComponent({
             : "rounded-xl bg-card border shadow-sm"
         )}
       >
-        <ErrorBoundary>
+        <ErrorBoundary isWidget>
           <div className="h-full w-full">
             {renderContent()}
           </div>

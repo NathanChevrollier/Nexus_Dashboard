@@ -41,6 +41,25 @@ export async function POST(request: Request) {
       await db.insert(iframeAllowlist).values({ id, origin, addedBy: session.user.id });
     }
 
+    // Notify requester (best-effort)
+    (async () => {
+      try {
+        const socketUrl = process.env.SOCKET_SERVER_URL || process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || 'http://localhost:4001';
+        const payload = { requestId, origin };
+        try {
+          await fetch(`${socketUrl.replace(/\/$/, '')}/emit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: 'iframe_request_approved', targetUserId: req.userId, payload }),
+          });
+        } catch (e) {
+          console.debug('notify requester failed', e);
+        }
+      } catch (e) {
+        console.debug('Failed to notify requester about approval', e);
+      }
+    })();
+
     return NextResponse.json({ ok: true, origin });
   } catch (err) {
     console.error('Erreur POST /api/admin/iframe/requests/approve', err);

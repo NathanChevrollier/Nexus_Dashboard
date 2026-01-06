@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -26,6 +27,7 @@ export function AccountSettings() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [dashboardsList, setDashboardsList] = useState<Array<any> | null>(null);
 
   const handleGoInvitations = () => {
     router.push("/dashboard/invitations");
@@ -49,6 +51,86 @@ export function AccountSettings() {
       await alert("Erreur lors de la réinitialisation.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/dashboards/me');
+        if (!mounted) return;
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (data?.dashboards) setDashboardsList(data.dashboards);
+      } catch (e) {
+        console.error('Failed to load dashboards for account page', e);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const handleRenameDashboard = async (id: string) => {
+    // open rename dialog (handled below)
+    setRenameTargetId(id);
+    const item = dashboardsList.find((x) => x.id === id);
+    setRenameValue(item?.name || '');
+    setRenameOpen(true);
+  };
+
+  const handleDeleteDashboard = async (id: string) => {
+    if (!(await confirm('Supprimer ce dashboard ? Cette action est irréversible.'))) return;
+    try {
+      const res = await fetch(`/api/dashboards/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Erreur');
+      setDashboardsList((prev) => prev.filter((d) => d.id !== id));
+      await alert('Dashboard supprimé');
+    } catch (e) {
+      console.error(e);
+      await alert('Erreur lors de la suppression');
+    }
+  };
+
+  // Rename dialog state and handlers
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState<string>('');
+  const [renameLoading, setRenameLoading] = useState(false);
+
+  const handleRenameSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!renameTargetId) return;
+    setRenameLoading(true);
+    try {
+      const res = await fetch(`/api/dashboards/${renameTargetId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: renameValue }) });
+      if (!res.ok) throw new Error('Erreur');
+      setDashboardsList((prev) => prev.map((d) => (d.id === renameTargetId ? { ...d, name: renameValue } : d)));
+      await alert('Nom mis à jour');
+      setRenameOpen(false);
+      setRenameTargetId(null);
+    } catch (err) {
+      console.error(err);
+      await alert('Erreur lors du renommage');
+    } finally {
+      setRenameLoading(false);
+    }
+  };
+
+  const handleDuplicateDashboard = async (id: string) => {
+    try {
+      const res = await fetch('/api/dashboards/clone', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dashboardId: id, name: undefined }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Erreur');
+      // Refresh list
+      const refreshed = await fetch('/api/dashboards/me');
+      if (refreshed.ok) {
+        const d = await refreshed.json();
+        if (d?.dashboards) setDashboardsList(d.dashboards);
+      }
+      await alert('Dashboard dupliqué');
+    } catch (e) {
+      console.error(e);
+      await alert('Erreur lors de la duplication');
     }
   };
 
@@ -141,6 +223,94 @@ export function AccountSettings() {
           </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Mes Dashboards</CardTitle>
+          <CardDescription>Gérez le nom et la suppression de vos dashboards personnels.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {dashboardsList === null ? (
+              <div className="flex items-center justify-center p-6">
+                <Loader2 className="h-5 w-5 animate-spin text-primary/60" />
+                <span className="ml-3 text-sm text-muted-foreground">Chargement des dashboards...</span>
+              </div>
+            ) : dashboardsList.length === 0 ? (
+              <div className="text-sm text-muted-foreground">Aucun dashboard trouvé.</div>
+            ) : (
+              <div className="grid gap-2">
+                {dashboardsList.map((d) => (
+                  <div key={d.id} className="flex items-center justify-between p-2 border rounded">
+                    <div>
+                      <div className="font-medium">{d.name}</div>
+                      <div className="text-xs text-muted-foreground">{d.slug} • {d.widgets || 0} widgets • {d.categories || 0} catégories</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => { setRenameTargetId(d.id); setRenameValue(d.name); setRenameOpen(true); }}>Renommer</Button>
+                      <Button size="sm" variant="outline" onClick={() => handleDuplicateDashboard(d.id)}>Dupliquer</Button>
+                      <Button size="sm" variant="outline" onClick={async () => {
+                        const currentPos = typeof d.position === 'number' ? d.position : dashboardsList.findIndex(x => x.id === d.id);
+                        const newPos = currentPos - 1;
+                        try {
+                          const res = await fetch(`/api/dashboards/${d.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ position: newPos }) });
+                          if (res.ok) {
+                            const refreshed = await fetch('/api/dashboards/me');
+                            if (refreshed.ok) {
+                              const data = await refreshed.json();
+                              if (data?.dashboards) setDashboardsList(data.dashboards);
+                            }
+                          } else {
+                            await alert('Erreur lors du déplacement');
+                          }
+                        } catch (e) { console.error(e); await alert('Erreur lors du déplacement'); }
+                      }}>↑</Button>
+                      <Button size="sm" variant="outline" onClick={async () => {
+                        const currentPos = typeof d.position === 'number' ? d.position : dashboardsList.findIndex(x => x.id === d.id);
+                        const newPos = currentPos + 1;
+                        try {
+                          const res = await fetch(`/api/dashboards/${d.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ position: newPos }) });
+                          if (res.ok) {
+                            const refreshed = await fetch('/api/dashboards/me');
+                            if (refreshed.ok) {
+                              const data = await refreshed.json();
+                              if (data?.dashboards) setDashboardsList(data.dashboards);
+                            }
+                          } else {
+                            await alert('Erreur lors du déplacement');
+                          }
+                        } catch (e) { console.error(e); await alert('Erreur lors du déplacement'); }
+                      }}>↓</Button>
+                      <Button size="sm" variant="destructive" onClick={() => handleDeleteDashboard(d.id)}>Supprimer</Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Renommer le dashboard</DialogTitle>
+            <DialogDescription>Entrez le nouveau nom pour votre dashboard.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleRenameSubmit} className="space-y-3 mt-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm text-muted-foreground">Nom</label>
+              <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} />
+            </div>
+            <DialogFooter>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setRenameOpen(false)}>Annuler</Button>
+                <Button type="submit" disabled={renameLoading}>{renameLoading ? '...' : 'Renommer'}</Button>
+              </div>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>

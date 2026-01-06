@@ -276,6 +276,37 @@ export const mediaItemsRelations = relations(mediaItems, ({ one }) => ({
   }),
 }));
 
+// ============ LIBRARY ITEMS TABLE =============
+
+export const libraryItems = mysqlTable('library_items', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+
+  title: varchar('title', { length: 255 }).notNull(),
+  type: varchar('type', { length: 50 }).notNull().default('manga'),
+  status: varchar('status', { length: 50 }).notNull().default('reading'),
+
+  // Progression
+  currentProgress: int('current_progress').default(0),
+  totalProgress: int('total_progress'),
+
+  // Customisation
+  coverUrl: text('cover_url'),
+  linkUrl: text('link_url'),
+
+  // Calendrier Manuel
+  // ex: "weekly-monday" ou juste une date "2024-05-20"
+  releaseSchedule: text('release_schedule'),
+
+  rating: int('rating').default(0),
+  notes: text('notes'),
+
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  userIdIdx: index('library_items_user_id_idx').on(table.userId),
+}));
+
 // ============= TYPES =============
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;

@@ -30,14 +30,38 @@ export default function NotificationBell() {
       setItems((s) => [msg, ...s]);
     };
 
+    const onIframeRequest = (payload: any) => {
+      const msg = `Nouvelle demande d'iframe: ${payload.url || payload.origin || payload.id}`;
+      setItems((s) => [msg, ...s]);
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification('Demande Iframe', { body: msg });
+        }
+      } catch (e) {}
+    };
+
+    const onIframeApproved = (payload: any) => {
+      const msg = `Votre demande iframe a été approuvée (${payload.origin || payload.requestId})`;
+      setItems((s) => [msg, ...s]);
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification('Iframe approuvée', { body: msg });
+        }
+      } catch (e) {}
+    };
+
     socket.on('share:created', onCreated);
     socket.on('share:accepted', onAccepted);
     socket.on('share:rejected', onRejected);
+    socket.on('iframe_request', onIframeRequest);
+    socket.on('iframe_request_approved', onIframeApproved);
 
     return () => {
       socket.off('share:created', onCreated);
       socket.off('share:accepted', onAccepted);
       socket.off('share:rejected', onRejected);
+      socket.off('iframe_request', onIframeRequest);
+      socket.off('iframe_request_approved', onIframeApproved);
     };
   }, [socket]);
 

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import IframeRequestsAdmin from "@/components/admin/iframe-requests-admin";
+import IframeAllowlistAdmin from "@/components/admin/iframe-allowlist-admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, Check, X, Shield, Crown, User as UserIcon } from "lucide-react";
@@ -333,6 +335,7 @@ export function UserManagementSettings() {
             </div>
           </div>
         )}
+          {/* iframe admin is intentionally kept out of this user card; it is rendered in the Settings page as a separate section */}
       </CardContent>
     </Card>
   );

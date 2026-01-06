@@ -156,8 +156,8 @@ Créer un fichier `.env` à la racine :
 
 ```env
 # Database
-DATABASE_HOST=localhost
-DATABASE_PORT=3307
+DATABASE_HOST=localhost    # ou 'db' si via docker-compose
+DATABASE_PORT=3307         # port exposé sur l'hôte (docker-compose mappe 3307:3306)
 DATABASE_USER=nexus
 DATABASE_PASSWORD=nexus_password_2025
 DATABASE_NAME=nexus_dashboard
@@ -926,6 +926,6 @@ Dashboard créé avec ❤️ et beaucoup de ☕
 ---
 
 **Version** : 2.0.0  
-**Dernière mise à jour** : Décembre 2024  
+**Dernière mise à jour** : Décembre 2025  
 **Node** : v20+  
 **Next.js** : 15.5.9
