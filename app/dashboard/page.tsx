@@ -51,18 +51,20 @@ export default async function DashboardPage() {
     .orderBy(categories.order);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-full flex flex-col overflow-hidden bg-background">
       <Navbar 
         user={session.user} 
         dashboards={userDashboards}
         currentDashboardId={currentDashboard.id}
       />
-      <DashboardView 
-        dashboard={currentDashboard}
-        isOwner={true}
-        initialWidgets={dashboardWidgets}
-        initialCategories={dashboardCategories}
-      />
+      <div className="flex-1 overflow-y-auto">
+        <DashboardView 
+          dashboard={currentDashboard}
+          isOwner={true}
+          initialWidgets={dashboardWidgets}
+          initialCategories={dashboardCategories}
+        />
+      </div>
     </div>
   );
 }

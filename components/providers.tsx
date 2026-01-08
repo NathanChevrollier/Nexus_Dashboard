@@ -6,7 +6,8 @@ import { useState } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ConfirmProvider } from "@/components/ui/confirm-provider";
 import { SocketProvider } from "@/components/ui/socket-provider";
-import NotificationBell from "@/components/ui/notification-bell";
+import { AlertsProvider } from "@/components/chat/alerts-context";
+import FloatingAlerts from "@/components/chat/floating-alerts";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -27,8 +28,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <ThemeProvider>
           <ConfirmProvider>
             <SocketProvider>
-              {children}
-              <NotificationBell />
+              <AlertsProvider>
+                {children}
+                <FloatingAlerts />
+              </AlertsProvider>
             </SocketProvider>
           </ConfirmProvider>
         </ThemeProvider>

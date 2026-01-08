@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-// CORRECTION 1 : Ajout de Umbrella dans les imports pour éviter l'erreur "not defined"
 import { 
   Cloud, CloudRain, Sun, Wind, Droplets, CloudSnow, 
-  Cloudy, Eye, Gauge, Umbrella, Navigation, RefreshCw, CalendarDays 
+  Cloudy, Eye, Umbrella, Navigation, RefreshCw, CalendarDays 
 } from "lucide-react";
 import { Widget } from "@/lib/db/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -38,13 +37,39 @@ interface ForecastDay {
   precipitation: number;
 }
 
-const WEATHER_THEMES: Record<string, { gradient: string; iconColor: string; textColor: string }> = {
-  default: { gradient: "from-slate-100 to-slate-300 dark:from-slate-800 dark:to-slate-950", iconColor: "text-slate-500", textColor: "text-slate-700 dark:text-slate-300" },
-  sunny: { gradient: "from-amber-200 to-orange-100 dark:from-amber-900/60 dark:to-orange-950/60", iconColor: "text-amber-500", textColor: "text-amber-800 dark:text-amber-200" },
-  cloudy: { gradient: "from-gray-200 to-slate-200 dark:from-slate-700/60 dark:to-gray-900/60", iconColor: "text-gray-400", textColor: "text-gray-700 dark:text-gray-300" },
-  rainy: { gradient: "from-blue-200 to-indigo-200 dark:from-blue-900/60 dark:to-indigo-950/60", iconColor: "text-blue-500", textColor: "text-blue-800 dark:text-blue-200" },
-  snowy: { gradient: "from-sky-100 to-blue-50 dark:from-sky-900/50 dark:to-blue-950/50", iconColor: "text-sky-400", textColor: "text-sky-800 dark:text-sky-200" },
-  stormy: { gradient: "from-violet-200 to-fuchsia-200 dark:from-violet-900/60 dark:to-fuchsia-950/60", iconColor: "text-violet-500", textColor: "text-violet-800 dark:text-violet-200" },
+// THÈMES AUTONOMES (Ne dépendent PAS du thème global de l'app)
+// On force des couleurs statiques pour garantir le rendu visuel.
+const WEATHER_THEMES: Record<string, { gradient: string; iconColor: string; barColor: string }> = {
+  default: { 
+    gradient: "from-slate-800/40 via-transparent to-transparent", 
+    iconColor: "text-slate-400",
+    barColor: "bg-slate-500"
+  },
+  sunny: { 
+    gradient: "from-amber-500/20 via-orange-500/5 to-transparent", 
+    iconColor: "text-amber-400",
+    barColor: "bg-gradient-to-r from-amber-400 to-orange-500"
+  },
+  cloudy: { 
+    gradient: "from-gray-500/30 via-slate-500/10 to-transparent", 
+    iconColor: "text-gray-300",
+    barColor: "bg-gray-400"
+  },
+  rainy: { 
+    gradient: "from-blue-600/30 via-indigo-900/20 to-transparent", 
+    iconColor: "text-blue-400",
+    barColor: "bg-blue-500"
+  },
+  snowy: { 
+    gradient: "from-sky-400/25 via-blue-200/5 to-transparent", 
+    iconColor: "text-sky-300",
+    barColor: "bg-sky-300"
+  },
+  stormy: { 
+    gradient: "from-violet-600/30 via-purple-900/20 to-transparent", 
+    iconColor: "text-violet-400",
+    barColor: "bg-violet-500"
+  },
 };
 
 export function WeatherWidget({ widget }: WeatherWidgetProps) {
@@ -130,8 +155,8 @@ export function WeatherWidget({ widget }: WeatherWidgetProps) {
     return "Inconnu";
   };
 
-  const getTheme = (code: number, isDay: boolean = true) => {
-    if (code === 0 || code === 1) return isDay ? WEATHER_THEMES.sunny : WEATHER_THEMES.default;
+  const getTheme = (code: number) => {
+    if (code === 0 || code === 1) return WEATHER_THEMES.sunny;
     if (code >= 2 && code <= 3) return WEATHER_THEMES.cloudy;
     if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return WEATHER_THEMES.rainy;
     if ((code >= 71 && code <= 77) || code >= 85) return WEATHER_THEMES.snowy;
@@ -148,120 +173,148 @@ export function WeatherWidget({ widget }: WeatherWidgetProps) {
     return <Cloud className={className} />;
   };
 
+  // --- RENDU LOADING / ERROR ---
+  // Note: On utilise des couleurs fixes (zinc-900 / text-white) pour ignorer le thème clair
+  
   if (loading && !weather) {
-    return <div className="h-full flex items-center justify-center bg-card animate-pulse"><Cloud className="h-10 w-10 text-muted" /></div>;
-  }
-
-  if (!weather) {
     return (
-      <div className="h-full flex flex-col items-center justify-center p-4 bg-card text-center">
-        <Cloud className="h-10 w-10 mb-2 opacity-20" />
-        <p className="text-sm text-muted-foreground mb-2">Météo indisponible</p>
-        <Button size="sm" variant="outline" onClick={fetchWeather}>Réessayer</Button>
+      <div className="h-full flex items-center justify-center bg-zinc-950/80 animate-pulse text-zinc-500 rounded-2xl">
+        <Cloud className="h-10 w-10" />
       </div>
     );
   }
 
-  const theme = getTheme(weather.code, weather.isDay);
+  if (!weather) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-4 bg-zinc-950/80 text-center text-zinc-300 rounded-2xl">
+        <Cloud className="h-10 w-10 mb-2 opacity-30" />
+        <p className="text-sm mb-2">Météo indisponible</p>
+        <Button size="sm" variant="outline" className="bg-transparent border-zinc-700 hover:bg-zinc-800 text-white" onClick={fetchWeather}>
+          Réessayer
+        </Button>
+      </div>
+    );
+  }
+
+  const theme = getTheme(weather.code);
   const isCompact = widget.w <= 2 || widget.h <= 2;
 
+  // --- RENDU COMPACT ---
   if (isCompact) {
     return (
-      <div className={cn("h-full w-full flex flex-col justify-between p-4 bg-gradient-to-br", theme.gradient)}>
-        <div className="flex justify-between items-start">
-          <span className="font-semibold text-sm truncate max-w-[80px]">{weather.city}</span>
+      <div className={cn(
+        "h-full w-full flex flex-col justify-between p-4 relative overflow-hidden text-white",
+        "bg-zinc-950/90 backdrop-blur-md border border-white/5", // Fond sombre forcé
+        "bg-gradient-to-br", theme.gradient // Dégradé fixe
+      )}>
+        <div className="flex justify-between items-start z-10">
+          <span className="font-semibold text-sm truncate max-w-[80px] opacity-90">{weather.city}</span>
           <div className={theme.iconColor}>{getIcon(weather.code, "h-6 w-6")}</div>
         </div>
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-2 z-10">
           <span className="text-3xl font-bold">{weather.temp}°</span>
         </div>
       </div>
     );
   }
 
+  // --- RENDU COMPLET ---
   return (
-    <Tabs defaultValue="current" className={cn("h-full w-full flex flex-col bg-gradient-to-br relative overflow-hidden", theme.gradient)}>
+    <Tabs defaultValue="current" className={cn(
+      "h-full w-full flex flex-col relative overflow-hidden text-white",
+      "bg-zinc-950/80 backdrop-blur-xl border border-white/10 shadow-xl", // Fond unifié "Dark Glass"
+      "bg-gradient-to-br", theme.gradient
+    )}>
       
-      <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-black/5 rounded-full blur-3xl pointer-events-none" />
+      {/* Background Decor (Fixes et subtils) */}
+      <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/5 rounded-full blur-[80px] pointer-events-none" />
+      <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-black/40 rounded-full blur-[80px] pointer-events-none" />
 
-      {/* Header Fixe */}
+      {/* Header */}
       <div className="flex items-center justify-between px-5 pt-4 z-10 shrink-0">
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2">
-            <Navigation className="h-3 w-3 text-primary" /> {weather.city}
+            <Navigation className="h-3.5 w-3.5 text-white/70" /> {weather.city}
           </h2>
-          <p className="text-[10px] text-muted-foreground flex items-center gap-1 opacity-70">
+          <p className="text-[10px] text-white/40 flex items-center gap-1">
             {lastUpdated.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-            <RefreshCw className="h-3 w-3 cursor-pointer hover:rotate-180 transition-transform" onClick={fetchWeather} />
+            <RefreshCw className="h-3 w-3 cursor-pointer hover:text-white transition-colors" onClick={fetchWeather} />
           </p>
         </div>
         
-        <TabsList className="h-7 bg-background/30 backdrop-blur-md border border-white/10 p-0.5 w-auto rounded-lg">
-          <TabsTrigger value="current" className="text-[10px] h-6 px-2 rounded-sm data-[state=active]:bg-white/80 dark:data-[state=active]:bg-black/50">Actuel</TabsTrigger>
-          <TabsTrigger value="forecast" className="text-[10px] h-6 px-2 rounded-sm data-[state=active]:bg-white/80 dark:data-[state=active]:bg-black/50">5 Jours</TabsTrigger>
+        {/* Onglets stylisés "Glass" */}
+        <TabsList className="h-7 bg-white/5 border border-white/10 p-0.5 w-auto rounded-lg">
+          <TabsTrigger 
+            value="current" 
+            className="text-[10px] h-6 px-3 rounded-md text-white/60 data-[state=active]:bg-white/10 data-[state=active]:text-white transition-all"
+          >
+            Actuel
+          </TabsTrigger>
+          <TabsTrigger 
+            value="forecast" 
+            className="text-[10px] h-6 px-3 rounded-md text-white/60 data-[state=active]:bg-white/10 data-[state=active]:text-white transition-all"
+          >
+            5 Jours
+          </TabsTrigger>
         </TabsList>
       </div>
 
-      {/* Zone de Contenu Principale */}
-      {/* CORRECTION 2: Utilisation de flex-col et h-full pour occuper tout l'espace */}
-      <div className="flex-1 overflow-hidden z-10 p-5 pt-2 flex flex-col min-h-0 relative">
+      {/* Contenu */}
+      <div className="flex-1 overflow-hidden z-10 p-5 pt-2 flex flex-col min-h-0">
         
-        {/* --- ONGLET ACTUEL --- */}
-        <TabsContent value="current" className="flex-1 flex flex-col mt-0 h-full min-h-0 data-[state=inactive]:hidden">
-          {/* Scrollable si besoin */}
-          <div className="overflow-y-auto flex-1 flex flex-col">
-            <div className="flex items-center justify-between mb-4 mt-2 shrink-0">
-              <div className="flex flex-col">
-                <span className="text-5xl font-bold tracking-tighter">{weather.temp}°</span>
-                <span className="text-sm font-medium opacity-80 mt-1 capitalize">{weather.condition}</span>
-                <span className="text-xs opacity-60">Ressenti {weather.feelsLike}°</span>
-              </div>
-              <div className={cn("p-3 rounded-3xl bg-white/20 dark:bg-black/10 backdrop-blur-md shadow-sm border border-white/10", theme.iconColor)}>
-                {getIcon(weather.code, "h-14 w-14 drop-shadow-md")}
-              </div>
+        {/* --- ACTUEL --- */}
+        <TabsContent value="current" className="flex-1 flex flex-col mt-0 h-full min-h-0 overflow-y-auto custom-scrollbar">
+          <div className="flex items-center justify-between mb-4 mt-2 shrink-0">
+            <div className="flex flex-col">
+              <span className="text-6xl font-bold tracking-tighter text-white drop-shadow-sm">{weather.temp}°</span>
+              <span className="text-sm font-medium text-white/80 mt-1 capitalize flex items-center gap-2">
+                {weather.condition}
+              </span>
+              <span className="text-xs text-white/50">Ressenti {weather.feelsLike}°</span>
             </div>
+            <div className={cn("p-4 rounded-full bg-white/5 border border-white/10 shadow-lg backdrop-blur-sm", theme.iconColor)}>
+              {getIcon(weather.code, "h-16 w-16 drop-shadow-md")}
+            </div>
+          </div>
 
-            <div className="grid grid-cols-2 gap-2 mt-auto">
-              <MetricCard icon={Wind} label="Vent" value={`${weather.windSpeed} km/h`} color="text-cyan-500" />
-              <MetricCard icon={Droplets} label="Humidité" value={`${weather.humidity}%`} color="text-blue-500" />
-              <MetricCard icon={Eye} label="Visibilité" value={`${weather.visibility} km`} color="text-amber-500" />
-              <MetricCard icon={Umbrella} label="Précip." value={`${weather.precipitation} mm`} color="text-purple-500" />
-            </div>
+          <div className="grid grid-cols-2 gap-2 mt-auto">
+            <MetricCard icon={Wind} label="Vent" value={`${weather.windSpeed} km/h`} />
+            <MetricCard icon={Droplets} label="Humidité" value={`${weather.humidity}%`} />
+            <MetricCard icon={Eye} label="Visibilité" value={`${weather.visibility} km`} />
+            <MetricCard icon={Umbrella} label="Précip." value={`${weather.precipitation} mm`} />
           </div>
         </TabsContent>
 
-        {/* --- ONGLET PRÉVISIONS --- */}
-        {/* CORRECTION 3: Suppression de justify-end ou mt-auto implicites qui poussaient le contenu en bas */}
+        {/* --- PRÉVISIONS --- */}
         <TabsContent value="forecast" className="flex-1 mt-0 h-full min-h-0 data-[state=inactive]:hidden flex flex-col">
-          {/* Container Scrollable qui prend toute la hauteur disponible */}
-          <div className="overflow-y-auto flex-1 pr-1 space-y-2">
+          <div className="overflow-y-auto flex-1 pr-1 space-y-2 custom-scrollbar">
             {forecast.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-50">
+              <div className="h-full flex flex-col items-center justify-center text-white/30">
                 <CalendarDays className="h-8 w-8 mb-2" />
                 <span className="text-xs">Pas de prévisions</span>
               </div>
             ) : (
               forecast.map((day, i) => (
-                <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-background/20 hover:bg-background/40 backdrop-blur-sm transition-colors border border-white/5">
-                  <div className="w-16 font-semibold text-sm capitalize">{day.date}</div>
+                <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 transition-colors group">
+                  <div className="w-16 font-medium text-sm capitalize text-white/80">{day.date}</div>
                   
-                  <div className={cn("flex flex-col items-center mx-2", getTheme(day.code, true).iconColor)}>
-                    {getIcon(day.code, "h-6 w-6")}
+                  <div className={cn("flex flex-col items-center mx-2", theme.iconColor)}>
+                    {getIcon(day.code, "h-5 w-5")}
                   </div>
 
-                  <div className="flex-1 flex items-center gap-2 text-sm">
-                    <span className="text-right w-8 opacity-70">{day.tempMin}°</span>
-                    <div className="flex-1 h-2 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden relative">
+                  <div className="flex-1 flex items-center gap-2 text-xs text-white">
+                    <span className="text-right w-6 text-white/50">{day.tempMin}°</span>
+                    {/* Barre de température visible sur fond sombre */}
+                    <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden relative">
                       <div 
-                        className="absolute h-full rounded-full bg-gradient-to-r from-blue-400 to-orange-400 opacity-80"
+                        className={cn("absolute h-full rounded-full opacity-90", theme.barColor)}
                         style={{ 
-                          left: '10%',
-                          right: '10%' 
+                          left: '15%', 
+                          width: '70%' // Simplifié pour le rendu
                         }}
                       />
                     </div>
-                    <span className="font-bold w-8 text-right">{day.tempMax}°</span>
+                    <span className="font-bold w-6 text-right">{day.tempMax}°</span>
                   </div>
                 </div>
               ))
@@ -273,15 +326,16 @@ export function WeatherWidget({ widget }: WeatherWidgetProps) {
   );
 }
 
-function MetricCard({ icon: Icon, label, value, color }: any) {
+// Sous-composant avec style forcé
+function MetricCard({ icon: Icon, label, value }: any) {
   return (
-    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-background/30 backdrop-blur-md border border-white/5 shadow-sm">
-      <div className={cn("p-1.5 rounded-lg bg-white/40 dark:bg-black/20 shrink-0", color)}>
+    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white/5 border border-white/5 backdrop-blur-sm">
+      <div className="p-1.5 rounded-lg bg-white/10 text-white/80 shrink-0">
         <Icon className="h-3.5 w-3.5" />
       </div>
       <div className="flex flex-col min-w-0">
-        <span className="text-[9px] opacity-60 uppercase tracking-wider truncate">{label}</span>
-        <span className="font-bold text-xs truncate">{value}</span>
+        <span className="text-[9px] text-white/40 uppercase tracking-wider truncate">{label}</span>
+        <span className="font-bold text-xs truncate text-white/90">{value}</span>
       </div>
     </div>
   );

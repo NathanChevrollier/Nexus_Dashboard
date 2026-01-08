@@ -308,6 +308,47 @@ export const libraryItems = mysqlTable('library_items', {
 }));
 
 // ============= TYPES =============
+// ============= MESSAGING TABLES =============
+export const conversationStatusEnum = mysqlEnum('conversation_status', ['OPEN', 'CLOSED']);
+export const conversationTypeEnum = mysqlEnum('conversation_type', ['DIRECT', 'REPORT', 'SUPPORT']);
+
+export const conversations = mysqlTable('conversations', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  type: conversationTypeEnum.default('DIRECT').notNull(),
+  title: varchar('title', { length: 255 }),
+  lastMessageId: varchar('last_message_id', { length: 255 }),
+  assigneeId: varchar('assignee_id', { length: 255 }),
+  status: conversationStatusEnum.default('OPEN').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  lastMessageIdx: index('conversations_last_message_idx').on(table.lastMessageId),
+  assigneeIdx: index('conversations_assignee_idx').on(table.assigneeId),
+}));
+
+export const messages = mysqlTable('messages', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  conversationId: varchar('conversation_id', { length: 255 }).notNull(),
+  senderId: varchar('sender_id', { length: 255 }).notNull(),
+  content: text('content').notNull(),
+  isEdited: boolean('is_edited').default(false).notNull(),
+  deleted: boolean('deleted').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  convIdx: index('messages_conversation_idx').on(table.conversationId),
+  senderIdx: index('messages_sender_idx').on(table.senderId),
+}));
+
+export const participants = mysqlTable('participants', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  conversationId: varchar('conversation_id', { length: 255 }).notNull(),
+  userId: varchar('user_id', { length: 255 }).notNull(),
+  role: mysqlEnum('participant_role', ['USER', 'ADMIN']).default('USER').notNull(),
+  lastReadAt: timestamp('last_read_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  convUserIdx: index('participants_conv_user_idx').on(table.conversationId, table.userId),
+}));
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 
@@ -331,6 +372,15 @@ export type NewMediaItem = typeof mediaItems.$inferInsert;
 
 export type SharedDashboard = typeof sharedDashboards.$inferSelect;
 export type NewSharedDashboard = typeof sharedDashboards.$inferInsert;
+
+export type Conversation = typeof conversations.$inferSelect;
+export type NewConversation = typeof conversations.$inferInsert;
+
+export type Message = typeof messages.$inferSelect;
+export type NewMessage = typeof messages.$inferInsert;
+
+export type Participant = typeof participants.$inferSelect;
+export type NewParticipant = typeof participants.$inferInsert;
 
 // Theme Configuration Type
 export interface ThemeConfig {

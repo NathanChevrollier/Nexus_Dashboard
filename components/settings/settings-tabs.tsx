@@ -3,9 +3,10 @@
 import React, { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Palette, Plug, Users, ShieldCheck } from "lucide-react";
-import { ThemeSettingsEnhanced } from "@/components/settings/theme-settings-enhanced";
+import { ThemeSettings } from "@/components/settings/theme-settings";
 import { IntegrationsSettings } from "@/components/settings/integrations-settings";
 import { AccountSettings } from "@/components/settings/account-settings";
+import ContactSettings from "@/components/settings/contact-settings";
 import { UserManagementSettings } from "@/components/settings/user-management-settings";
 import IframeRequestsAdmin from "@/components/admin/iframe-requests-admin";
 import IframeAllowlistAdmin from "@/components/admin/iframe-allowlist-admin";
@@ -50,6 +51,7 @@ export default function SettingsTabs({ userRole, dashboardId }: { userRole: stri
           <TabTrigger value="appearance" icon={Palette} label="Apparence" />
           <TabTrigger value="integrations" icon={Plug} label="Intégrations" />
           <TabTrigger value="account" icon={ShieldCheck} label="Compte" />
+          <TabTrigger value="contact" icon={Users} label="Contact" />
           {userRole === "ADMIN" && <TabTrigger value="users" icon={Users} label="Gestion Admin" />}
         </TabsList>
       </div>
@@ -61,8 +63,8 @@ export default function SettingsTabs({ userRole, dashboardId }: { userRole: stri
               <h3 className="text-lg font-medium">Personnalisation</h3>
               <p className="text-sm text-muted-foreground">Gérez le thème et l'apparence de votre dashboard.</p>
             </div>
-            <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
-              <ThemeSettingsEnhanced user={{ role: userRole as any }} dashboardId={dashboardId} />
+            <div className="rounded-xl border bg-card text-card-foreground shadow-sm p-6">
+              <ThemeSettings />
             </div>
           </div>
         </TabsContent>
@@ -87,6 +89,18 @@ export default function SettingsTabs({ userRole, dashboardId }: { userRole: stri
             </div>
             <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
               <AccountSettings />
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="contact" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+          <div className="space-y-6">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-lg font-medium">Contact & Signalement</h3>
+              <p className="text-sm text-muted-foreground">Envoyez un retour, une suggestion, ou signalez un bug. Les messages seront transmis via webhook Discord.</p>
+            </div>
+            <div className="rounded-xl border bg-card text-card-foreground shadow-sm p-4">
+              <ContactSettings />
             </div>
           </div>
         </TabsContent>

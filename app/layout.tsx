@@ -27,7 +27,7 @@ export default async function RootLayout({
   const cookieStore = await cookies();
   const nonce = cookieStore.get?.('csp-nonce')?.value ?? '';
   return (
-    <html lang="fr" suppressHydrationWarning>
+    <html lang="fr" suppressHydrationWarning className="overflow-hidden h-full">
       <head>
         <script
           nonce={nonce}
@@ -100,7 +100,7 @@ export default async function RootLayout({
           suppressHydrationWarning
         />
       </head>
-      <body className={inter.className} suppressHydrationWarning={true}>
+      <body className={`${inter.className} overflow-hidden h-full`} suppressHydrationWarning={true}>
         <Providers>
           {children}
         </Providers>

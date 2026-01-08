@@ -1,87 +1,215 @@
-import { redirect } from "next/navigation";
+'use client';
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { dashboards } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { ThemeSettingsEnhanced } from "@/components/settings/theme-settings-enhanced";
-import { AccountSettings } from "@/components/settings/account-settings";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, Users, Palette, Plug, Settings as SettingsIcon, ShieldCheck } from "lucide-react";
-import { IntegrationsSettings } from "@/components/settings/integrations-settings";
-import SettingsTabs from "@/components/settings/settings-tabs";
-import IframeRequestsAdmin from "@/components/admin/iframe-requests-admin";
-import IframeAllowlistAdmin from "@/components/admin/iframe-allowlist-admin";
+import { useSearchParams } from "next/navigation";
+import { 
+  User, 
+  Palette, 
+  Settings as SettingsIcon, 
+  LogOut,
+  CreditCard,
+  Bell,
+  Puzzle,
+  ArrowLeft,
+  MessageSquare,
+  Shield
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { useSession, signOut } from "next-auth/react";
 
-export default async function SettingsPage() {
-  const session = await auth();
+// Import des sous-composants
+import { AccountSettings } from "@/components/settings/account-settings";
+import { IntegrationsSettings } from "@/components/settings/integrations-settings";
+import { ThemeSettings } from "@/components/settings/theme-settings";
+import ContactSettings from "@/components/settings/contact-settings";
+import { UserManagementSettings } from "@/components/settings/user-management-settings";
+import IframeAllowlistAdmin from "@/components/admin/iframe-allowlist-admin";
+import IframeRequestsAdmin from "@/components/admin/iframe-requests-admin";
+
+export default function SettingsPage() {
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState("appearance");
   
-  if (!session) {
-    redirect("/auth/login");
-  }
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+  const { data: session } = useSession();
 
-  // Récupérer le dashboard actif de l'utilisateur
-  const userDashboards = await db
-    .select()
-    .from(dashboards)
-    .where(eq(dashboards.userId, session.user.id));
+  const isAdmin = session?.user?.role === "ADMIN";
 
-  // Si aucun dashboard, on en crée un par défaut
-  if (userDashboards.length === 0) {
-    const defaultDashboard = {
-      id: `dash-${Date.now()}`,
-      userId: session.user.id,
-      name: "Home",
-      slug: "home",
-      isPublic: false,
-      themeConfig: null,
-      customCss: null,
-    };
-
-    await db.insert(dashboards).values(defaultDashboard);
-    userDashboards.push(defaultDashboard as any);
-  }
-
-  const currentDashboard = userDashboards[0];
+  const menuItems = [
+    { id: "account", label: "Mon Compte", icon: User },
+    { id: "appearance", label: "Apparence", icon: Palette },
+    { id: "integrations", label: "Intégrations", icon: Puzzle },
+    { id: "contact", label: "Contact", icon: MessageSquare },
+    ...(isAdmin ? [{ id: "admin", label: "Admin", icon: Shield }] : []),
+  ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground relative selection:bg-primary/20">
+    <div className="flex h-screen bg-background overflow-hidden">
+      
+      {/* SIDEBAR NAVIGATION */}
+      <aside className="w-64 border-r bg-card/30 backdrop-blur-sm flex flex-col hidden md:flex">
+        <div className="p-6">
+          <Link href="/dashboard" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors mb-4 group">
+            <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" />
+            Retour au dashboard
+          </Link>
+          <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
+            <SettingsIcon className="w-5 h-5 text-primary" />
+            Paramètres
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">Gérez vos préférences</p>
+        </div>
+        
+        <nav className="flex-1 px-4 space-y-1">
+          {menuItems.map((item, index) => (
+            <div key={item.id}>
+              {item.id === "admin" && (
+                <Separator className="my-3" />
+              )}
+              <button
+                onClick={() => setActiveTab(item.id)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all",
+                  activeTab === item.id 
+                    ? "bg-primary text-primary-foreground shadow-md" 
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  item.id === "admin" && "bg-destructive/10 hover:bg-destructive/20 border border-destructive/30"
+                )}
+              >
+                <item.icon className="w-4 h-4" />
+                {item.label}
+              </button>
+            </div>
+          ))}
+        </nav>
 
-      {/* Fond décoratif subtil (Grid Pattern) */}
-      <div className="absolute inset-0 -z-10 h-full w-full bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]">
-        <div className="absolute left-0 right-0 top-0 -z-10 m-auto h-[310px] w-[310px] rounded-full bg-primary/20 opacity-20 blur-[100px]" />
-      </div>
+        <div className="p-4 border-t">
+          <div className="flex items-center gap-3 px-3 py-3 rounded-lg bg-muted/50 mb-3">
+            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
+              {session?.user?.name?.[0] || "U"}
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <p className="text-sm font-medium truncate">{session?.user?.name}</p>
+              <p className="text-xs text-muted-foreground truncate">{session?.user?.email}</p>
+            </div>
+          </div>
+          <Button 
+            variant="destructive" 
+            className="w-full justify-start" 
+            size="sm"
+            onClick={() => signOut({ callbackUrl: "/auth/login" })}
+          >
+            <LogOut className="w-4 h-4 mr-2" /> Déconnexion
+          </Button>
+        </div>
+      </aside>
 
-      <div className="container mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between mb-12">
-          <div className="space-y-1.5">
-            <Link href="/dashboard" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors mb-2 group">
-              <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" />
-              Retour au tableau de bord
+      {/* MAIN CONTENT */}
+      <main className="flex-1 overflow-y-auto bg-background/50">
+        <div className="max-w-4xl mx-auto p-6 md:p-10 space-y-8">
+          
+          {/* Bouton retour mobile */}
+          <div className="md:hidden">
+            <Link href="/dashboard">
+              <Button variant="ghost" size="sm" className="mb-4">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Retour
+              </Button>
             </Link>
-            <h1 className="text-3xl font-bold tracking-tight">Paramètres</h1>
-            <p className="text-muted-foreground">Gérez les préférences de votre application et de votre compte.</p>
           </div>
 
-          <div className="flex items-center gap-3 bg-card border rounded-full pl-1 pr-4 py-1 shadow-sm">
-            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">
-              {session.user.name?.charAt(0).toUpperCase()}
+          <div className="md:hidden mb-6">
+            {/* Mobile Nav (Simplifiée) */}
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {menuItems.map((item) => (
+                <Button
+                  key={item.id}
+                  variant={activeTab === item.id ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setActiveTab(item.id)}
+                  className="whitespace-nowrap"
+                >
+                  <item.icon className="w-4 h-4 mr-2" />
+                  {item.label}
+                </Button>
+              ))}
             </div>
-            <div className="flex flex-col">
-              <span className="text-xs font-medium leading-none">{session.user.name}</span>
-              <span className="text-[10px] text-muted-foreground leading-none mt-1 uppercase tracking-wide">{session.user.role}</span>
-            </div>
+          </div>
+
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {activeTab === "account" && (
+              <>
+                <div className="mb-6">
+                  <h1 className="text-2xl font-bold">Mon Compte</h1>
+                  <p className="text-muted-foreground">Gérez vos informations personnelles et votre sécurité.</p>
+                </div>
+                <Separator className="mb-6" />
+                <AccountSettings />
+              </>
+            )}
+
+            {activeTab === "appearance" && (
+              <>
+                <div className="mb-6">
+                  <h1 className="text-2xl font-bold">Apparence</h1>
+                  <p className="text-muted-foreground">Personnalisez l'interface du Nexus Dashboard.</p>
+                </div>
+                <Separator className="mb-6" />
+                <ThemeSettings />
+              </>
+            )}
+
+            {activeTab === "integrations" && (
+              <>
+                <div className="mb-6">
+                  <h1 className="text-2xl font-bold">Intégrations</h1>
+                  <p className="text-muted-foreground">Connectez vos services tiers (TMDb, AniList, *arr...).</p>
+                </div>
+                <Separator className="mb-6" />
+                <IntegrationsSettings />
+              </>
+            )}
+
+            {activeTab === "contact" && (
+              <>
+                <div className="mb-6">
+                  <h1 className="text-2xl font-bold">Contact & Support</h1>
+                  <p className="text-muted-foreground">Envoyez-nous vos suggestions, questions ou signalez un bug.</p>
+                </div>
+                <Separator className="mb-6" />
+                <ContactSettings />
+              </>
+            )}
+
+            {activeTab === "admin" && isAdmin && (
+              <>
+                <div className="mb-6">
+                  <h1 className="text-2xl font-bold">Administration</h1>
+                  <p className="text-muted-foreground">Gérez les utilisateurs, rôles et autorisations iframe.</p>
+                </div>
+                <Separator className="mb-6" />
+                <div className="space-y-6">
+                  <UserManagementSettings />
+                  
+                  <Separator className="my-6" />
+                  
+                  <IframeRequestsAdmin />
+                  
+                  <IframeAllowlistAdmin />
+                </div>
+              </>
+            )}
           </div>
         </div>
-
-        {/* Client-side tabs (persist active tab) */}
-        <SettingsTabs userRole={session.user.role} dashboardId={currentDashboard.id} />
-      </div>
+      </main>
     </div>
   );
 }
-
-// Composants utilitaires pour la lisibilité
-// The tabs UI is implemented in `components/settings/settings-tabs.tsx` (client-side)

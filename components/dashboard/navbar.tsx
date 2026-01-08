@@ -6,6 +6,8 @@ import { LogOut, Settings, Plus, LayoutDashboard, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { Dashboard } from "@/lib/db/schema";
 import { useState } from "react";
+import NotificationCenter from "@/components/ui/notification-center";
+import ChatToggle from "@/components/ui/chat-toggle";
 
 interface NavbarProps {
   user: {
@@ -71,17 +73,22 @@ export function Navbar({ user, dashboards, currentDashboardId }: NavbarProps) {
 
         {/* User info et actions - Desktop */}
         <div className="hidden md:flex items-center gap-2 lg:gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-card/50 rounded-lg border border-border/50 backdrop-blur-sm">
-            <div className="flex flex-col">
-              <span className="font-semibold text-xs lg:text-sm text-foreground">{user.name || user.email || 'Utilisateur'}</span>
+          <Link href="/settings?tab=account">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-card/50 rounded-lg border border-border/50 backdrop-blur-sm cursor-pointer hover:bg-accent/50 transition-colors">
+              <div className="flex flex-col">
+                <span className="font-semibold text-xs lg:text-sm text-foreground">{user.name || user.email || 'Utilisateur'}</span>
+              </div>
+              <div className="h-4 w-px bg-border" />
+              <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-gradient-to-r from-primary/20 to-primary/10 text-primary border border-primary/30">
+                {user.role}
+              </span>
             </div>
-            <div className="h-4 w-px bg-border" />
-            <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-gradient-to-r from-primary/20 to-primary/10 text-primary border border-primary/30">
-              {user.role}
-            </span>
-          </div>
+          </Link>
           
           <div className="h-8 w-px bg-border/50" />
+          
+          <NotificationCenter />
+          <ChatToggle />
           
           <Link href="/settings">
             <Button size="sm" variant="ghost" className="h-9 w-9 p-0 hover:bg-accent/50">

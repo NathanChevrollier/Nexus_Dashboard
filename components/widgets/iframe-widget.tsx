@@ -11,6 +11,8 @@ export function IframeWidget({ widget }: IframeWidgetProps) {
   const { title } = widget.options || {};
   const opts = (widget.options || {}) as any;
   let iframeUrl = opts?.iframeUrl || opts?.url || null;
+  
+  // TOUS LES HOOKS DOIVENT ÊTRE APPELÉS EN PREMIER, AVANT TOUT RETURN
   const [hasError, setHasError] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
@@ -18,52 +20,20 @@ export function IframeWidget({ widget }: IframeWidgetProps) {
   const prompt = usePrompt();
   const alert = useAlert();
 
-  if (!iframeUrl) {
-    return (
-      <div className="flex items-center justify-center h-full p-4">
-        <p className="text-muted-foreground text-sm">URL non configurée</p>
-      </div>
-    );
-  }
-
   // Normalize URL: allow entering host without protocol (e.g. example.com)
   let normalizedUrl: string | null = null;
-  try {
-    normalizedUrl = new URL(iframeUrl).toString();
-  } catch {
+  if (iframeUrl) {
     try {
-      normalizedUrl = new URL(`https://${iframeUrl}`).toString();
+      normalizedUrl = new URL(iframeUrl).toString();
     } catch {
-      normalizedUrl = null;
+      try {
+        normalizedUrl = new URL(`https://${iframeUrl}`).toString();
+      } catch {
+        normalizedUrl = null;
+      }
     }
   }
   const isValidUrl = !!normalizedUrl;
-
-  if (!isValidUrl) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-4 gap-2">
-        <AlertCircle className="h-6 w-6 text-yellow-500" />
-        <p className="text-xs text-muted-foreground text-center">URL invalide</p>
-        <p className="text-[11px] text-muted-foreground text-center break-all">{iframeUrl}</p>
-      </div>
-    );
-  }
-
-  if (hasError) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-4 gap-2">
-        <AlertCircle className="h-6 w-6 text-red-500" />
-        <p className="text-xs text-muted-foreground">Erreur lors du chargement</p>
-        {errorText && <p className="text-xs text-muted-foreground text-center">{errorText}</p>}
-        <button
-          onClick={() => setHasError(false)}
-          className="text-xs text-blue-500 hover:underline mt-1"
-        >
-          Réessayer
-        </button>
-      </div>
-    );
-  }
 
   // Check embeddability on mount and when URL changes
   useEffect(() => {
@@ -99,6 +69,41 @@ export function IframeWidget({ widget }: IframeWidgetProps) {
     window.addEventListener('iframe-requests-changed', handler as EventListener);
     return () => { mounted = false; window.removeEventListener('iframe-requests-changed', handler as EventListener); };
   }, [normalizedUrl]);
+
+  // RENDER LOGIC - Maintenant APRÈS tous les hooks
+  if (!iframeUrl) {
+    return (
+      <div className="flex items-center justify-center h-full p-4">
+        <p className="text-muted-foreground text-sm">URL non configurée</p>
+      </div>
+    );
+  }
+
+  if (!isValidUrl) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-4 gap-2">
+        <AlertCircle className="h-6 w-6 text-yellow-500" />
+        <p className="text-xs text-muted-foreground text-center">URL invalide</p>
+        <p className="text-[11px] text-muted-foreground text-center break-all">{iframeUrl}</p>
+      </div>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-4 gap-2">
+        <AlertCircle className="h-6 w-6 text-red-500" />
+        <p className="text-xs text-muted-foreground">Erreur lors du chargement</p>
+        {errorText && <p className="text-xs text-muted-foreground text-center">{errorText}</p>}
+        <button
+          onClick={() => setHasError(false)}
+          className="text-xs text-blue-500 hover:underline mt-1"
+        >
+          Réessayer
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full w-full bg-background">
