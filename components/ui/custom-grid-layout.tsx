@@ -75,7 +75,9 @@ export function CustomGridLayout({
     startLeft: number; startTop: number;
     currX: number; currY: number;
     startW: number; startH: number;
+    pointerId?: number;
   } | null>(null);
+  const pointerCaptureRef = useRef<HTMLElement | null>(null);
   const [placeholder, setPlaceholder] = useState<GridItem | null>(null);
 
   const colWidth = (width - containerPadding[0] * 2 - margin[0] * (cols - 1)) / cols;
@@ -83,8 +85,6 @@ export function CustomGridLayout({
   // --- ALGORITHME DE COMPACTION (LE CŒUR DU SYSTÈME) ---
   const compactLayout = useCallback((layoutItems: GridItem[]): GridItem[] => {
     // 1. On trie les items du haut vers le bas.
-    // C'est CRUCIAL : on place d'abord ce qui est en haut (ex: la catégorie).
-    // Ensuite, quand on traitera les items du dessous, on saura qu'ils doivent bouger.
     const sorted = [...layoutItems].sort((a, b) => {
       if (a.y === b.y) return a.x - b.x;
       return a.y - b.y;
@@ -96,21 +96,15 @@ export function CustomGridLayout({
       let newItem = { ...item };
 
       // 2. PHASE DE POUSSÉE (Collision Resolution)
-      // Avant de penser à la gravité, on vérifie si l'item est écrasé par un item du dessus.
-      // Si on déplie une catégorie, elle devient plus grande. L'item du dessous (newItem)
-      // se retrouve en collision. On le pousse vers le bas tant qu'il touche quelque chose.
       while (getFirstCollision(compacted, newItem)) {
         newItem.y++;
       }
 
       // 3. PHASE DE GRAVITÉ (Si activée)
-      // Une fois qu'on est sûr qu'il ne chevauche rien, on essaie de le remonter
-      // pour combler les trous (si compactType est vertical).
       if (compactType === 'vertical') {
         while (newItem.y > 0) {
           const proposed = { ...newItem, y: newItem.y - 1 };
           if (getFirstCollision(compacted, proposed)) {
-            // Stop, on touche un item au-dessus, on ne peut pas monter plus haut
             break; 
           }
           newItem.y--;
@@ -124,14 +118,9 @@ export function CustomGridLayout({
   }, [compactType]);
 
   // --- SYNCHRONISATION ---
-  // Quand le parent change le layout (ex: DashboardView change la hauteur d'une catégorie),
-  // on déclenche immédiatement la compaction pour tout réorganiser.
   useEffect(() => {
     if (!activeItem) {
-      // On lance l'algorithme pour recalculer les positions Y
       const newLayout = compactLayout(layout);
-      
-      // On met à jour seulement si ça a changé pour éviter les rendus infinis
       if (JSON.stringify(newLayout) !== JSON.stringify(internalLayout)) {
         setInternalLayout(newLayout);
       }
@@ -139,8 +128,7 @@ export function CustomGridLayout({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout, activeItem, compactLayout]); 
 
-  // --- RESTE DU CODE (Helpers & Handlers) ---
-  // (Le reste est identique à la version précédente mais nécessaire pour que le fichier marche)
+  // --- HELPERS ---
 
   const getPixelPosition = useCallback((item: GridItem) => {
     return {
@@ -188,7 +176,24 @@ export function CustomGridLayout({
 
     const target = e.target as HTMLElement;
     if (type === 'drag') {
-      const handle = target.closest('.widget-drag-handle') || target.closest('.category-drag-handle');
+      // Robust handle detection
+      let handle = target.closest('.widget-drag-handle') || target.closest('.category-drag-handle');
+      if (!handle) {
+        const path = (e.nativeEvent as any)?.composedPath?.() as EventTarget[] | undefined;
+        if (path && Array.isArray(path)) {
+          for (const node of path) {
+            try {
+              const el = node as HTMLElement;
+              if (el?.classList?.contains('widget-drag-handle') || el?.classList?.contains('category-drag-handle')) {
+                handle = el;
+                break;
+              }
+            } catch (err) {
+              // ignore non-HTMLElements
+            }
+          }
+        }
+      }
       if (!handle) return;
       if (e.ctrlKey || e.metaKey) return; 
     }
@@ -200,8 +205,19 @@ export function CustomGridLayout({
     setActiveItem(id);
     setActivity(type);
     setPlaceholder(item);
-    setDragState({ startX: e.clientX, startY: e.clientY, startLeft: pos.left, startTop: pos.top, currX: pos.left, currY: pos.top, startW: pos.width, startH: pos.height });
-    target.setPointerCapture(e.pointerId);
+    setDragState({ startX: e.clientX, startY: e.clientY, startLeft: pos.left, startTop: pos.top, currX: pos.left, currY: pos.top, startW: pos.width, startH: pos.height, pointerId: e.pointerId });
+    
+    // --- CORRECTION MAJEURE ICI ---
+    // On capture le pointeur sur le CONTENEUR parent, pas sur l'élément enfant qui bouge.
+    // Cela garantit que l'événement "pointerUp" sera reçu même si l'élément enfant change/bouge.
+    try {
+      if (containerRef.current) {
+        containerRef.current.setPointerCapture(e.pointerId);
+        pointerCaptureRef.current = containerRef.current;
+      }
+    } catch (err) {
+      console.warn("Failed to capture pointer", err);
+    }
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -210,6 +226,7 @@ export function CustomGridLayout({
     const deltaX = e.clientX - dragState.startX;
     const deltaY = e.clientY - dragState.startY;
 
+    // Auto-scroll
     if (e.clientY > window.innerHeight - 50) window.scrollBy(0, 10);
     else if (e.clientY < 50) window.scrollBy(0, -10);
 
@@ -244,7 +261,16 @@ export function CustomGridLayout({
 
   const handlePointerUp = (e: React.PointerEvent) => {
     if (!activeItem) return;
-    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    
+    // Release pointer capture
+    try {
+      if (pointerCaptureRef.current && dragState?.pointerId !== undefined) {
+        pointerCaptureRef.current.releasePointerCapture(dragState.pointerId);
+      }
+    } catch (err) {
+      // ignore
+    }
+
     if (placeholder) {
       const finalLayout = compactLayout(internalLayout);
       setInternalLayout(finalLayout);
@@ -254,6 +280,7 @@ export function CustomGridLayout({
     setActivity(null);
     setDragState(null);
     setPlaceholder(null);
+    pointerCaptureRef.current = null;
   };
 
   const containerHeight = Math.max(
@@ -267,7 +294,7 @@ export function CustomGridLayout({
       style={{ ...style, height: `${Math.max(containerHeight, 200)}px`, width: `${width}px`, touchAction: 'none' }}
       onPointerMove={activeItem ? handlePointerMove : undefined}
       onPointerUp={activeItem ? handlePointerUp : undefined}
-      onPointerLeave={activeItem ? handlePointerUp : undefined}
+      // CORRECTION : Suppression de onPointerLeave pour éviter les drops intempestifs
     >
       {activeItem && placeholder && (
         <div className="absolute bg-primary/10 border-2 border-primary/30 border-dashed rounded-xl z-0 transition-all duration-200 ease-out"
@@ -284,7 +311,6 @@ export function CustomGridLayout({
           position: 'absolute',
           left: pixelPos.left, top: pixelPos.top, width: pixelPos.width, height: pixelPos.height,
           zIndex: isActive ? 50 : 10,
-          // Transition fluide pour voir les éléments descendre/monter
           transition: isActive ? 'none' : 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.3s ease, height 0.3s ease',
         };
         if (isActive && activity === 'drag' && dragState) {

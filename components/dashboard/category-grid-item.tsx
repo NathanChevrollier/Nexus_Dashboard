@@ -142,6 +142,11 @@ export function CategoryGridItem({
             <div 
               className="category-drag-handle cursor-grab active:cursor-grabbing p-2.5 rounded-xl hover:bg-background/80 text-muted-foreground/50 hover:text-foreground transition-all hover:scale-110 shadow-sm border border-transparent hover:border-border/50"
               onPointerUp={(e) => e.stopPropagation()}
+              onPointerDown={(e) => {
+                // Ensure pointerdown targets the handle element so the grid's handler
+                // can reliably detect the handle (fixes inconsistent drag starts).
+                // Do NOT stop propagation.
+              }}
             >
               <GripVertical className="h-6 w-6" />
             </div>
@@ -200,7 +205,7 @@ export function CategoryGridItem({
       {/* CONTENU (z-index bas pour passer dessous) */}
       <div 
         className={cn(
-          "flex-1 relative transition-all duration-300 bg-background/30 w-full overflow-hidden z-0", 
+          "flex-1 relative transition-all duration-300 bg-background/30 w-full overflow-auto z-0", 
           isCollapsed ? "hidden" : "block"
         )}
       >

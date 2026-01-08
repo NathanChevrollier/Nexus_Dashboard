@@ -200,8 +200,9 @@ function DashboardViewInner({
     // On ajoute +1 pour le header. Minimum 4 lignes pour l'esthétique.
     const expandedHeight = Math.max(4, maxWidgetY + 1);
 
-    // 2. Si plié = hauteur 1. Si déplié = hauteur calculée.
-    const currentHeight = isCollapsed ? 1 : expandedHeight;
+    // 2. Si plié = hauteur 1. Si déplié = on respecte la hauteur stockée en mode édition
+    //    En mode affichage on s'assure d'au moins contenir les widgets (évite couper le contenu).
+    const currentHeight = isCollapsed ? 1 : (isEditMode ? Math.max(1, cat.h || 4) : Math.max(expandedHeight, cat.h || 4));
 
     return {
       i: `cat-${cat.id}`,
@@ -235,8 +236,8 @@ function DashboardViewInner({
 
     const updatedCats = categories.map((cat) => {
       const item = newLayout.find((l) => l.i === `cat-${cat.id}`);
-      // On ne met à jour que X et Y, la hauteur est gérée dynamiquement
-      return item ? { ...cat, x: item.x, y: item.y, w: item.w } : cat;
+      // On met à jour X, Y, W et H (permettre le redimensionnement manuel des catégories)
+      return item ? { ...cat, x: item.x, y: item.y, w: item.w, h: item.h } : cat;
     });
 
     const updatedWidgets = widgets.map((w) => {
