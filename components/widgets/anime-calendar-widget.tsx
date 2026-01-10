@@ -296,8 +296,8 @@ function AnimeItem({ anime, isCompact, sonarrIntegration, isAdding, onAddToSonar
           className="w-full h-full object-cover transition-transform group-hover:scale-105"
           loading="lazy"
         />
-        {nextEp && (
-          <div className="absolute bottom-0 w-full bg-black/60 backdrop-blur-[2px] text-[12px] text-white text-center py-0.5 font-medium">
+        {nextEp && !isCompact && (
+          <div className="absolute bottom-0 left-0 w-[80px] bg-black/60 backdrop-blur-[2px] text-[12px] text-white text-center py-0.5 font-medium">
             Ep {nextEp.episode}
           </div>
         )}

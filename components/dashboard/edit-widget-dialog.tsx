@@ -366,6 +366,24 @@ export function EditWidgetDialog({ widget, categories, open, onOpenChange, onWid
             </div>
          );
 
+      case "library":
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Titre</Label>
+              <Input value={options.title || "Bibliothèque"} onChange={(e) => setOptions({...options, title: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <Label>Affichage</Label>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant={options.variant === 'simple' ? 'secondary' : 'ghost'} onClick={() => setOptions({...options, variant: 'simple'})}>Simple</Button>
+                <Button size="sm" variant={options.variant === 'detailed' ? 'secondary' : 'ghost'} onClick={() => setOptions({...options, variant: 'detailed'})}>Détaillé</Button>
+              </div>
+              <p className="text-sm text-muted-foreground">Simple = apparence compacte (type Lien+ sans ping). Détaillé = carte complète avec progression.</p>
+            </div>
+          </div>
+        );
+
       default:
         return <div className="p-4 text-center text-muted-foreground bg-muted/20 rounded text-sm">Ce widget n'a pas d'options avancées.</div>;
     }

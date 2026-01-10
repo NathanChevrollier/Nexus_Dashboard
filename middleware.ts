@@ -42,19 +42,38 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_IFRAME_ALLOWLIST || process.env.IFRAME_ALLOWLIST || '';
 
   // If no env var provided, try fetching the dynamic allowlist from internal API
-  // Avoid doing this for API routes to prevent recursive middleware fetches
+  // Use an in-memory cache on the Node process to avoid fetching on every request.
+  // This avoids recursive middleware fetches and reduces latency.
   if (!iframeAllowlistRaw) {
     try {
-      const pathname = request.nextUrl?.pathname || '';
-      // Skip fetching when middleware is executing for an API route or _next resources
-      if (!pathname.startsWith('/api/') && !pathname.startsWith('/_next/')) {
-        const origin = request.nextUrl?.origin || '';
-        if (origin) {
-          const res = await fetch(`${origin}/api/iframe/allowlist`, { cache: 'no-store' });
-          if (res.ok) {
-            const body = await res.json();
-            if (body && Array.isArray(body.origins)) {
-              iframeAllowlistRaw = body.origins.join(',');
+      const CACHE_TTL = parseInt(
+        process.env.NEXT_PUBLIC_IFRAME_ALLOWLIST_TTL_MS || '300000',
+        10
+      ); // default 5 minutes
+      type CacheEntry = { value: string; ts: number };
+      const globalKey = '__IFRAME_ALLOWLIST_CACHE__';
+      const now = Date.now();
+
+      const cached = (globalThis as any)[globalKey] as CacheEntry | undefined;
+      if (cached && now - cached.ts < CACHE_TTL) {
+        iframeAllowlistRaw = cached.value;
+      } else {
+        const pathname = request.nextUrl?.pathname || '';
+        // Skip fetching when middleware is executing for an API route or _next resources
+        if (!pathname.startsWith('/api/') && !pathname.startsWith('/_next/')) {
+          const origin = request.nextUrl?.origin || '';
+          if (origin) {
+            const res = await fetch(`${origin}/api/iframe/allowlist`);
+            if (res.ok) {
+              const body = await res.json();
+              if (body && Array.isArray(body.origins)) {
+                iframeAllowlistRaw = body.origins.join(',');
+                try {
+                  (globalThis as any)[globalKey] = { value: iframeAllowlistRaw, ts: now };
+                } catch (e) {
+                  // ignore attempts to write non-writable globals in some runtimes
+                }
+              }
             }
           }
         }

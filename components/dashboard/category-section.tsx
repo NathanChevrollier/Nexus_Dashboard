@@ -42,6 +42,15 @@ export function CategorySection({
   const [editIcon, setEditIcon] = useState(category.icon || "📁");
   const [editColor, setEditColor] = useState(category.color || "#3b82f6");
 
+  // Sync form fields when the category prop changes (but avoid clobbering while editing)
+  useEffect(() => {
+    if (!isEditing) {
+      setEditName(category.name);
+      setEditIcon(category.icon || "📁");
+      setEditColor(category.color || "#3b82f6");
+    }
+  }, [category.id, category.name, category.icon, category.color, isEditing]);
+
   const toggleCollapse = async () => {
     const newState = !isCollapsed;
     setIsCollapsed(newState);
@@ -138,7 +147,13 @@ export function CategorySection({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-muted-foreground hover:text-primary"
-                onClick={() => setIsEditing(true)}
+                onClick={() => {
+                  // Initialize edit fields from latest category values when opening
+                  setEditName(category.name);
+                  setEditIcon(category.icon || "📁");
+                  setEditColor(category.color || "#3b82f6");
+                  setIsEditing(true);
+                }}
               >
                 <Edit2 className="h-4 w-4" />
               </Button>

@@ -116,6 +116,7 @@ export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWid
       case "timer": Object.assign(defaults, { pomodoroMinutes: 25, shortBreakMinutes: 5, longBreakMinutes: 15, customMinutes: 30, title: "Timer" }); break;
       case "countdown": Object.assign(defaults, { countdownDate: new Date(Date.now() + 86400000).toISOString(), countdownEmoji: "🎉", title: "Événement" }); break;
       case "chart": Object.assign(defaults, { chartType: "bar", title: "Graphique" }); break;
+      case "library": Object.assign(defaults, { title: "Bibliothèque", variant: 'detailed' }); break;
     }
     setFormState(defaults);
     setStep("configure");
@@ -333,6 +334,23 @@ export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWid
               </div>
             );
          }
+        case "library":
+          return (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Titre</Label>
+                <Input value={formState.title} onChange={e => setFormState({...formState, title: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Affichage</Label>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant={formState.variant === 'simple' ? 'secondary' : 'ghost'} onClick={() => setFormState({...formState, variant: 'simple'})}>Simple</Button>
+                  <Button size="sm" variant={formState.variant === 'detailed' ? 'secondary' : 'ghost'} onClick={() => setFormState({...formState, variant: 'detailed'})}>Détaillé</Button>
+                </div>
+                <p className="text-sm text-muted-foreground">Simple = apparence compacte (type Lien+ sans ping). Détaillé = carte complète avec progression.</p>
+              </div>
+            </div>
+          );
 
          return (
            <div className="space-y-4">
@@ -503,9 +521,14 @@ export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWid
 
         <div className="flex-1 overflow-hidden bg-background/50">
           {step === "select" ? (
-             <ScrollArea className="h-[60vh]">
-               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-6">
-                 {widgetDefinitions.map((w) => {
+            <ScrollArea className="h-[60vh]">
+                 {loadingIntegrations ? (
+                   <div className="h-[60vh] flex items-center justify-center">
+                     <Loader2 className="w-10 h-10 animate-spin text-muted-foreground" />
+                   </div>
+                 ) : (
+                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-6">
+                   {widgetDefinitions.map((w) => {
                     const Icon = w.icon;
                     // Check integration requirement
                     const reqInt = ["media-requests", "torrent-overview", "monitoring"].includes(w.type);
@@ -544,7 +567,8 @@ export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWid
                       </button>
                     );
                  })}
-               </div>
+                </div>
+                )}
              </ScrollArea>
           ) : (
              <ScrollArea className="h-[60vh]">

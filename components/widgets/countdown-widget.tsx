@@ -43,6 +43,19 @@ export function CountdownWidget({ widget }: CountdownWidgetProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState(countdown);
 
+  // Keep countdown and edit form in sync when widget options change
+  useEffect(() => {
+    const newCountdown: CountdownData = {
+      title: widget.options.countdownTitle as string || 'My Event',
+      targetDate:
+        (widget.options.countdownDate as string) || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      emoji: widget.options.countdownEmoji as string || '🎉',
+    };
+    setCountdown(newCountdown);
+    // Only reset the edit form if we're not actively editing to avoid clobbering user input
+    if (!isEditing) setEditForm(newCountdown);
+  }, [widget.options.countdownTitle, widget.options.countdownDate, widget.options.countdownEmoji]);
+
   const isCompact = widget.w <= 2 && widget.h <= 1;
 
   useEffect(() => {
@@ -182,7 +195,11 @@ export function CountdownWidget({ widget }: CountdownWidgetProps) {
             <Calendar className="h-5 w-5 text-primary" />
             Countdown
           </h3>
-          <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>
+          <Button variant="ghost" size="sm" onClick={() => {
+            // Ensure the edit form is initialized from the latest countdown values when opening
+            setEditForm(countdown);
+            setIsEditing(true);
+          }}>
             <Settings className="h-4 w-4" />
           </Button>
         </div>

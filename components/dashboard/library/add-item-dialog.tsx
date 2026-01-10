@@ -6,13 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Link as LinkIcon, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Search, Link as LinkIcon, Image as ImageIcon, Loader2, CalendarClock, BookOpen } from 'lucide-react';
 import { addLibraryItem, updateLibraryItem } from '@/lib/actions/library';
-import { useAlert } from '@/components/ui/confirm-provider';
 import { searchMedia } from '@/lib/api/anilist';
 
-// Types simplifiés pour l'exemple
 const TYPES = [
   { value: 'manga', label: 'Manga' },
   { value: 'manhwa', label: 'Manhwa' },
@@ -22,49 +21,113 @@ const TYPES = [
 
 export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialData }: any) {
   const [loading, setLoading] = useState(false);
-  const alert = useAlert();
   const [activeTab, setActiveTab] = useState('manual');
+  
+  // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
-  
-  // Form State
-  const [formData, setFormData] = useState(() => ({
-    title: initialData?.title || '',
-    type: initialData?.type || 'manhwa',
-    currentProgress: initialData?.currentProgress || 0,
-    totalProgress: initialData?.totalProgress || '',
-    linkUrl: initialData?.linkUrl || '',
-    coverUrl: initialData?.coverUrl || '',
-    status: initialData?.status || 'reading'
-  }));
 
-  // Reset form when dialog opens/closes or when initialData changes
+  // Form State
+  const [formData, setFormData] = useState({
+    title: '',
+    type: 'manhwa',
+    status: 'reading',
+    currentProgress: 0,
+    totalProgress: '',
+    linkUrl: '',
+    coverUrl: '',
+    hasSchedule: false,
+    scheduleType: 'weekly',
+    scheduleDay: 'monday'
+  });
+
+  // Init Form
   useEffect(() => {
-    setFormData({
-      title: initialData?.title || '',
-      type: initialData?.type || 'manhwa',
-      currentProgress: initialData?.currentProgress || 0,
-      totalProgress: initialData?.totalProgress || '',
-      linkUrl: initialData?.linkUrl || '',
-      coverUrl: initialData?.coverUrl || '',
-      status: initialData?.status || 'reading'
-    });
-    if (initialData) setActiveTab('manual');
+    if (initialData) {
+      setFormData({
+        title: initialData.title || '',
+        type: initialData.type || 'manhwa',
+        status: initialData.status || 'reading',
+        currentProgress: initialData.currentProgress || 0,
+        totalProgress: initialData.totalProgress || '',
+        linkUrl: initialData.linkUrl || '',
+        coverUrl: initialData.coverUrl || '',
+        hasSchedule: !!initialData.scheduleType,
+        scheduleType: initialData.scheduleType || 'weekly',
+        scheduleDay: initialData.scheduleDay || 'monday',
+      });
+      setActiveTab('manual');
+    } else {
+      setFormData({
+        title: '', type: 'manhwa', status: 'reading',
+        currentProgress: 0, totalProgress: '', linkUrl: '', coverUrl: '',
+        hasSchedule: false, scheduleType: 'weekly', scheduleDay: 'monday'
+      });
+      setSearchQuery('');
+      setSearchResults([]);
+    }
   }, [initialData, open]);
+
+  // --- RECHERCHE AUTO AVEC DEBOUNCE ---
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (searchQuery.length >= 3 && activeTab === 'search') {
+        handleApiSearch();
+      }
+    }, 600); // 600ms de délai
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery, activeTab]);
+
+  const handleApiSearch = async () => {
+    setSearchLoading(true);
+    try {
+      const results = await searchMedia(searchQuery, undefined, 1, 10);
+      setSearchResults(results || []);
+    } catch (e) {
+      console.error(e);
+      // Friendly feedback for the user
+      // eslint-disable-next-line no-alert
+      alert('La recherche AniList a échoué. Vérifie ta connexion ou le proxy.');
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const selectSearchResult = (item: any) => {
+    setFormData(prev => ({
+      ...prev,
+      title:
+        item.title?.userPreferred || item.title?.english || item.title?.romaji || item.title?.native || 'Titre inconnu',
+      // On prend l'image la plus grande dispo pour la qualité
+      coverUrl: item.coverImage?.large || item.coverImage?.medium || '',
+      linkUrl: item.siteUrl || '',
+    }));
+    setActiveTab('manual');
+  };
 
   const handleSubmit = async () => {
     setLoading(true);
     try {
+      const dataToSave = {
+        ...formData,
+        // ensure numeric fields are properly typed for the DB
+        currentProgress: parseInt(String(formData.currentProgress)) || 0,
+        totalProgress: formData.totalProgress === '' || formData.totalProgress === null
+          ? null
+          : parseInt(String(formData.totalProgress)),
+        scheduleType: formData.hasSchedule ? formData.scheduleType : null,
+        scheduleDay: formData.hasSchedule ? formData.scheduleDay : null,
+      };
+
       if (initialData?.id) {
-        await updateLibraryItem(initialData.id, formData);
+        await updateLibraryItem(initialData.id, dataToSave);
       } else {
-        await addLibraryItem(formData);
+        await addLibraryItem(dataToSave);
       }
+      if (onSuccess) onSuccess();
       onOpenChange(false);
-      if (onSuccess) await onSuccess();
-      // Reset form
-      setFormData({ title: '', type: 'manhwa', currentProgress: 0, totalProgress: '', linkUrl: '', coverUrl: '', status: 'reading' });
     } catch (e) {
       console.error(e);
     } finally {
@@ -72,179 +135,172 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
     }
   };
 
-  // Simulation recherche API (à connecter à ton proxy Anilist plus tard)
-  const handleApiSearch = async () => {
-    if (!searchQuery || searchQuery.trim().length < 2) {
-      await alert('Saisis au moins 2 caractères pour lancer la recherche');
-      return;
-    }
-
-    setSearchLoading(true);
-    try {
-      const results = await searchMedia(searchQuery, undefined, 1, 10);
-      setSearchResults(results || []);
-    } catch (err) {
-      console.error(err);
-      await alert('La recherche AniList a échoué.');
-    } finally {
-      setSearchLoading(false);
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto flex flex-col">
         <DialogHeader>
-          <DialogTitle>Ajouter une œuvre</DialogTitle>
+          <DialogTitle>{initialData ? 'Modifier l\'œuvre' : 'Ajouter une lecture'}</DialogTitle>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="manual">Manuel</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-1 flex flex-col">
+          <TabsList className="grid w-full grid-cols-2 mb-4 shrink-0">
+            <TabsTrigger value="manual">Saisie Manuelle</TabsTrigger>
             <TabsTrigger value="search">Recherche Auto</TabsTrigger>
           </TabsList>
 
-          <div className="py-4 space-y-4">
-            {/* Recherche API (Active le mode hybride) */}
-            {activeTab === 'search' && (
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Rechercher (ex: Solo Leveling)..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleApiSearch(); }}
-                  />
-                  <Button onClick={handleApiSearch} variant="secondary">
-                    {searchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                  </Button>
-                </div>
-
-                {/* Results */}
-                <div className="max-h-56 overflow-auto">
-                  {searchLoading && <div className="text-sm text-muted-foreground">Chargement...</div>}
-                  {!searchLoading && searchResults.length === 0 && <div className="text-sm text-muted-foreground">Aucun résultat</div>}
-                  <div className="space-y-2">
-                    {searchResults.map(item => (
-                      <button
-                        key={item.id}
-                        className="w-full flex items-center gap-3 p-2 rounded hover:bg-muted"
-                        onClick={() => {
-                          const title = item.title?.english || item.title?.romaji || '';
-                          setFormData({
-                            ...formData,
-                            title,
-                            coverUrl: item.coverImage?.large || item.coverImage?.medium || '',
-                            linkUrl: item.siteUrl || '',
-                          });
-                          setActiveTab('manual');
-                        }}
-                      >
-                        <img src={item.coverImage?.medium || item.coverImage?.large} alt="cover" className="w-10 h-14 object-cover rounded" />
-                        <div className="text-left">
-                          <div className="font-semibold">{item.title?.english || item.title?.romaji}</div>
-                          <div className="text-xs text-muted-foreground">{item.format} · {item.status}</div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Formulaire Principal (Toujours éditable) */}
-            <div className="grid gap-2">
-              <Label>Titre</Label>
+          <TabsContent value="search" className="space-y-4 flex-1 flex flex-col min-h-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input 
-                value={formData.title} 
-                onChange={e => setFormData({...formData, title: e.target.value})}
-                placeholder="Titre de l'œuvre"
+                className="pl-9"
+                placeholder="Titre du manga/webtoon..." 
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                autoFocus
               />
             </div>
+            
+            <div className="flex-1 overflow-y-auto min-h-[300px] border rounded-md bg-muted/10 p-2">
+              {searchLoading && (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <span className="text-xs">Recherche en cours...</span>
+                </div>
+              )}
+              
+              {!searchLoading && searchResults.length === 0 && searchQuery.length > 2 && (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                  <BookOpen className="h-8 w-8 mb-2 opacity-20" />
+                  <span className="text-sm">Aucun résultat trouvé</span>
+                </div>
+              )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
+                {searchResults.map((res: any) => (
+                  <div 
+                    key={res.id} 
+                    onClick={() => selectSearchResult(res)} 
+                    className="flex items-center gap-3 p-2 rounded-lg border bg-card hover:bg-accent/50 hover:border-primary/50 cursor-pointer transition-all group"
+                  >
+                    <div className="h-16 w-12 bg-muted rounded shrink-0 overflow-hidden relative">
+                      {res.coverImage?.large || res.coverImage?.medium ? (
+                        <img 
+                          src={res.coverImage.large || res.coverImage.medium} 
+                          alt="" 
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform" 
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-muted">
+                          <ImageIcon className="h-4 w-4 opacity-30" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="font-semibold text-sm truncate">{res.title?.userPreferred || res.title?.english}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Clique pour sélectionner</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* ... TabsContent MANUAL inchangé ... */}
+          {/* Pour être sûr, je te remets le contenu Manual car c'est important */}
+          <TabsContent value="manual" className="space-y-4">
+            <div className="grid grid-cols-4 gap-4">
+              <div className="col-span-3 space-y-2">
+                <Label>Titre</Label>
+                <Input value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Solo Leveling..." />
+              </div>
+              <div className="space-y-2">
                 <Label>Type</Label>
-                <Select 
-                  value={formData.type} 
-                  onValueChange={v => setFormData({...formData, type: v})}
-                >
+                <Select value={formData.type} onValueChange={v => setFormData({...formData, type: v})}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2">
-                <Label>Statut</Label>
-                <Select 
-                  value={formData.status} 
-                  onValueChange={v => setFormData({...formData, status: v})}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="reading">En cours</SelectItem>
-                    <SelectItem value="paused">En pause</SelectItem>
-                    <SelectItem value="completed">Terminé</SelectItem>
-                    <SelectItem value="planned">À lire</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Chapitre Actuel</Label>
-                <Input 
-                  type="number" 
-                  value={formData.currentProgress} 
-                  onChange={e => setFormData({...formData, currentProgress: parseInt(e.target.value) || 0})}
-                />
+              <div className="space-y-2">
+                <Label>Chapitre actuel</Label>
+                <Input type="number" value={formData.currentProgress} onChange={e => setFormData({...formData, currentProgress: parseInt(e.target.value) || 0})} />
               </div>
-              <div className="grid gap-2">
+              <div className="space-y-2">
                 <Label>Total (Optionnel)</Label>
-                <Input 
-                  type="number" 
-                  placeholder="?" 
-                  value={formData.totalProgress} 
-                  onChange={e => setFormData({...formData, totalProgress: e.target.value})}
-                />
+                <Input type="number" placeholder="?" value={formData.totalProgress} onChange={e => setFormData({...formData, totalProgress: e.target.value})} />
               </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label>Lien Scan (Ton favori)</Label>
-              <div className="relative">
-                <LinkIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  className="pl-9" 
-                  placeholder="https://..." 
-                  value={formData.linkUrl} 
-                  onChange={e => setFormData({...formData, linkUrl: e.target.value})}
-                />
+            <div className="space-y-2">
+              <Label>Lien du scan</Label>
+              <Input placeholder="https://..." value={formData.linkUrl} onChange={e => setFormData({...formData, linkUrl: e.target.value})} />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Image de couverture (URL)</Label>
+              <div className="flex gap-3">
+                <Input className="flex-1" placeholder="https://..." value={formData.coverUrl} onChange={e => setFormData({...formData, coverUrl: e.target.value})} />
+                {formData.coverUrl && (
+                  <div className="h-10 w-10 shrink-0 rounded border bg-muted overflow-hidden">
+                    <img src={formData.coverUrl} alt="" className="w-full h-full object-cover" />
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label>Image Couverture (URL)</Label>
-              <div className="relative">
-                <ImageIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  className="pl-9" 
-                  placeholder="https://..." 
-                  value={formData.coverUrl} 
-                  onChange={e => setFormData({...formData, coverUrl: e.target.value})}
-                />
+            {/* PLANIFICATION */}
+            <div className="border rounded-lg p-3 bg-muted/30 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="h-4 w-4 text-primary" />
+                  <Label htmlFor="schedule-mode" className="cursor-pointer font-medium">Suivi de sortie</Label>
+                </div>
+                <Switch id="schedule-mode" checked={formData.hasSchedule} onCheckedChange={v => setFormData({...formData, hasSchedule: v})} />
               </div>
+
+              {formData.hasSchedule && (
+                <div className="grid grid-cols-2 gap-3 pt-1 animate-in slide-in-from-top-1">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Fréquence</Label>
+                    <Select value={formData.scheduleType} onValueChange={v => setFormData({...formData, scheduleType: v})}>
+                      <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="weekly">Hebdomadaire</SelectItem>
+                        <SelectItem value="biweekly">Une semaine sur deux</SelectItem>
+                        <SelectItem value="monthly">Mensuel</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Jour de sortie</Label>
+                    <Select value={formData.scheduleDay} onValueChange={v => setFormData({...formData, scheduleDay: v})}>
+                      <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="monday">Lundi</SelectItem>
+                        <SelectItem value="tuesday">Mardi</SelectItem>
+                        <SelectItem value="wednesday">Mercredi</SelectItem>
+                        <SelectItem value="thursday">Jeudi</SelectItem>
+                        <SelectItem value="friday">Vendredi</SelectItem>
+                        <SelectItem value="saturday">Samedi</SelectItem>
+                        <SelectItem value="sunday">Dimanche</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          </TabsContent>
         </Tabs>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
+        <DialogFooter className="mt-auto pt-4 border-t">
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Annuler</Button>
           <Button onClick={handleSubmit} disabled={!formData.title || loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Sauvegarder
+            {initialData ? 'Enregistrer' : 'Ajouter'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -303,6 +303,12 @@ export const libraryItems = mysqlTable('library_items', {
 
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+
+  // Pour les séries/mangas avec sorties récurrentes
+  scheduleType: text("schedule_type"), // 'weekly', 'biweekly', 'monthly'
+  scheduleDay: text("schedule_day"),   // 'monday', 'tuesday', etc.
+  lastReadAt: timestamp("last_read_at"), // Pour le "Lu il y a..."
+  
 }, (table) => ({
   userIdIdx: index('library_items_user_id_idx').on(table.userId),
 }));

@@ -267,6 +267,19 @@ export function ChartWidget({ widget }: ChartWidgetProps) {
     };
   }, [dataSourceUrl, pollInterval]);
 
+  // Sync local edit buffers with widget options when options change (but avoid clobbering while editing)
+  // This ensures that opening the editor reflects the latest saved values.
+  useEffect(() => {
+    if (!isEditing) {
+      setLocalTitle(options.title || "Statistiques");
+      setLocalType((options.chartType as ChartType) || "bar");
+      setLabelsInput((options.labels || []).join(", "));
+      setValuesInput((options.values || []).join(", "));
+      setDataSourceUrl(options.dataSourceUrl || "");
+      setPollInterval(options.pollInterval || 0);
+    }
+  }, [options.title, options.chartType, options.labels, options.values, options.dataSourceUrl, options.pollInterval, isEditing]);
+
   // --- RENDER CONFIG ---
   const chartOptions = {
     responsive: true,
@@ -316,9 +329,21 @@ export function ChartWidget({ widget }: ChartWidgetProps) {
         </div>
 
         {/* Bouton Edit (visible au survol ou si editing) */}
-        <div className={`flex items-center gap-1 transition-opacity ${isEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+          <div className={`flex items-center gap-1 transition-opacity ${isEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
            {!isEditing && (
-             <button onClick={() => setIsEditing(true)} className="p-1.5 hover:bg-accent rounded-md text-muted-foreground transition-colors">
+             <button
+               onClick={() => {
+                 // Reinitialize local form state from widget options before opening editor
+                 setLocalTitle(options.title || "Statistiques");
+                 setLocalType((options.chartType as ChartType) || "bar");
+                 setLabelsInput((options.labels || []).join(", "));
+                 setValuesInput((options.values || []).join(", "));
+                 setDataSourceUrl(options.dataSourceUrl || "");
+                 setPollInterval(options.pollInterval || 0);
+                 setIsEditing(true);
+               }}
+               className="p-1.5 hover:bg-accent rounded-md text-muted-foreground transition-colors"
+             >
                <Settings className="w-4 h-4" />
              </button>
            )}

@@ -39,7 +39,7 @@ export class ErrorBoundaryInner extends React.Component<{ children: React.ReactN
               <div className="flex flex-col items-center gap-2 bg-card/70 border border-border rounded-md p-3 text-center max-w-xs">
                 <AlertCircle className="h-6 w-6 text-red-400" />
                 <div className="text-sm font-medium">Erreur du widget</div>
-                <div className="text-xs text-muted-foreground">Le widget a crasché — vérifiez la console.</div>
+                <div className="text-xs text-muted-foreground">Le widget a crash — vérifiez la console.</div>
                 <Button variant="outline" size="sm" onClick={this.handleReload}>Recharger</Button>
               </div>
             </div>
