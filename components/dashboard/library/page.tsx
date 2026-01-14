@@ -102,7 +102,7 @@ export default function LibraryPage() {
   return (
     <div className="min-h-screen flex flex-col bg-background/50 relative">
 
-      <div className="flex flex-col pt-2 px-6 pb-6 min-h-screen w-full space-y-6 flex-1 overflow-hidden">
+      <div className="flex flex-col pt-2 px-6 pb-6 min-h-0 w-full space-y-6 flex-1">
         
         {/* HEADER */}
         <div className="flex flex-col gap-6">
