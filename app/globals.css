@@ -176,10 +176,10 @@
     @apply border-border;
   }
   html, body {
-    @apply overflow-hidden h-full;
+    @apply h-full;
   }
   body {
-    @apply bg-background text-foreground transition-colors duration-300;
+    @apply min-h-screen bg-background text-foreground transition-colors duration-300;
     /* Allow a configurable background image via CSS variable set by the theme provider */
     background-image: var(--background-image, none);
     background-size: cover;

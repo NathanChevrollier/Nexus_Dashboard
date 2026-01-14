@@ -27,7 +27,7 @@ export default async function RootLayout({
   const cookieStore = await cookies();
   const nonce = cookieStore.get?.('csp-nonce')?.value ?? '';
   return (
-    <html lang="fr" suppressHydrationWarning className="overflow-hidden h-full">
+    <html lang="fr" suppressHydrationWarning className="h-full">
       <head>
         {/* Favicon */}
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -113,7 +113,7 @@ export default async function RootLayout({
           suppressHydrationWarning
         />
       </head>
-      <body className={`${inter.className} overflow-hidden h-full`} suppressHydrationWarning={true}>
+      <body className={`${inter.className} min-h-screen h-full`} suppressHydrationWarning={true}>
         <Providers>
           {children}
         </Providers>
