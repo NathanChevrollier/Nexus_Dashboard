@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { CustomGridLayout, GridItem } from "@/components/ui/custom-grid-layout";
 import { Dashboard, Widget, Category } from "@/lib/db/schema";
 import { Button } from "@/components/ui/button";
@@ -56,6 +56,7 @@ function DashboardViewInner({
   const [widgets, setWidgets] = useState<Widget[]>(initialWidgets);
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(() => new Set(initialCategories.filter(c => c.isCollapsed).map(c => c.id)));
+  const pendingToggleRef = useRef<Set<string>>(new Set());
   
   // Dialogs
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -171,34 +172,34 @@ function DashboardViewInner({
   // --- LOGIQUE METIER ---
 
   const toggleCategoryCollapse = useCallback(async (categoryId: string) => {
-    // Determine current state and compute new state
-    const currentlyCollapsed = collapsedCategories.has(categoryId);
-    const newState = !currentlyCollapsed;
-
-    // Optimistically update UI
+    if (pendingToggleRef.current.has(categoryId)) return; // ignore rapid repeats
+    pendingToggleRef.current.add(categoryId);
+    // Use functional update to avoid stale closures when toggling rapidly
+    let computedNewState = false;
     setCollapsedCategories((prev) => {
       const next = new Set(prev);
-      if (newState) next.add(categoryId); else next.delete(categoryId);
+      const willCollapse = !prev.has(categoryId);
+      computedNewState = willCollapse;
+      if (willCollapse) next.add(categoryId); else next.delete(categoryId);
       return next;
     });
 
     try {
-      // Persist server-side
-      await toggleCategoryCollapseAction(categoryId, newState);
+      await toggleCategoryCollapseAction(categoryId, computedNewState);
     } catch (err) {
-      // Rollback on error
+      // Rollback on error using functional update
       setCollapsedCategories((prev) => {
         const next = new Set(prev);
-        if (newState) next.delete(categoryId); else next.add(categoryId);
+        if (computedNewState) next.delete(categoryId); else next.add(categoryId);
         return next;
       });
+    } finally {
+      pendingToggleRef.current.delete(categoryId);
     }
-  }, [collapsedCategories]);
+  }, []);
 
-  // Sync collapsed set when initial categories change (server-side values)
-  useEffect(() => {
-    setCollapsedCategories(new Set(initialCategories.filter(c => c.isCollapsed).map(c => c.id)));
-  }, [initialCategories]);
+  // NOTE: do not resync collapsed state from `initialCategories` on every prop change
+  // to avoid overwriting optimistic toggles caused by user interactions or local edits.
 
   // Algorithme de recherche de place libre
   const findFreePosition = useCallback((startX: number, startY: number, w: number = 2, h: number = 2) => {
