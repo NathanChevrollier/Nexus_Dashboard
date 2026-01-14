@@ -108,6 +108,29 @@ services:
       retries: 3
       start_period: 40s
 
+  migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
+    container_name: nexus-migrator
+    restart: "no"
+    secrets:
+      - db_password
+      - nextauth_secret
+    environment:
+      DATABASE_HOST: db
+      DATABASE_PORT: 3306
+      DATABASE_USER: nexus
+      DATABASE_PASSWORD_FILE: /run/secrets/db_password
+      DATABASE_NAME: nexus_dashboard
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - nexus-internal
+
 volumes:
   mysql_data:
     driver: local

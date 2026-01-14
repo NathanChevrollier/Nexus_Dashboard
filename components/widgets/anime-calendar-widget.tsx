@@ -66,12 +66,19 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
   const [selectedDay, setSelectedDay] = useState<string>(getToday());
   const [sonarrIntegration, setSonarrIntegration] = useState<any>(null);
   const [addingToSonarr, setAddingToSonarr] = useState<Record<string, boolean>>({});
+  const [languageFilter, setLanguageFilter] = useState<'all' | 'vf' | 'vostfr'>('all');
+  const [animeLangMap, setAnimeLangMap] = useState<Record<number, 'vf' | 'vostfr' | 'auto'>>({});
 
   const isCompact = width <= 2 && height <= 2;
 
   useEffect(() => {
     loadData();
     loadSonarrIntegration();
+    // load local language map
+    try {
+      const raw = localStorage.getItem('animeLangMap');
+      if (raw) setAnimeLangMap(JSON.parse(raw));
+    } catch (e) { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -88,6 +95,63 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
       ]);
       setAnimeSchedule(animeData);
       setMangaReleases(mangaData);
+      // Detect providers for fetched anime and merge into local map
+      try {
+        // Load persisted map (fresh read to avoid stale closure)
+        let persisted: Record<number, any> = {};
+        try {
+          const raw = localStorage.getItem('animeLangMap');
+          if (raw) persisted = JSON.parse(raw);
+        } catch (e) { persisted = {}; }
+
+        const idsToCheck = animeData
+          .map((a) => ({ id: a.id, title: a.title?.english || a.title?.romaji || '' }))
+          .filter((it) => it.title && (!persisted[it.id] || persisted[it.id] === 'auto'));
+
+        if (idsToCheck.length > 0) {
+          const titleToIds: Record<string, number[]> = {};
+          idsToCheck.forEach((it) => {
+            const key = it.title.trim();
+            if (!titleToIds[key]) titleToIds[key] = [];
+            titleToIds[key].push(it.id);
+          });
+
+          const uniqueTitles = Object.keys(titleToIds);
+          const batchSize = 20;
+          const detectedMap: Record<number, 'vf'|'vostfr'|'unknown'> = {};
+
+          for (let i = 0; i < uniqueTitles.length; i += batchSize) {
+            const batch = uniqueTitles.slice(i, i + batchSize);
+            try {
+              const res = await fetch('/api/tmdb/providers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ titles: batch }),
+              });
+              if (!res.ok) continue;
+              const data = await res.json();
+              if (!data || !data.ok || !Array.isArray(data.results)) continue;
+
+              data.results.forEach((r: any) => {
+                const t = String(r.title || '').trim();
+                const ids = titleToIds[t] || [];
+                ids.forEach((id) => {
+                  detectedMap[id] = r.result === 'vf' ? 'vf' : (r.result === 'vostfr' ? 'vostfr' : 'unknown');
+                });
+              });
+            } catch (e) {
+              // ignore batch errors and continue
+            }
+          }
+
+          const nextMap = { ...(persisted || {}), ...(animeLangMap || {}) } as Record<number, any>;
+          Object.keys(detectedMap).forEach((k) => { nextMap[Number(k)] = detectedMap[Number(k)]; });
+          if (Object.keys(detectedMap).length > 0) {
+            setAnimeLangMap(nextMap);
+            try { localStorage.setItem('animeLangMap', JSON.stringify(nextMap)); } catch (e) {}
+          }
+        }
+      } catch (e) { /* ignore provider detection errors */ }
     } catch (err) {
       setError('Failed to load data');
     } finally {
@@ -132,7 +196,16 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
   const groupedByDay = groupByDay(animeSchedule);
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   
-  const filteredAnime = selectedDay === 'All' ? animeSchedule : groupedByDay[selectedDay] || [];
+  let filteredAnime = selectedDay === 'All' ? animeSchedule : groupedByDay[selectedDay] || [];
+
+  // Apply language filter using local mapping (user-provided)
+  if (languageFilter !== 'all') {
+    filteredAnime = filteredAnime.filter(a => {
+      const tag = animeLangMap?.[a.id];
+      if (!tag || tag === 'auto') return false; // if no tag, treat as not matching
+      return (languageFilter === 'vf' && tag === 'vf') || (languageFilter === 'vostfr' && tag === 'vostfr');
+    });
+  }
 
   const sortedAnime = [...filteredAnime].sort((a, b) => {
     const timeA = a.nextAiringEpisode?.airingAt || 0;
@@ -158,7 +231,17 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
           <Calendar className="h-4 w-4 text-primary" />
           <h3 className="font-semibold text-sm">Programme</h3>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <select
+            value={languageFilter}
+            onChange={(e) => setLanguageFilter(e.target.value as any)}
+            className="text-xs px-2 py-1 bg-background border border-border rounded"
+            title="Filtrer par langue"
+          >
+            <option value="all">Toutes langues</option>
+            <option value="vf">VF uniquement</option>
+            <option value="vostfr">VOSTFR uniquement</option>
+          </select>
           <Button onClick={loadData} variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
@@ -222,6 +305,12 @@ export function AnimeCalendarWidget({ width = 2, height = 2 }: AnimeCalendarWidg
                     onAddToSonarr={handleAddToSonarr}
                     // AFFICHER LE JOUR SI "ALL" EST SÉLECTIONNÉ
                     showDayInfo={selectedDay === 'All'}
+                    langTag={animeLangMap?.[anime.id] || 'auto'}
+                    onLangChange={(tag: 'vf'|'vostfr'|'auto') => {
+                      const next = { ...(animeLangMap||{}), [anime.id]: tag };
+                      setAnimeLangMap(next);
+                      try { localStorage.setItem('animeLangMap', JSON.stringify(next)); } catch (e) {}
+                    }}
                   />
                 ))
               )}
@@ -276,7 +365,7 @@ function EmptyState({ label, icon: Icon }: any) {
   );
 }
 
-function AnimeItem({ anime, isCompact, sonarrIntegration, isAdding, onAddToSonarr, showDayInfo }: any) {
+function AnimeItem({ anime, isCompact, sonarrIntegration, isAdding, onAddToSonarr, showDayInfo, langTag = 'auto', onLangChange }: any) {
   const nextEp = anime.nextAiringEpisode;
   
   // Calcul du jour pour l'affichage conditionnel
@@ -311,18 +400,31 @@ function AnimeItem({ anime, isCompact, sonarrIntegration, isAdding, onAddToSonar
               {anime.title.english || anime.title.romaji}
             </h4>
             
-            {/* Sonarr Button */}
-            {sonarrIntegration && !isCompact && (
-               <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 -mr-1 -mt-1 text-muted-foreground hover:text-primary shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => onAddToSonarr(e, anime)}
-                disabled={isAdding}
+            {/* Sonarr Button + Lang tag selector */}
+            <div className="flex items-center gap-2">
+              {sonarrIntegration && !isCompact && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 -mr-1 -mt-1 text-muted-foreground hover:text-primary shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => onAddToSonarr(e, anime)}
+                  disabled={isAdding}
+                >
+                  {isAdding ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-4 w-4" />}
+                </Button>
+              )}
+
+              <select
+                value={langTag || 'auto'}
+                onChange={(e) => { const v = e.target.value as 'vf'|'vostfr'|'auto'; if (onLangChange) onLangChange(v); }}
+                className="text-[11px] bg-background border border-border rounded px-2 py-1"
+                title="Marquer disponibilité audio"
               >
-                {isAdding ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-4 w-4" />}
-              </Button>
-            )}
+                <option value="auto">Auto</option>
+                <option value="vf">VF</option>
+                <option value="vostfr">VOSTFR</option>
+              </select>
+            </div>
           </div>
           
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">

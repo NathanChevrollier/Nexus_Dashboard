@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { widgets, dashboards } from "@/lib/db/schema";
+import { iframeAllowlist, iframeRequests } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { generateId } from "@/lib/utils";
@@ -39,6 +40,49 @@ export async function createWidget(
 
   const widgetId = generateId();
   const now = new Date();
+
+  // Enforce heavy widget restrictions: only VIP/ADMIN can add heavy widgets
+  const HEAVY_TYPES = ["torrent-overview", "monitoring", "media-requests", "media-library"];
+  if (HEAVY_TYPES.includes(widgetData.type) && session.user.role === 'USER') {
+    throw new Error('Widget réservé aux comptes VIP/ADMIN');
+  }
+
+  // Iframe policy: USER only allowed origins in allowlist; VIP can request approval; ADMIN always allowed
+  if (widgetData.type === 'iframe') {
+    const url = (widgetData.options && (widgetData.options.url || widgetData.options.iframeUrl)) || null;
+    if (!url) throw new Error('URL iframe requise');
+    let origin = '';
+    try {
+      const u = new URL(url);
+      origin = `${u.protocol}//${u.host}`;
+    } catch (e) {
+      throw new Error('URL iframe invalide');
+    }
+
+    // Check allowlist
+    const rows = await db.select().from(iframeAllowlist).where(eq(iframeAllowlist.origin, origin)).limit(1).catch(() => []);
+    const allowed = (rows && rows.length > 0);
+
+    if (!allowed) {
+      if (session.user.role === 'USER') {
+        throw new Error('Cette URL iframe n\u2019est pas autorisée pour votre plan');
+      }
+
+      if (session.user.role === 'VIP') {
+        // Create a request entry if none exists and inform the user
+        try {
+          const existing = await db.select().from(iframeRequests).where(eq(iframeRequests.url, url)).limit(1).catch(() => []);
+          if (!existing || existing.length === 0) {
+            const reqId = `ifr-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+            await db.insert(iframeRequests).values({ id: reqId, userId: session.user.id, url, reason: null, status: 'PENDING' });
+          }
+        } catch (e) {
+          // ignore request insertion errors
+        }
+        throw new Error('L\u2019URL iframe n\u2019est pas dans la liste blanche. Une demande d\u2019autorisation a été créée.');
+      }
+    }
+  }
 
   // Si la position fournie est 0,0 ou non définie, calculer une position dynamique
   let x = widgetData.x ?? 0;

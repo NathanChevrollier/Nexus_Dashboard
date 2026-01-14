@@ -11,6 +11,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
     }
 
+    // Only VIP or ADMIN allowed to upload backgrounds to server
+    if (session.user.role === 'USER') {
+      return NextResponse.json({ error: "Upload réservé aux comptes VIP/ADMIN" }, { status: 403 });
+    }
+
     const formData = await request.formData();
     const file = formData.get("file") as File;
 

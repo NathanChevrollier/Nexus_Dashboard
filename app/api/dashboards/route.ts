@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dashboards } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { generateId, generateSlug } from "@/lib/utils";
 import { z } from "zod";
 
@@ -35,6 +36,19 @@ export async function POST(request: Request) {
     const { name, isPublic, format } = validatedData.data;
     const slug = generateSlug(name);
     const id = generateId();
+
+    // Enforce role-based dashboard limits and public dashboards
+    const role = session.user.role as string;
+    if (role === 'USER') {
+      // Count existing dashboards for this user
+      const existing = await db.select().from(dashboards).where(eq(dashboards.userId, session.user.id));
+      if (existing.length >= 2) {
+        return NextResponse.json({ error: 'Limite de dashboards atteinte pour votre plan' }, { status: 403 });
+      }
+      if (isPublic) {
+        return NextResponse.json({ error: 'Les dashboards publics ne sont pas disponibles pour votre plan' }, { status: 403 });
+      }
+    }
 
     await db.insert(dashboards).values({
       id,

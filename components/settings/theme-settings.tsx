@@ -91,6 +91,14 @@ export function ThemeSettings() {
     { id: "purple-haze", label: "Purple Haze", preview: "bg-gradient-to-br from-[#360033] to-[#0b8793]" },
   ];
 
+  // Feature support map: which themes allow which UI cards/features.
+  const featureSupport: Record<string, string[]> = {
+    gradients: ["light"],
+    backgroundImage: ["light", "dark", "oled"],
+    borderRadius: ["light", "dark", "oled", "cyber", "cyber-matrix", "cyber-synthwave", "cyber-arctic"],
+    timeBasedTheme: ["light", "dark", "oled", "cyber"],
+  };
+
   return (
     <div className="space-y-6">
       
@@ -133,7 +141,8 @@ export function ThemeSettings() {
       </Card>
 
       {/* Gradients de fond */}
-      <Card>
+      {featureSupport.gradients.includes(theme) && (
+        <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5" />
@@ -165,10 +174,12 @@ export function ThemeSettings() {
             ))}
           </div>
         </CardContent>
-      </Card>
+        </Card>
+      )}
 
       {/* Image de fond */}
-      <Card>
+      {featureSupport.backgroundImage.includes(theme) && (
+        <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ImageIcon className="h-5 w-5" />
@@ -235,7 +246,8 @@ export function ThemeSettings() {
             )}
           </div>
         </CardContent>
-      </Card>
+        </Card>
+      )}
 
       {/* Couleurs personnalisées */}
       <Card>

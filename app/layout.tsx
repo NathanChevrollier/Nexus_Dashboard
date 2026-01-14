@@ -29,6 +29,10 @@ export default async function RootLayout({
   return (
     <html lang="fr" suppressHydrationWarning className="overflow-hidden h-full">
       <head>
+        {/* Favicon */}
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="alternate icon" href="/favicon.svg" />
+        <link rel="apple-touch-icon" href="/favicon.svg" />
         <script
           nonce={nonce}
           dangerouslySetInnerHTML={{
@@ -78,8 +82,17 @@ export default async function RootLayout({
                       if (gradientPreset !== 'none' && gradients[gradientPreset]) {
                         body.style.background = gradients[gradientPreset];
                         body.style.backgroundAttachment = 'fixed';
+                        body.classList.remove('has-background-image');
                       } else if (backgroundImage) {
+                        // Clear shorthand background that could override the image
+                        body.style.background = '';
+                        // prefer CSS variable for consistency with globals.css
+                        root.style.setProperty('--background-image', 'url("' + backgroundImage + '")');
                         body.style.backgroundImage = 'url(' + backgroundImage + ')';
+                        body.style.backgroundSize = 'cover';
+                        body.style.backgroundPosition = 'center';
+                        body.style.backgroundAttachment = 'fixed';
+                        body.classList.add('has-background-image');
                       }
                     } catch (err) {
                       console.error('Theme init inner error:', err);

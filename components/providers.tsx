@@ -8,6 +8,7 @@ import { ConfirmProvider } from "@/components/ui/confirm-provider";
 import { SocketProvider } from "@/components/ui/socket-provider";
 import { AlertsProvider } from "@/components/chat/alerts-context";
 import FloatingAlerts from "@/components/chat/floating-alerts";
+import FaviconManager from "@/components/ui/favicon";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -29,6 +30,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <ConfirmProvider>
             <SocketProvider>
               <AlertsProvider>
+                <FaviconManager />
                 {children}
                 <FloatingAlerts />
               </AlertsProvider>

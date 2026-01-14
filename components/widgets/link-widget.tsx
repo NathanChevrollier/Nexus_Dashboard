@@ -1,6 +1,7 @@
 import { Widget } from "@/lib/db/schema";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
+import { getIconUrlForLink } from "@/lib/api/logos";
 
 interface LinkWidgetProps {
   widget: Widget;
@@ -20,6 +21,8 @@ export function LinkWidget({ widget }: LinkWidgetProps) {
     }
   };
 
+  const resolvedIconUrl = iconUrl || (isValidUrl ? getIconUrlForLink(url) : null);
+
   return (
     <Link
       href={href}
@@ -32,11 +35,11 @@ export function LinkWidget({ widget }: LinkWidgetProps) {
       title={isValidUrl ? '' : 'Invalid URL'}
     >
       <div className="mb-2 flex items-center justify-center">
-        {iconUrl ? (
+        {resolvedIconUrl ? (
           // Afficher l'image si une URL d'icône est fournie
-          <img 
-            src={iconUrl} 
-            alt={title || 'icon'} 
+          <img
+            src={resolvedIconUrl}
+            alt={title || 'icon'}
             className="h-12 w-12 object-contain"
             onError={(e) => {
               // Fallback to emoji if image fails

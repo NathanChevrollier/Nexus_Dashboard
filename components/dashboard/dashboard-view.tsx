@@ -12,7 +12,7 @@ import { AddCategoryDialog } from "@/components/dashboard/add-category-dialog";
 import { EditWidgetDialog } from "@/components/dashboard/edit-widget-dialog";
 import { ShareDashboardDialog } from "@/components/dashboard/share-dashboard-dialog";
 import { updateWidgetPositions, deleteWidget } from "@/lib/actions/widgets";
-import { updateCategoryPositions, deleteCategory } from "@/lib/actions/categories";
+import { updateCategoryPositions, deleteCategory, toggleCategoryCollapse as toggleCategoryCollapseAction } from "@/lib/actions/categories";
 import { CrossGridDragProvider, useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-v2";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { useAlert } from "@/components/ui/confirm-provider";
@@ -55,7 +55,7 @@ function DashboardViewInner({
   const [isEditMode, setIsEditMode] = useState(false);
   const [widgets, setWidgets] = useState<Widget[]>(initialWidgets);
   const [categories, setCategories] = useState<Category[]>(initialCategories);
-  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(() => new Set(initialCategories.filter(c => c.isCollapsed).map(c => c.id)));
   
   // Dialogs
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -70,6 +70,8 @@ function DashboardViewInner({
   const [responsiveCols, setResponsiveCols] = useState(12);
   const [currentTime, setCurrentTime] = useState<Date | null>(null); 
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  // persisted scroll position key per dashboard
+  const scrollKey = `dashboard-scroll-${dashboard.id}`;
 
   // --- EFFETS ---
 
@@ -134,17 +136,69 @@ function DashboardViewInner({
     return () => clearInterval(timer);
   }, []);
 
+  // Persist / restore scroll position for the dashboard area
+  useEffect(() => {
+    const el = document.getElementById('dashboard-scroll-area');
+    if (!el) return;
+
+    // Restore
+    try {
+      const raw = localStorage.getItem(scrollKey);
+      if (raw) {
+        const v = Number(raw);
+        if (!Number.isNaN(v)) el.scrollTop = v;
+      }
+    } catch (e) { /* ignore */ }
+
+    // Debounced saver
+    let t: number | null = null;
+    const onScroll = () => {
+      if (t) window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        try { localStorage.setItem(scrollKey, String(el.scrollTop)); } catch (e) { }
+        t = null;
+      }, 250);
+    };
+
+    el.addEventListener('scroll', onScroll);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      if (t) window.clearTimeout(t);
+    };
+  }, [dashboard.id]);
+
 
   // --- LOGIQUE METIER ---
 
-  const toggleCategoryCollapse = useCallback((categoryId: string) => {
+  const toggleCategoryCollapse = useCallback(async (categoryId: string) => {
+    // Determine current state and compute new state
+    const currentlyCollapsed = collapsedCategories.has(categoryId);
+    const newState = !currentlyCollapsed;
+
+    // Optimistically update UI
     setCollapsedCategories((prev) => {
       const next = new Set(prev);
-      if (next.has(categoryId)) next.delete(categoryId);
-      else next.add(categoryId);
+      if (newState) next.add(categoryId); else next.delete(categoryId);
       return next;
     });
-  }, []);
+
+    try {
+      // Persist server-side
+      await toggleCategoryCollapseAction(categoryId, newState);
+    } catch (err) {
+      // Rollback on error
+      setCollapsedCategories((prev) => {
+        const next = new Set(prev);
+        if (newState) next.delete(categoryId); else next.add(categoryId);
+        return next;
+      });
+    }
+  }, [collapsedCategories]);
+
+  // Sync collapsed set when initial categories change (server-side values)
+  useEffect(() => {
+    setCollapsedCategories(new Set(initialCategories.filter(c => c.isCollapsed).map(c => c.id)));
+  }, [initialCategories]);
 
   // Algorithme de recherche de place libre
   const findFreePosition = useCallback((startX: number, startY: number, w: number = 2, h: number = 2) => {

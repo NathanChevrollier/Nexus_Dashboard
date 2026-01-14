@@ -8,13 +8,23 @@ import { eq } from 'drizzle-orm';
 const postSchema = z.object({ origin: z.string().min(3) });
 const patchSchema = z.object({ id: z.string(), removed: z.boolean().optional() });
 
+// short in-memory cache to reduce DB hits on cold starts
+const ALLOWLIST_CACHE_TTL = Number(process.env.ALLOWLIST_CACHE_TTL_SECONDS || 30);
+let allowlistCache: { ts: number; rows: any[] } | null = null;
+
 export async function GET(request: Request) {
   try {
     const session = await auth();
     if (!session) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
     if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
 
+    // serve cached response when fresh
+    if (allowlistCache && (Date.now() - allowlistCache.ts) / 1000 < ALLOWLIST_CACHE_TTL) {
+      return NextResponse.json({ ok: true, origins: allowlistCache.rows });
+    }
+
     const rows = await db.select().from(iframeAllowlist).orderBy(iframeAllowlist.addedAt);
+    allowlistCache = { ts: Date.now(), rows };
     return NextResponse.json({ ok: true, origins: rows });
   } catch (err) {
     console.error('Erreur GET /api/admin/iframe/allowlist', err);

@@ -42,8 +42,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         const io = (mod && (mod.io || mod.default || mod)) as any;
         if (!io) return;
         if (!url) return;
-        // If socket is local and server likely unavailable in production, disable autoConnect
-        const socket = io(url, { autoConnect: !unsafeLocalHost });
+        // Prefer websocket transport to avoid HTTP long-polling requests to /socket.io when server absent
+        const socket = io(url, { autoConnect: !unsafeLocalHost, transports: ['websocket'] });
         socketRef.current = socket;
 
         socket.on("connect", () => {

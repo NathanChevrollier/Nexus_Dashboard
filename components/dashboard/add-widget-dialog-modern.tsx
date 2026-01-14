@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +66,8 @@ export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWid
   const [selectedWidget, setSelectedWidget] = useState<WidgetType | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const { data: session } = useSession();
+  const role = session?.user?.role as string | undefined;
   const [availableIntegrations, setAvailableIntegrations] = useState<any[]>([]);
   const [loadingIntegrations, setLoadingIntegrations] = useState(false);
   const [availableCities, setAvailableCities] = useState<any[]>([]);
@@ -530,6 +533,9 @@ export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWid
                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-6">
                    {widgetDefinitions.map((w) => {
                     const Icon = w.icon;
+                    // Disable heavy widgets for USER role
+                    const heavy = ["torrent-overview", "monitoring", "media-requests", "media-library"].includes(w.type);
+                    const disabledByRole = !!(role === 'USER' && heavy);
                     // Check integration requirement
                     const reqInt = ["media-requests", "torrent-overview", "monitoring"].includes(w.type);
                     const hasInt = !reqInt || availableIntegrations.some(i => 
@@ -542,12 +548,12 @@ export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWid
                       <button
                         key={w.type}
                         onClick={() => handleWidgetSelect(w.type as any)}
-                        disabled={!hasInt && reqInt}
+                        disabled={disabledByRole || (!hasInt && reqInt)}
                         className={`group relative flex flex-col items-center p-4 rounded-xl border text-center gap-3 transition-all duration-200
-                           ${!hasInt && reqInt 
-                              ? "opacity-60 cursor-not-allowed bg-muted/20 border-transparent grayscale" 
-                              : "bg-card border-border hover:border-primary/50 hover:shadow-lg hover:-translate-y-1"}
-                        `}
+                          ${!hasInt && reqInt 
+                            ? "opacity-60 cursor-not-allowed bg-muted/20 border-transparent grayscale" 
+                            : "bg-card border-border hover:border-primary/50 hover:shadow-lg hover:-translate-y-1"
+                        }`}
                       >
                          <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${w.color} flex items-center justify-center shadow-md transition-transform group-hover:scale-110`}>
                             <Icon className="text-white h-6 w-6" />
@@ -557,6 +563,13 @@ export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWid
                             <span className="text-xs text-muted-foreground line-clamp-2 leading-tight px-1">{w.description}</span>
                          </div>
                          
+                         {disabledByRole && (
+                           <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-background/60 backdrop-blur-[1px]">
+                             <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded border border-amber-200 shadow-sm">
+                              VIP requis
+                             </span>
+                           </div>
+                         )}
                          {!hasInt && reqInt && (
                             <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-background/60 backdrop-blur-[1px]">
                                <span className="text-[10px] font-bold text-destructive bg-destructive/10 px-2 py-1 rounded border border-destructive/20 shadow-sm">

@@ -40,6 +40,11 @@ export async function upsertIntegration(input: UpsertIntegrationInput) {
 
   const now = new Date();
 
+  // Enforce role: USER cannot create integrations (lecture seule)
+  if (session.user.role === 'USER') {
+    throw new Error('Accès réservé aux comptes VIP/ADMIN');
+  }
+
   if (input.id) {
     // Update existing (ensure ownership)
     const existing = await db

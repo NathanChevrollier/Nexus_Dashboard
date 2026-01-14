@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Link as LinkIcon, Image as ImageIcon, Loader2, CalendarClock, BookOpen } from 'lucide-react';
+import { Search, Image as ImageIcon, Loader2, CalendarClock, BookOpen } from 'lucide-react';
 import { addLibraryItem, updateLibraryItem } from '@/lib/actions/library';
 import { searchMedia } from '@/lib/api/anilist';
 
@@ -17,6 +17,15 @@ const TYPES = [
   { value: 'manhwa', label: 'Manhwa' },
   { value: 'manhua', label: 'Manhua' },
   { value: 'novel', label: 'Roman / LN' },
+  { value: 'anime', label: 'Anime' }, // Ajouté pour le calendrier
+];
+
+const STATUSES = [
+  { value: 'reading', label: 'En cours de lecture' },
+  { value: 'plan_to_read', label: 'À lire (Planifié)' },
+  { value: 'completed', label: 'Terminé / Déjà lu' },
+  { value: 'paused', label: 'En pause' },
+  { value: 'dropped', label: 'Abandonné' },
 ];
 
 export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialData }: any) {
@@ -75,7 +84,7 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
       if (searchQuery.length >= 3 && activeTab === 'search') {
         handleApiSearch();
       }
-    }, 600); // 600ms de délai
+    }, 600);
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery, activeTab]);
@@ -87,7 +96,6 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
       setSearchResults(results || []);
     } catch (e) {
       console.error(e);
-      // Friendly feedback for the user
       // eslint-disable-next-line no-alert
       alert('La recherche AniList a échoué. Vérifie ta connexion ou le proxy.');
     } finally {
@@ -96,13 +104,16 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
   };
 
   const selectSearchResult = (item: any) => {
+    // Détection basique du type si possible, sinon défaut
+    const typeMap: any = { 'MANGA': 'manga', 'NOVEL': 'novel', 'ANIME': 'anime' };
+    const detectedType = typeMap[item.format] || 'manhwa';
+
     setFormData(prev => ({
       ...prev,
-      title:
-        item.title?.userPreferred || item.title?.english || item.title?.romaji || item.title?.native || 'Titre inconnu',
-      // On prend l'image la plus grande dispo pour la qualité
+      title: item.title?.userPreferred || item.title?.english || item.title?.romaji || 'Titre inconnu',
       coverUrl: item.coverImage?.large || item.coverImage?.medium || '',
       linkUrl: item.siteUrl || '',
+      type: item.type === 'ANIME' ? 'anime' : detectedType,
     }));
     setActiveTab('manual');
   };
@@ -112,7 +123,6 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
     try {
       const dataToSave = {
         ...formData,
-        // ensure numeric fields are properly typed for the DB
         currentProgress: parseInt(String(formData.currentProgress)) || 0,
         totalProgress: formData.totalProgress === '' || formData.totalProgress === null
           ? null
@@ -137,7 +147,7 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto flex flex-col">
+      <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto flex flex-col">
         <DialogHeader>
           <DialogTitle>{initialData ? 'Modifier l\'œuvre' : 'Ajouter une lecture'}</DialogTitle>
         </DialogHeader>
@@ -148,12 +158,13 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
             <TabsTrigger value="search">Recherche Auto</TabsTrigger>
           </TabsList>
 
+          {/* ONGLET RECHERCHE (Inchangé visuellement, logique conservée) */}
           <TabsContent value="search" className="space-y-4 flex-1 flex flex-col min-h-0">
             <div className="relative">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input 
                 className="pl-9"
-                placeholder="Titre du manga/webtoon..." 
+                placeholder="Titre du manga/webtoon/anime..." 
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 autoFocus
@@ -197,7 +208,10 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
                     </div>
                     <div className="flex-1 min-w-0 text-left">
                       <p className="font-semibold text-sm truncate">{res.title?.userPreferred || res.title?.english}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Clique pour sélectionner</p>
+                      <div className="flex gap-2 text-xs text-muted-foreground mt-0.5">
+                         <span className="uppercase font-bold text-[10px] bg-muted px-1 rounded">{res.format || 'N/A'}</span>
+                         <span>• Clique pour sélectionner</span>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -205,13 +219,12 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
             </div>
           </TabsContent>
 
-          {/* ... TabsContent MANUAL inchangé ... */}
-          {/* Pour être sûr, je te remets le contenu Manual car c'est important */}
+          {/* ONGLET MANUEL (Amélioré avec Statut et Type Anime) */}
           <TabsContent value="manual" className="space-y-4">
             <div className="grid grid-cols-4 gap-4">
               <div className="col-span-3 space-y-2">
                 <Label>Titre</Label>
-                <Input value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Solo Leveling..." />
+                <Input value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Nom de l'œuvre..." />
               </div>
               <div className="space-y-2">
                 <Label>Type</Label>
@@ -224,9 +237,20 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
               </div>
             </div>
 
+            {/* NOUVEAU : SELECTEUR DE STATUT */}
+            <div className="space-y-2">
+                <Label>Statut de lecture</Label>
+                <Select value={formData.status} onValueChange={v => setFormData({...formData, status: v})}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STATUSES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Chapitre actuel</Label>
+                <Label>Progression (Chapitre / Épisode)</Label>
                 <Input type="number" value={formData.currentProgress} onChange={e => setFormData({...formData, currentProgress: parseInt(e.target.value) || 0})} />
               </div>
               <div className="space-y-2">
@@ -236,7 +260,7 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
             </div>
 
             <div className="space-y-2">
-              <Label>Lien du scan</Label>
+              <Label>Lien (Scan / Stream)</Label>
               <Input placeholder="https://..." value={formData.linkUrl} onChange={e => setFormData({...formData, linkUrl: e.target.value})} />
             </div>
 
@@ -257,7 +281,7 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <CalendarClock className="h-4 w-4 text-primary" />
-                  <Label htmlFor="schedule-mode" className="cursor-pointer font-medium">Suivi de sortie</Label>
+                  <Label htmlFor="schedule-mode" className="cursor-pointer font-medium">Suivi de sortie (Calendrier)</Label>
                 </div>
                 <Switch id="schedule-mode" checked={formData.hasSchedule} onCheckedChange={v => setFormData({...formData, hasSchedule: v})} />
               </div>

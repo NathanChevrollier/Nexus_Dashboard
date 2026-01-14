@@ -180,7 +180,84 @@
   }
   body {
     @apply bg-background text-foreground transition-colors duration-300;
+    /* Allow a configurable background image via CSS variable set by the theme provider */
+    background-image: var(--background-image, none);
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
   }
+}
+
+/* When a custom background image is in use, make panels slightly
+   translucent and apply a subtle backdrop blur so widgets blend with
+   the image while remaining readable. Works for light/dark/oled. */
+.has-background-image {
+  /* Ensure the background is visible behind content */
+  color-scheme: light dark;
+}
+
+/* Force the body to be transparent and render the chosen image via a fixed ::before
+   pseudo-element. This ensures the image appears even when theme utilities set
+   background colors or shorthand properties. */
+body.has-background-image {
+  background-image: none !important;
+  background-color: transparent !important;
+}
+
+body.has-background-image::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: var(--background-image, none);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  pointer-events: none;
+}
+
+/* Darken or dim the image slightly on OLED to preserve contrast */
+.oled body.has-background-image::before {
+  filter: brightness(0.35) saturate(0.95);
+}
+
+/* Make high-level background utilities transparent when a background image is active
+   so large containers (like the dashboard wrapper) don't cover the page background. */
+body.has-background-image .bg-background,
+body.has-background-image [class*="bg-background/"] {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+.has-background-image .bg-card,
+.has-background-image .card,
+.has-background-image .bg-muted,
+.has-background-image .p-4,
+.has-background-image .rounded-xl,
+.has-background-image .border-2 {
+  background-color: hsl(var(--card) / 0.6) !important;
+  backdrop-filter: blur(8px) saturate(120%);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  border-color: hsl(var(--border) / 0.5) !important;
+}
+
+.has-background-image .bg-card,
+.has-background-image .card,
+.has-background-image .bg-muted,
+.has-background-image .p-4,
+.has-background-image .rounded-xl,
+.has-background-image .border-2 {
+  background-color: hsl(var(--card) / 0.6) !important;
+  backdrop-filter: blur(8px) saturate(120%);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  border-color: hsl(var(--border) / 0.5) !important;
+}
+
+/* Slightly stronger contrast for OLED to avoid washed-out widgets */
+.oled .has-background-image .bg-card,
+.oled .has-background-image .card,
+.oled .has-background-image .bg-muted {
+  background-color: hsl(var(--card) / 0.45) !important;
 }
 
 /* Utilitaires globaux */

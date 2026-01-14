@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { getCityByName } from "@/lib/cities";
+import crypto from 'crypto';
+
+// cache weather per-city for short TTL to reduce external calls
+const weatherCache = new Map<string, { ts: number; ttl: number; body: any }>();
+const WEATHER_TTL = 60 * 10; // 10 minutes
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const city = searchParams.get("city") || "Paris";
+    const city = (searchParams.get("city") || "Paris").trim();
 
     // 1) Geocoding - utiliser d'abord notre liste prédéfinie
     let latitude = 48.8566;
@@ -47,6 +52,14 @@ export async function GET(request: Request) {
     }
 
     // 2) Fetch forecast + current
+    const cacheKey = crypto.createHash('sha256').update(city + '|' + latitude + '|' + longitude).digest('hex');
+    if (weatherCache.has(cacheKey)) {
+      const entry = weatherCache.get(cacheKey)!;
+      if (Date.now() - entry.ts < entry.ttl * 1000) {
+        return NextResponse.json(entry.body);
+      }
+      weatherCache.delete(cacheKey);
+    }
     const params = new URLSearchParams({
       latitude: String(latitude),
       longitude: String(longitude),
@@ -67,13 +80,19 @@ export async function GET(request: Request) {
     }
 
     const weatherJson = await weatherRes.json();
-
-    return NextResponse.json({
+    const payload = {
       city: resolvedCity,
       latitude,
       longitude,
       ...weatherJson,
-    });
+    };
+
+    // cache the payload for a short TTL
+    try {
+      weatherCache.set(cacheKey, { ts: Date.now(), ttl: WEATHER_TTL, body: payload });
+    } catch (e) { /* ignore cache set errors */ }
+
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("Weather API error:", error);
     return NextResponse.json(

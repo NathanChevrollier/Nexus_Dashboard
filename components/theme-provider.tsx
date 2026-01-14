@@ -132,13 +132,31 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       body.style.background = gradient;
       body.style.backgroundAttachment = "fixed";
     } else if (backgroundImage) {
-      root.style.setProperty("--background-image", `url(${backgroundImage})`);
-      body.style.backgroundImage = `url(${backgroundImage})`;
+      // Clear any shorthand background that could override the image
+      body.style.background = "";
+      // Ensure the page background color does not fully hide the image
+      body.style.backgroundColor = "transparent";
+
+      // Expose the image via CSS variable (used by globals.css)
+      root.style.setProperty("--background-image", `url("${backgroundImage}")`);
+      // Also set inline background image to cover pages rendered before CSS variables apply
+      body.style.backgroundImage = `url("${backgroundImage}")`;
+      body.style.backgroundSize = 'cover';
+      body.style.backgroundPosition = 'center';
+      body.style.backgroundAttachment = 'fixed';
+
+      // Mark the document as using a background image so we can apply
+      // special transparent styles to cards/widgets across all themes.
+      body.classList.add("has-background-image");
     } else {
       root.style.removeProperty("--background-gradient");
       root.style.removeProperty("--background-image");
       body.style.background = "";
       body.style.backgroundImage = "";
+      body.style.backgroundSize = '';
+      body.style.backgroundPosition = '';
+      body.style.backgroundAttachment = '';
+      body.classList.remove("has-background-image");
     }
 
     // Save to localStorage

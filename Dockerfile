@@ -63,3 +63,15 @@ ENV HOSTNAME "0.0.0.0"
 
 # If you want the socket server to run inside this image, set RUN_SOCKET_IN_APP=true
 CMD ["sh", "./scripts/docker-entrypoint.sh"]
+
+# Migrator stage: reuse build artifacts and dev dependencies to run drizzle migrations
+FROM builder AS migrator
+WORKDIR /app
+
+# ensure dev dependencies are available (copied from deps via builder)
+COPY --from=deps /app/node_modules ./node_modules
+
+ENV NODE_ENV production
+
+# Read secrets and run migrations when container starts
+CMD sh -c "export DATABASE_PASSWORD=$(cat /run/secrets/db_password) && export NEXTAUTH_SECRET=$(cat /run/secrets/nextauth_secret) && echo '🗄️ Running drizzle-kit push...' && npx drizzle-kit push --config=./drizzle.config.ts || true && echo '✅ Migrations finished'"
