@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
+import { io } from "socket.io-client";
 
 const SocketContext = createContext<any>(null);
 
@@ -20,41 +21,27 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     // En prod, cela devrait être "https://nexus.chevrolliernathan.fr"
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || window.location.origin;
 
-    let socket: any = null;
+    // Connexion WebSocket standard
+    const socket = io(socketUrl, {
+      path: "/socket.io", // IMPORTANT: doit matcher Nginx et le serveur
+      transports: ["websocket"], // Force WebSocket pour éviter le polling long
+      reconnectionAttempts: 5,
+      withCredentials: true, // Nécessaire si cookies/session partagés
+      autoConnect: true
+    });
 
-    (async () => {
-      try {
-        const mod = await import("socket.io-client");
-        const io = (mod && (mod.io || mod.default || mod)) as any;
-        
-        if (!io) return;
+    socketRef.current = socket;
 
-        // Connexion WebSocket standard
-        socket = io(socketUrl, {
-          path: "/socket.io", // IMPORTANT: doit matcher Nginx et le serveur
-          transports: ["websocket"], // Force WebSocket pour éviter le polling long
-          reconnectionAttempts: 5,
-          withCredentials: true, // Nécessaire si cookies/session partagés
-          autoConnect: true
-        });
-
-        socketRef.current = socket;
-
-        socket.on("connect", () => {
-          // console.log("Socket connected via provider");
-          if (session?.user?.id) {
-            socket.emit("identify", session.user.id);
-          }
-        });
-
-        socket.on("connect_error", (err: any) => {
-          console.warn("Socket connection error:", err);
-        });
-
-      } catch (err) {
-        console.error("Socket import failed", err);
+    socket.on("connect", () => {
+      // console.log("Socket connected via provider");
+      if (session?.user?.id) {
+        socket.emit("identify", session.user.id);
       }
-    })();
+    });
+
+    socket.on("connect_error", (err: any) => {
+      console.warn("Socket connection error:", err);
+    });
 
     return () => {
       if (socket) {
