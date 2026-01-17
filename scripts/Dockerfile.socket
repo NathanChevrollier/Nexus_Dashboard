@@ -5,6 +5,9 @@ WORKDIR /app
 # Install build deps
 RUN apk add --no-cache python3 make g++
 
+# Install curl
+RUN apk --no-cache add curl
+
 # Copy package files to install only production deps
 COPY package.json package-lock.json* ./
 

@@ -74,6 +74,7 @@ type SortMode = "recent" | "priority" | "alpha";
 
 export function TodoListWidget({ widget }: TodoListWidgetProps) {
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [hoveredTodoId, setHoveredTodoId] = useState<string | null>(null);
   const [newTodo, setNewTodo] = useState("");
   const [newPriority, setNewPriority] = useState<Todo["priority"]>("medium");
   const [categories, setCategories] = useState<string[]>(["Général"]);
@@ -416,10 +417,13 @@ export function TodoListWidget({ widget }: TodoListWidgetProps) {
             visible.map((todo) => (
               <div
                 key={todo.id}
+                onMouseEnter={() => setHoveredTodoId(todo.id)}
+                onMouseLeave={() => setHoveredTodoId((id) => (id === todo.id ? null : id))}
                 className={cn(
-                  "group relative flex items-start gap-3 p-2.5 rounded-xl border bg-card/80 hover:bg-card hover:shadow-sm transition-all duration-200",
+                  "relative flex items-start gap-3 p-2.5 rounded-xl border bg-card/80 hover:bg-card hover:shadow-sm transition-all duration-200",
                   todo.completed && "opacity-60 bg-muted/30 border-transparent"
                 )}
+                tabIndex={0}
               >
                 <button 
                   onClick={() => toggleTodo(todo.id)} 
@@ -460,7 +464,10 @@ export function TodoListWidget({ widget }: TodoListWidgetProps) {
                   </div>
                 </div>
 
-                <div className="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-card/80 backdrop-blur-sm rounded-md shadow-sm border p-0.5">
+                <div className={cn(
+                  "absolute right-2 bottom-2 flex gap-1 transition-opacity bg-card/80 backdrop-blur-sm rounded-md shadow-sm border p-0.5",
+                  hoveredTodoId === todo.id ? "opacity-100" : "opacity-0 pointer-events-none"
+                )}>
                   <Button variant="ghost" size="icon" className="h-6 w-6 rounded-sm hover:text-primary" onClick={() => openEdit(todo)}>
                     <Edit3 className="h-3 w-3" />
                   </Button>
