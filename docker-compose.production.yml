@@ -50,12 +50,13 @@ services:
         reservations:
           cpus: '0.2'
           memory: 128M
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4001/"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+        healthcheck:
+              # On utilise Node pour vérifier si http://127.0.0.1:4001/ répond 200 OK
+              test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:4001/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+              interval: 10s
+              timeout: 5s
+              retries: 5
+              start_period: 10s
 
   app:
     build:
