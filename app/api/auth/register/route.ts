@@ -5,8 +5,7 @@ import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { generateId } from "@/lib/utils";
 import { z } from "zod";
-
-const SOCKET_EMIT_URL = process.env.SOCKET_EMIT_URL || process.env.SOCKET_SERVER_URL || "http://localhost:4001/emit";
+import { createNotification } from '@/lib/notifications';
 
 const registerSchema = z.object({
   name: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
@@ -58,22 +57,22 @@ export async function POST(request: Request) {
       status: "PENDING", // Par défaut, le compte doit être validé par un admin
     });
 
-    // Notifier les admins (best-effort)
+    // Notifier les admins (persist + emit best-effort)
     (async () => {
       try {
         const admins = await db.select().from(users).where(eq(users.role, 'ADMIN'));
         for (const a of admins || []) {
           try {
-            await fetch(SOCKET_EMIT_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                event: 'user:pending',
-                targetUserId: a.id,
-                payload: { userId, name, email, timestamp: Date.now() },
-              }),
-            }).catch(() => {});
-          } catch (e) {}
+            await createNotification({
+              userId: a.id,
+              type: 'user:pending',
+              title: 'Nouvel utilisateur en attente',
+              message: `Utilisateur ${name} (${email}) en attente de validation`,
+              payload: { userId, name, email, timestamp: Date.now() },
+            });
+          } catch (e) {
+            console.debug('notify admin failed for', a.id, e);
+          }
         }
       } catch (e) {
         console.debug('notify admins failed', e);

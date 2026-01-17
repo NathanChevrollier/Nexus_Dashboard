@@ -14,7 +14,11 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "seed": "tsx seed.ts",
-    "socket-server": "node scripts/socket-server.js"
+    "socket-server": "node scripts/socket-server.js",
+    "test:integration": "tsx scripts/integration-test.ts",
+    "test:e2e": "playwright test",
+    "test:ci": "playwright test --reporter=github",
+    "test:api": "tsx tests/api/run-tests.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.1",
@@ -72,6 +76,7 @@
     "tailwindcss": "^3.4.19",
     "tailwindcss-animate": "^1.0.7",
     "tsx": "^4.7.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@playwright/test": "^1.40.0"
   }
 }

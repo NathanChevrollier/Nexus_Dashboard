@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useRef } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { io } from "socket.io-client";
 
@@ -13,6 +13,7 @@ export function useSocket() {
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const socketRef = useRef<any | null>(null);
+  const [socket, setSocket] = useState<any | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -22,15 +23,17 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || window.location.origin;
 
     // Connexion WebSocket standard
+    // Allow fallback transports and keep socket in state so consumers re-render
     const socket = io(socketUrl, {
-      path: "/socket.io", // IMPORTANT: doit matcher Nginx et le serveur
-      transports: ["websocket"], // Force WebSocket pour éviter le polling long
-      reconnectionAttempts: 5,
-      withCredentials: true, // Nécessaire si cookies/session partagés
-      autoConnect: true
+      path: "/socket.io",
+      transports: ["websocket", "polling"],
+      reconnectionAttempts: 10,
+      withCredentials: true,
+      autoConnect: true,
     });
 
     socketRef.current = socket;
+    setSocket(socket);
 
     socket.on("connect", () => {
       // console.log("Socket connected via provider");
@@ -48,8 +51,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         socket.disconnect();
       }
       socketRef.current = null;
+      setSocket(null);
     };
   }, [session?.user?.id]);
 
-  return <SocketContext.Provider value={socketRef.current}>{children}</SocketContext.Provider>;
+  // provide the socket instance from state so consumers re-render when socket becomes available
+  return <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>;
 }

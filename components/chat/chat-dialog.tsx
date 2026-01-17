@@ -277,6 +277,15 @@ export default function ChatDialog({ onClose }: { onClose?: () => void }) {
           setMessages(data || []);
           setCanLoadMore((data || []).length === 50);
           scrollToBottom(false);
+          try {
+            // Persist read-receipt up to latest message
+            const last = (data || []).length ? (data || [])[ (data || []).length - 1 ] : null;
+            if (last && last.id) {
+              fetch(`/api/chat/conversations/${selectedId}/read`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId: last.id }) }).catch(() => {});
+            } else {
+              fetch(`/api/chat/conversations/${selectedId}/read`, { method: 'POST' }).catch(() => {});
+            }
+          } catch (e) {}
         }
         
         if (partsRes.ok) {
@@ -424,22 +433,13 @@ export default function ChatDialog({ onClose }: { onClose?: () => void }) {
     if (!socket || !selectedId) return;
     
     // Emit start typing
-    socket.emit("chat:typing", { conversationId: selectedId, typing: true }); // Adapter selon ton backend
-    // Ou via fetch si ton backend n'écoute pas directement les emits client
-    fetch('/api/chat/typing', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId: selectedId, typing: true }) 
-    }).catch(() => {});
+    // Emit typing via socket only (server-side HTTP bridge is still available for non-socket clients)
+    socket.emit("chat:typing", { conversationId: selectedId, typing: true });
 
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-       fetch('/api/chat/typing', { 
-          method: 'POST', 
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ conversationId: selectedId, typing: false }) 
-      }).catch(() => {});
-    }, 1500);
+     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+     typingTimeoutRef.current = setTimeout(() => {
+       if (socket && selectedId) socket.emit('chat:typing', { conversationId: selectedId, typing: false });
+     }, 1500);
   };
 
   const handleSearchUsers = async (q: string) => {

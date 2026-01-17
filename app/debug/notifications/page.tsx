@@ -16,6 +16,9 @@ export default function NotificationDebugPage() {
   const router = useRouter();
   const [isConnected, setIsConnected] = useState(false);
   const [events, setEvents] = useState<string[]>([]);
+  const [serverNotifs, setServerNotifs] = useState<any[]>([]);
+  const [eventType, setEventType] = useState('share:created');
+  const [customPayload, setCustomPayload] = useState('');
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
 
   useEffect(() => {
@@ -71,6 +74,10 @@ export default function NotificationDebugPage() {
       setEvents(prev => [`✅ iframe_request_approved - ${JSON.stringify(payload)}`, ...prev]);
     };
 
+    const onUserPending = (payload: any) => {
+      setEvents(prev => [`🧑‍💼 user:pending - ${JSON.stringify(payload)}`, ...prev]);
+    };
+
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('share:created', onShareCreated);
@@ -78,12 +85,25 @@ export default function NotificationDebugPage() {
     socket.on('share:rejected', onShareRejected);
     socket.on('iframe_request', onIframeRequest);
     socket.on('iframe_request_approved', onIframeApproved);
+    socket.on('user:pending', onUserPending);
 
     // Check initial connection status
     if (socket.connected) {
       setIsConnected(true);
       setEvents(prev => [`✅ Socket déjà connecté au chargement`, ...prev]);
     }
+
+    // fetch current unread notifications from server on connect
+    (async () => {
+      try {
+        const res = await fetch('/api/notifications?unread=1');
+        if (!res.ok) return;
+        const data = await res.json();
+        setServerNotifs(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.warn('Failed to fetch server notifications', e);
+      }
+    })();
 
     return () => {
       socket.off('connect', onConnect);
@@ -93,6 +113,7 @@ export default function NotificationDebugPage() {
       socket.off('share:rejected', onShareRejected);
       socket.off('iframe_request', onIframeRequest);
       socket.off('iframe_request_approved', onIframeApproved);
+      socket.off('user:pending', onUserPending);
     };
   }, [socket]);
 
@@ -122,11 +143,8 @@ export default function NotificationDebugPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          eventType: 'share:created',
-          payload: {
-            dashboardId: 'test-dashboard-123',
-            message: 'Ceci est un test de notification',
-          },
+            eventType: eventType,
+            payload: customPayload ? JSON.parse(customPayload) : { dashboardId: 'test-dashboard-123', message: 'Ceci est un test de notification' },
         }),
       });
 
@@ -142,6 +160,24 @@ export default function NotificationDebugPage() {
       setEvents(prev => [`❌ Erreur réseau: ${error.message}`, ...prev]);
       alert(`Erreur réseau: ${error.message}`);
     }
+  };
+
+  const refreshServerNotifs = async () => {
+    try {
+      const res = await fetch('/api/notifications?unread=1');
+      if (!res.ok) return;
+      const data = await res.json();
+      setServerNotifs(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.warn('refreshServerNotifs error', e);
+    }
+  };
+
+  const markServerNotifRead = async (id: string) => {
+    try {
+      await fetch('/api/notifications/mark-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [id] }) });
+      refreshServerNotifs();
+    } catch (e) {}
   };
 
   // Show loading state while checking authentication
@@ -258,13 +294,23 @@ export default function NotificationDebugPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button 
-              onClick={sendTestNotification} 
-              disabled={!isConnected}
-              className="w-full"
-            >
-              📤 Émettre événement test (share:created)
-            </Button>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <select value={eventType} onChange={(e) => setEventType(e.target.value)} className="col-span-2 p-2 rounded border bg-background">
+                <option value="share:created">share:created</option>
+                <option value="share:accepted">share:accepted</option>
+                <option value="share:rejected">share:rejected</option>
+                <option value="iframe_request">iframe_request</option>
+                <option value="iframe_request_approved">iframe_request_approved</option>
+                <option value="user:pending">user:pending</option>
+                <option value="message:new">message:new</option>
+              </select>
+              <Button onClick={sendTestNotification} disabled={!isConnected} className="w-full">📤 Émettre</Button>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium">Payload JSON (optionnel)</label>
+              <textarea value={customPayload} onChange={(e) => setCustomPayload(e.target.value)} placeholder='{"dashboardId":"test","message":"hello"}' className="mt-1 w-full p-2 rounded border bg-background text-xs" rows={3} />
+            </div>
             <p className="text-xs text-muted-foreground">
               Cliquez sur le bouton pour émettre un événement test. La notification devrait apparaître en bas à droite de l'écran dans quelques secondes.
             </p>
@@ -312,6 +358,41 @@ export default function NotificationDebugPage() {
                     className="text-xs font-mono bg-muted p-2 rounded border"
                   >
                     {event}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Server unread notifications */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Notifications Serveur (non-lues)</CardTitle>
+                <CardDescription>Notifications persistées côté serveur</CardDescription>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={refreshServerNotifs}>Rafraîchir</Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {serverNotifs.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Aucune notification serveur non-lue.</p>
+            ) : (
+              <div className="space-y-2">
+                {serverNotifs.map((n) => (
+                  <div key={n.id} className="p-2 border rounded flex items-start justify-between">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold">{n.title} <span className="text-xs text-muted-foreground">({n.type})</span></div>
+                      <div className="text-xs text-muted-foreground line-clamp-2">{n.message}</div>
+                      <div className="text-[10px] text-muted-foreground/60">{new Date(n.createdAt).toLocaleString()}</div>
+                    </div>
+                    <div className="flex flex-col gap-1 ml-3">
+                      <Button size="sm" onClick={() => markServerNotifRead(n.id)}>Marquer lue</Button>
+                    </div>
                   </div>
                 ))}
               </div>

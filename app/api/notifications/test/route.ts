@@ -16,29 +16,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { eventType = "share:created", payload = {} } = body;
 
-    // Envoyer au serveur Socket.io
-    // Use server-side ENV first (internal network), then fall back to public client URL as last resort.
-    const socketEmitBase = (process.env.SOCKET_EMIT_URL || process.env.SOCKET_SERVER_URL || process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || "http://localhost:4001").replace(/\/$/, '');
+    const { emitToUser } = await import('@/lib/socket');
 
-    const response = await fetch(`${socketEmitBase}/emit`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        event: eventType,
-        targetUserId: session.user.id,
-        payload: {
-          ...payload,
-          userId: session.user.id,
-          timestamp: Date.now(),
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Socket server responded with ${response.status}`);
-    }
+    await emitToUser(session.user.id, eventType, { ...payload, userId: session.user.id, timestamp: Date.now() });
 
     return NextResponse.json({ 
       success: true, 

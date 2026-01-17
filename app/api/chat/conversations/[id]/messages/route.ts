@@ -5,8 +5,6 @@ import { conversations, participants, messages } from "@/lib/db/schema";
 import { eq, desc, and, lt } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
-const SOCKET_EMIT_URL = process.env.SOCKET_EMIT_URL || process.env.SOCKET_SERVER_URL || "http://localhost:4001/emit";
-
 export async function GET(req: Request, ctx: any) {
   try {
     const session = await auth();
@@ -89,25 +87,33 @@ export async function POST(req: Request, ctx: any) {
 
     const messageId = nanoid();
 
-    await db.insert(messages).values({ id: messageId, conversationId: convId, senderId: session.user.id, content }).catch((e) => { throw e; });
-
-    // Mettre à jour lastMessageId
-    await db.update(conversations).set({ lastMessageId: messageId }).where(eq(conversations.id, convId)).catch(() => {});
-
-    const [msg] = await db.select().from(messages).where(eq(messages.id, messageId)).limit(1).catch(() => []);
+    // Ensure insert + conversation update are atomic
+    const msg = await db.transaction(async (tx) => {
+      await tx.insert(messages).values({ id: messageId, conversationId: convId, senderId: session.user.id, content });
+      await tx.update(conversations).set({ lastMessageId: messageId }).where(eq(conversations.id, convId));
+      const [m] = await tx.select().from(messages).where(eq(messages.id, messageId)).limit(1).catch(() => []);
+      return m;
+    }).catch((e) => { throw e; });
 
     // Notifier participants via socket server HTTP /emit
     const targets = await db.select().from(participants).where(eq(participants.conversationId, convId));
 
     try {
+      const { createNotification } = await import('@/lib/notifications');
       for (const t of targets) {
         // don't notify the sender about their own message
         if (t.userId === session.user.id) continue;
-        await fetch(SOCKET_EMIT_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ event: 'message:new', targetUserId: t.userId, payload: { conversationId: convId, message: msg } }),
-        }).catch(() => {});
+        try {
+          await createNotification({
+            userId: t.userId,
+            type: 'message:new',
+            title: 'Nouveau message',
+            message: msg?.content ? `${msg.content}` : 'Vous avez reçu un nouveau message',
+            payload: { conversationId: convId, message: msg },
+          });
+        } catch (e) {
+          // best-effort: ignore per-user failures
+        }
       }
     } catch (e) {
       // ignore socket errors for now

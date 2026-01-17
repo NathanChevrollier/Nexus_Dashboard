@@ -7,7 +7,7 @@ const app = express();
 const server = http.createServer(app);
 
 // CORS Config (Production)
-const allowedOrigins = process.env.CORS_ORIGIN ? [process.env.CORS_ORIGIN] : '*';
+const allowedOrigins = process.env.CORS_ORIGIN ? [process.env.CORS_ORIGIN] : ['http://localhost:3000'];
 
 const io = new Server(server, { 
   cors: { 
@@ -30,11 +30,9 @@ let lastCheck = {
 
 function checkAppHealth() {
   const start = Date.now();
-  
-  // Timeout court (2s) pour détecter rapidement si ça ne répond pas
-  const request = http.get('http://app:3000/api/health', { timeout: 2000 }, (res) => {
+  // Timeout modéré
+  const request = http.get('http://app:3000/api/health', { timeout: 3000 }, (res) => {
     const latency = Date.now() - start;
-    
     if (res.statusCode === 200) {
       updateStatus('online', 200, `Système opérationnel (${latency}ms)`);
     } else if (res.statusCode >= 500) {
@@ -45,7 +43,6 @@ function checkAppHealth() {
   });
 
   request.on('error', (err) => {
-    // Erreur réseau pure (le conteneur est éteint ou ne lie pas le port)
     updateStatus('offline', 'ERR', `Service injoignable (${err.code || 'Connexion refusée'})`);
   });
 
@@ -70,7 +67,8 @@ function updateStatus(status, code, message) {
 }
 
 // Vérification fréquente (toutes les 1.5 secondes) pour le temps réel
-setInterval(checkAppHealth, 1500);
+// Reduced polling interval to 10s to lower load
+setInterval(checkAppHealth, 10000);
 
 io.on('connection', (socket) => {
   // Envoyer l'état actuel immédiatement à la connexion
@@ -86,6 +84,33 @@ app.get('/', (req, res) => res.status(200).json({ status: 'ok' }));
 app.post('/emit', (req, res) => {
   const { event, targetUserId, payload } = req.body || {};
   if (!event || !targetUserId) return res.status(400).json({ error: 'required args' });
+  // Simple secret validation to prevent public abuse
+  const expected = process.env.SOCKET_SERVER_SECRET;
+  if (expected) {
+    // Prefer HMAC signature verification
+    const sig = req.get('x-socket-signature');
+    const ts = req.get('x-socket-timestamp');
+    if (!sig || !ts) return res.status(401).json({ error: 'unauthorized' });
+    const now = Date.now();
+    const age = Math.abs(now - Number(ts));
+    if (isNaN(age) || age > 1000 * 60 * 5) return res.status(401).json({ error: 'stale timestamp' });
+
+    const crypto = require('crypto');
+    const canonical = `${event}|${targetUserId}|${ts}|${JSON.stringify(payload || {})}`;
+    const expectedSig = crypto.createHmac('sha256', expected).update(canonical).digest('hex');
+    const match = (function(a, b) {
+      try { return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)); } catch (e) { return false; }
+    })(expectedSig, sig);
+    if (!match) return res.status(401).json({ error: 'invalid signature' });
+  } else {
+    // Fallback: token equality header
+    const incomingToken = req.get('x-socket-token') || req.get('x-socket-secret');
+    if (incomingToken) {
+      const expectedToken = process.env.SOCKET_SERVER_SECRET;
+      if (expectedToken && incomingToken !== expectedToken) return res.status(401).json({ error: 'unauthorized' });
+    }
+  }
+
   io.to(targetUserId).emit(event, payload || {});
   return res.json({ ok: true });
 });

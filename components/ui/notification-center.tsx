@@ -18,7 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 export interface Notification {
   id: string;
-  type: 'share:created' | 'share:accepted' | 'share:rejected' | 'iframe_request' | 'iframe_request_approved' | 'message:received';
+  type: 'share:created' | 'share:accepted' | 'share:rejected' | 'iframe_request' | 'iframe_request_approved' | 'message:received' | 'user:pending';
   title: string;
   message: string;
   timestamp: number;
@@ -134,6 +134,17 @@ export default function NotificationCenter() {
       );
     };
 
+    const onUserPending = (payload: any) => {
+      console.log('[NotificationCenter] user:pending event received:', payload);
+      addNotification(
+        'user:pending',
+        "Nouvel utilisateur en attente",
+        `Utilisateur ${payload.name || payload.email || payload.userId} en attente de validation`,
+        payload,
+        '/admin/users'
+      );
+    };
+
     const onMessageNew = (payload: any) => {
       try {
         const { conversationId, message } = payload || {};
@@ -154,6 +165,7 @@ export default function NotificationCenter() {
     socket.on('share:rejected', onShareRejected);
     socket.on('iframe_request', onIframeRequest);
     socket.on('iframe_request_approved', onIframeApproved);
+    socket.on('user:pending', onUserPending);
     socket.on('message:new', onMessageNew);
 
     // Test de connexion
@@ -167,6 +179,39 @@ export default function NotificationCenter() {
 
     console.log('[NotificationCenter] Socket connected status:', socket.connected);
 
+    // On connect, fetch unread notifications from server and merge
+    const fetchUnread = async () => {
+      try {
+        const res = await fetch('/api/notifications?unread=1');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          // map server rows into Notification interface
+          const mapped = data.map((d: any) => ({
+            id: d.id,
+            type: d.type,
+            title: d.title,
+            message: d.message || '',
+            timestamp: new Date(d.createdAt).getTime(),
+            read: !!d.read,
+            payload: d.payload || {},
+            link: d.link || undefined,
+          } as Notification));
+
+          setNotifications((prev) => {
+            // merge, avoiding duplicates by id
+            const existingIds = new Set(prev.map(p => p.id));
+            const merged = [...mapped.filter(m => !existingIds.has(m.id)), ...prev];
+            return merged;
+          });
+        }
+      } catch (e) {
+        console.warn('Failed to fetch unread notifications', e);
+      }
+    };
+
+    fetchUnread();
+
     return () => {
       console.log('[NotificationCenter] Cleaning up socket listeners');
       socket.off('share:created', onShareCreated);
@@ -174,6 +219,7 @@ export default function NotificationCenter() {
       socket.off('share:rejected', onShareRejected);
       socket.off('iframe_request', onIframeRequest);
       socket.off('iframe_request_approved', onIframeApproved);
+      socket.off('user:pending', onUserPending);
       socket.off('message:new', onMessageNew);
       socket.off('connect');
       socket.off('disconnect');
@@ -183,15 +229,25 @@ export default function NotificationCenter() {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const markAsRead = (id: string) => {
-    setNotifications(prev => 
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
-    );
+    setNotifications(prev => {
+      const updated = prev.map(n => n.id === id ? { ...n, read: true } : n);
+      // notify server
+      try {
+        fetch('/api/notifications/mark-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [id] }) }).catch(() => {});
+      } catch (e) {}
+      return updated;
+    });
   };
 
   const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(n => ({ ...n, read: true }))
-    );
+    setNotifications(prev => {
+      const ids = prev.filter(n => !n.read).map(n => n.id);
+      try {
+        if (ids.length) fetch('/api/notifications/mark-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) }).catch(() => {});
+        else fetch('/api/notifications/mark-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true }) }).catch(() => {});
+      } catch (e) {}
+      return prev.map(n => ({ ...n, read: true }));
+    });
   };
 
   const deleteNotification = (id: string, e: React.MouseEvent) => {
