@@ -58,6 +58,16 @@ export default function LibraryPage() {
 
   useEffect(() => { loadItems(); }, []);
 
+  // Optimistic update helper: updates local state immediately and saves in background
+  const handleOptimisticUpdate = async (itemId: string, newData: any) => {
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, ...newData } : i));
+    try {
+      await updateLibraryItem(itemId, newData);
+    } catch (e) {
+      console.error('Optimistic save failed', e);
+    }
+  };
+
   const handleItemOpened = async (item: any) => {
     const now = new Date();
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, lastReadAt: now } : i));
@@ -225,6 +235,7 @@ export default function LibraryPage() {
                     onDelete={async () => {
                       if(await confirm('Supprimer définitivement ?')) { await deleteLibraryItem(item.id); loadItems(); }
                     }}
+                    onOptimisticUpdate={handleOptimisticUpdate}
                   />
                 ))}
               </div>
@@ -248,16 +259,27 @@ export default function LibraryPage() {
 }
 
 // --- CARTE ITEM (Visuel amélioré + Dropdown Statut) ---
-function LibraryCard({ item, onUpdate, onEdit, onDelete, onLinkOpened, onStatusChange }: any) {
+function LibraryCard({ item, onUpdate, onEdit, onDelete, onLinkOpened, onStatusChange, onOptimisticUpdate }: any) {
   const [isEditingProgress, setIsEditingProgress] = useState(false);
-  
+  const [localProgress, setLocalProgress] = useState<number>(Number(item.currentProgress || 0));
+
+  useEffect(() => {
+    setLocalProgress(Number(item.currentProgress || 0));
+  }, [item.currentProgress]);
   const handleOpenLink = () => {
     if (item.linkUrl) { window.open(item.linkUrl, '_blank'); onLinkOpened(item); }
   };
 
-  const handleAutoSaveProgress = async (newVal: number) => {
-    await updateLibraryItem(item.id, { currentProgress: newVal });
-    onUpdate();
+  const handleAutoSaveProgress = (newVal: number) => {
+    // Update UI immediately
+    setLocalProgress(newVal);
+    // Fire-and-forget save via optimistic helper if provided
+    if (onOptimisticUpdate) {
+      onOptimisticUpdate(item.id, { currentProgress: newVal });
+    } else {
+      // fallback: attempt direct save but do not reload entire list
+      updateLibraryItem(item.id, { currentProgress: newVal }).catch(e => console.error(e));
+    }
   };
 
   const getStatusBadge = () => {
@@ -354,7 +376,7 @@ function LibraryCard({ item, onUpdate, onEdit, onDelete, onLinkOpened, onStatusC
         <div className="mt-auto pt-2">
           {isEditingProgress ? (
             <InlineProgressEditor 
-              item={item} 
+              item={{ ...item, currentProgress: localProgress }} 
               onClose={() => setIsEditingProgress(false)} 
               onAutoSave={handleAutoSaveProgress} 
             />
@@ -362,14 +384,14 @@ function LibraryCard({ item, onUpdate, onEdit, onDelete, onLinkOpened, onStatusC
             <div className="space-y-1.5 cursor-pointer group/prog" onClick={() => setIsEditingProgress(true)} title="Cliquez pour changer rapidement">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span className="font-medium text-foreground group-hover/prog:text-primary transition-colors">
-                    {item.type === 'anime' ? 'Épisode' : 'Chap.'} {item.currentProgress}
+                    {item.type === 'anime' ? 'Épisode' : 'Chap.'} {localProgress}
                 </span>
                 {item.totalProgress && <span className="opacity-60 text-[10px]">Sur {item.totalProgress}</span>}
               </div>
               <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                 <div 
                   className={cn("h-full transition-all duration-500 ease-out", item.status === 'completed' ? 'bg-green-500' : 'bg-primary')} 
-                  style={{ width: `${Math.min(100, item.totalProgress ? (item.currentProgress / item.totalProgress) * 100 : (item.currentProgress > 0 ? 10 : 0))}%` }} 
+                  style={{ width: `${Math.min(100, item.totalProgress ? (localProgress / item.totalProgress) * 100 : (localProgress > 0 ? 10 : 0))}%` }} 
                 />
               </div>
             </div>
@@ -381,15 +403,25 @@ function LibraryCard({ item, onUpdate, onEdit, onDelete, onLinkOpened, onStatusC
 }
 
 // --- EDITEUR INLINE (Auto-Save lent) ---
-function InlineProgressEditor({ item, onClose, onAutoSave }: { item: any, onClose: () => void, onAutoSave: (val: number) => void }) {
+function InlineProgressEditor({ item, onClose, onAutoSave }: { item: any, onClose: () => void, onAutoSave?: (val: number) => any }) {
   const [val, setVal] = useState(item.currentProgress || 0);
   
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (val !== item.currentProgress) {
-        onAutoSave(val);
-      }
-    }, 2000); 
+      const doSave = async () => {
+        try {
+          const res: any = onAutoSave?.(val);
+          if (res && typeof res.then === 'function') {
+            await res;
+          }
+        } catch (e) {
+          console.error('Auto-save failed', e);
+        }
+        // Close the inline editor after save
+        onClose();
+      };
+      if (val !== item.currentProgress) doSave();
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, [val, item.currentProgress, onAutoSave]);

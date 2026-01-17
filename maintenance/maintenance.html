@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Status</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        :root {
+            --bg: #030712;
+            --card-bg: rgba(17, 24, 39, 0.7);
+            --border: rgba(255, 255, 255, 0.08);
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            --accent-offline: #ef4444; /* Red */
+            --accent-starting: #f59e0b; /* Amber */
+            --accent-online: #10b981; /* Green */
+        }
+
+        body {
+            margin: 0; padding: 0;
+            background: var(--bg);
+            color: var(--text-main);
+            font-family: 'Courier New', Courier, monospace; /* Style terminal */
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* Background Effects */
+        .bg-glow {
+            position: absolute; width: 600px; height: 600px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(0,0,0,0) 70%);
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            z-index: -1;
+        }
+
+        .container {
+            width: 100%; max-width: 500px;
+            padding: 2rem;
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            display: flex; flex-direction: column; align-items: center;
+        }
+
+        /* Status Indicator Pulse */
+        .status-ring {
+            width: 80px; height: 80px;
+            border-radius: 50%;
+            border: 4px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 1.5rem;
+            position: relative;
+            transition: border-color 0.3s ease;
+        }
+        .status-icon {
+            font-size: 2rem;
+        }
+        .status-ring::after {
+            content: ''; position: absolute; top: -4px; left: -4px; right: -4px; bottom: -4px;
+            border-radius: 50%; border: 4px solid transparent;
+            border-top-color: currentColor;
+            animation: spin 2s linear infinite;
+            opacity: 0.5;
+        }
+
+        h1 { font-family: -apple-system, sans-serif; font-size: 1.25rem; font-weight: 600; margin: 0 0 0.5rem 0; }
+        .status-text { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 2rem; text-align: center; }
+
+        /* Terminal Log Area */
+        .terminal {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            padding: 1rem;
+            font-size: 0.75rem;
+            height: 120px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            display: flex; flex-direction: column; gap: 0.5rem;
+            box-sizing: border-box;
+        }
+        
+        .log-entry { display: flex; gap: 0.5rem; opacity: 0; animation: fadeIn 0.3s forwards; }
+        .log-time { color: #6b7280; min-width: 60px; }
+        .log-msg { color: #e5e7eb; }
+        .log-msg.error { color: #f87171; }
+        .log-msg.success { color: #34d399; }
+        .log-msg.warn { color: #fbbf24; }
+
+        /* Footer Info */
+        .footer {
+            margin-top: 1.5rem;
+            font-size: 0.7rem;
+            color: #52525b;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Animations */
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* State Classes */
+        .state-offline { color: var(--accent-offline); --current-color: var(--accent-offline); }
+        .state-starting { color: var(--accent-starting); --current-color: var(--accent-starting); }
+        .state-online { color: var(--accent-online); --current-color: var(--accent-online); }
+        .state-unknown { color: var(--text-muted); --current-color: var(--text-muted); }
+
+    </style>
+</head>
+<body>
+    <div class="bg-glow"></div>
+    
+    <div class="container">
+        <div id="statusRing" class="status-ring state-unknown">
+            <span id="statusIcon" class="status-icon">⚡</span>
+        </div>
+
+        <h1 id="statusTitle">Connexion au moniteur...</h1>
+        <p id="statusDesc" class="status-text">Attente des données de télémétrie</p>
+
+        <div class="terminal" id="terminal">
+            <div class="log-entry">
+                <span class="log-time">SYS</span>
+                <span class="log-msg">Initialisation de l'interface...</span>
+            </div>
+        </div>
+
+        <div class="footer">
+            Nexus Dashboard • System Monitor
+        </div>
+    </div>
+
+    <script>
+        const terminal = document.getElementById('terminal');
+        const statusRing = document.getElementById('statusRing');
+        const statusTitle = document.getElementById('statusTitle');
+        const statusDesc = document.getElementById('statusDesc');
+        const statusIcon = document.getElementById('statusIcon');
+
+        function addLog(msg, type = 'normal') {
+            const now = new Date().toLocaleTimeString('fr-FR', { hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit' });
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            div.innerHTML = `<span class="log-time">${now}</span><span class="log-msg ${type}">${msg}</span>`;
+            terminal.appendChild(div);
+            terminal.scrollTop = terminal.scrollHeight;
+            
+            // Garder seulement les 20 derniers logs
+            if (terminal.children.length > 20) terminal.removeChild(terminal.firstChild);
+        }
+
+        function updateUI(data) {
+            // Nettoyage des classes
+            statusRing.classList.remove('state-offline', 'state-starting', 'state-online', 'state-unknown');
+
+            switch (data.status) {
+                case 'offline':
+                    statusRing.classList.add('state-offline');
+                    statusIcon.innerText = "✖";
+                    statusTitle.innerText = "SYSTÈME HORS LIGNE";
+                    statusDesc.innerText = "Le conteneur applicatif ne répond pas.";
+                    addLog(`PING ÉCHOUÉ: ${data.message}`, 'error');
+                    break;
+                
+                case 'starting':
+                    statusRing.classList.add('state-starting');
+                    statusIcon.innerText = "⚙";
+                    statusTitle.innerText = "DÉMARRAGE...";
+                    statusDesc.innerText = "Les services s'initialisent. Veuillez patienter.";
+                    addLog(`DÉMARRAGE: ${data.message}`, 'warn');
+                    break;
+
+                case 'online':
+                    statusRing.classList.add('state-online');
+                    statusIcon.innerText = "✔";
+                    statusTitle.innerText = "OPÉRATIONNEL";
+                    statusDesc.innerText = "Redirection vers le tableau de bord...";
+                    addLog(`SUCCÈS: ${data.message}`, 'success');
+                    
+                    // Vraie redirection quand c'est vraiment prêt
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                    break;
+
+                default:
+                    statusRing.classList.add('state-unknown');
+                    addLog(`STATUS INCONNU: ${data.message}`);
+            }
+        }
+
+        // Connexion Socket
+        const socket = io({ 
+            path: '/socket.io',
+            reconnectionAttempts: Infinity,
+            transports: ['websocket']
+        });
+
+        socket.on('connect', () => {
+            addLog("Connexion établie avec le moniteur.", "success");
+        });
+
+        socket.on('disconnect', () => {
+            addLog("Perte de connexion avec le moniteur.", "error");
+            statusRing.className = 'status-ring state-unknown';
+            statusTitle.innerText = "MONITEUR DÉCONNECTÉ";
+        });
+
+        socket.on('system:status', (data) => {
+            updateUI(data);
+        });
+
+        // Fail-safe : Si le socket ne marche pas du tout (ex: tout le serveur est down), reload auto
+        setTimeout(() => {
+            if (!socket.connected) window.location.reload();
+        }, 30000);
+
+    </script>
+</body>
+</html>

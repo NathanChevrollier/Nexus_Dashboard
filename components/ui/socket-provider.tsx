@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 
-// Use a generic any type so server bundling won't require socket.io-client at build-time
 const SocketContext = createContext<any>(null);
 
 export function useSocket() {
@@ -15,64 +14,52 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const socketRef = useRef<any | null>(null);
 
   useEffect(() => {
-    // Only run in browser
     if (typeof window === "undefined") return;
 
-    let mounted = true;
-    const rawEnvUrl = (process.env.NEXT_PUBLIC_SOCKET_SERVER_URL as string) || "";
-    const enableSockets = (process.env.NEXT_PUBLIC_ENABLE_SOCKETS || "true").toLowerCase() !== "false";
+    // Récupère l'URL publique définie dans docker-compose ou utilise l'origine actuelle
+    // En prod, cela devrait être "https://nexus.chevrolliernathan.fr"
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || window.location.origin;
 
-    if (!enableSockets) return;
+    let socket: any = null;
 
-    // Determine socket URL:
-    // - prefer explicit NEXT_PUBLIC_SOCKET_SERVER_URL when provided
-    // - otherwise default to same origin as the page (so we don't ship a hardcoded localhost)
-    const url = rawEnvUrl.trim()
-      ? rawEnvUrl.trim()
-      : (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.host}` : "");
-
-    // If the url points at localhost/127.0.0.1 in production, avoid aggressive autoConnect
-    const isProd = process.env.NODE_ENV === "production";
-    const unsafeLocalHost = isProd && (url.includes("localhost") || url.includes("127.0.0.1"));
-
-    // Dynamically import socket.io-client so the server build doesn't try to resolve it
     (async () => {
       try {
         const mod = await import("socket.io-client");
         const io = (mod && (mod.io || mod.default || mod)) as any;
+        
         if (!io) return;
-        if (!url) return;
-        // Prefer websocket transport to avoid HTTP long-polling requests to /socket.io when server absent
-        const socket = io(url, { autoConnect: !unsafeLocalHost, transports: ['websocket'] });
+
+        // Connexion WebSocket standard
+        socket = io(socketUrl, {
+          path: "/socket.io", // IMPORTANT: doit matcher Nginx et le serveur
+          transports: ["websocket"], // Force WebSocket pour éviter le polling long
+          reconnectionAttempts: 5,
+          withCredentials: true, // Nécessaire si cookies/session partagés
+          autoConnect: true
+        });
+
         socketRef.current = socket;
 
         socket.on("connect", () => {
-          if (session?.user?.id) socket.emit("identify", session.user.id);
+          // console.log("Socket connected via provider");
+          if (session?.user?.id) {
+            socket.emit("identify", session.user.id);
+          }
         });
 
-        // If we disabled autoConnect for local host, attempt a single connect pass after short delay
-        if (unsafeLocalHost) {
-          setTimeout(() => {
-            try {
-              socket.connect?.();
-            } catch (e) {
-              // ignore connect errors; avoids repeated failed polling attempts
-              console.debug("Socket connect attempt skipped/failed for localhost", e);
-            }
-          }, 2000);
-        }
+        socket.on("connect_error", (err: any) => {
+          console.warn("Socket connection error:", err);
+        });
+
       } catch (err) {
-        // If socket.io-client is not installed, fail gracefully
-        // The dev should run `npm install` to add socket.io-client
-        console.warn("socket.io-client not available:", err);
+        console.error("Socket import failed", err);
       }
     })();
 
     return () => {
-      mounted = false;
-      try {
-        socketRef.current?.disconnect?.();
-      } catch (e) {}
+      if (socket) {
+        socket.disconnect();
+      }
       socketRef.current = null;
     };
   }, [session?.user?.id]);
