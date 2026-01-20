@@ -44,14 +44,10 @@ export async function POST(request: Request) {
     // Notify requester (best-effort)
     (async () => {
       try {
-        const socketUrl = process.env.SOCKET_SERVER_URL || process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || 'http://localhost:4001';
+        const { emitToUser } = await import('@/lib/socket');
         const payload = { requestId, origin };
         try {
-          await fetch(`${socketUrl.replace(/\/$/, '')}/emit`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ event: 'iframe_request_approved', targetUserId: req.userId, payload }),
-          });
+          await emitToUser(req.userId, 'iframe_request_approved', payload);
         } catch (e) {
           console.debug('notify requester failed', e);
         }

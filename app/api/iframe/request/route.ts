@@ -60,17 +60,13 @@ export async function POST(request: Request) {
     // Notify admins via socket server (best-effort)
     (async () => {
       try {
-        const socketUrl = process.env.SOCKET_SERVER_URL || process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || 'http://localhost:4001';
+        const { emitToUser } = await import('@/lib/socket');
         // fetch admin users
         const adminRows = await db.select().from(users).where(eq(users.role, 'ADMIN'));
         const payload = { id, url, userId: session.user.id, reason: reason || null };
         for (const a of adminRows) {
           try {
-            await fetch(`${socketUrl.replace(/\/$/, '')}/emit`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ event: 'iframe_request', targetUserId: a.id, payload }),
-            });
+            await emitToUser(a.id, 'iframe_request', payload);
           } catch (e) {
             // ignore individual notify errors
             console.debug('notify admin failed', e);

@@ -28,15 +28,17 @@ services:
   socket:
     build:
       context: .
-      dockerfile: Dockerfile
-      target: runner
+      # Assure-toi que ce fichier existe bien comme mentionné dans tes uploads précédents
+      dockerfile: scripts/Dockerfile.socket 
     container_name: nexus-socket-prod
     restart: always
     environment:
       NODE_ENV: production
       SOCKET_PORT: 4001
-    command: node ./scripts/socket-server.js
+      # IMPORTANT : L'URL de ton site pour autoriser le CORS
+      CORS_ORIGIN: "https://nexus.chevrolliernathan.fr"
     ports:
+      # Mappe le port 4001 du conteneur sur le 4001 du serveur hôte (pour Nginx)
       - "127.0.0.1:4001:4001" 
     networks:
       - nexus-public
@@ -49,11 +51,12 @@ services:
           cpus: '0.2'
           memory: 128M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4001/"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+              # On utilise Node pour vérifier si http://127.0.0.1:4001/ répond 200 OK
+              test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:4001/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+              interval: 10s
+              timeout: 5s
+              retries: 5
+              start_period: 10s
 
   app:
     build:
@@ -73,10 +76,13 @@ services:
       DATABASE_USER: nexus
       DATABASE_PASSWORD_FILE: /run/secrets/db_password
       DATABASE_NAME: nexus_dashboard
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-https://nexus.example.com}
+      NEXTAUTH_URL: https://nexus.chevrolliernathan.fr
       NEXTAUTH_SECRET_FILE: /run/secrets/nextauth_secret
       NODE_ENV: production
       NEXT_PUBLIC_TMDB_API_KEY: ${NEXT_PUBLIC_TMDB_API_KEY}
+      # IMPORTANT : Le client utilisera cette URL pour se connecter
+      NEXT_PUBLIC_SOCKET_SERVER_URL: https://nexus.chevrolliernathan.fr
+      SOCKET_EMIT_URL: "http://socket:4001"
     command: 
       - sh
       - -c

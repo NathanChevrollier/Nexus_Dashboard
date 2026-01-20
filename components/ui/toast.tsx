@@ -33,6 +33,11 @@ function generateId() {
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const push = useCallback((t: Omit<Toast, "id">) => {
     const id = generateId();
@@ -58,7 +63,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   return (
     <ToastContext.Provider value={value}>
       {children}
-      {typeof window !== "undefined" && createPortal(<ToastViewport toasts={toasts} onDismiss={dismiss} />, document.body)}
+      {mounted && createPortal(<ToastViewport toasts={toasts} onDismiss={dismiss} />, document.body)}
     </ToastContext.Provider>
   );
 };
@@ -66,11 +71,11 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 function ToastViewport({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: string) => void }) {
   // simple container top-right
   return (
-    <div className="fixed right-4 top-4 z-[9999] flex flex-col gap-3 max-w-sm w-full">
+    <div className="fixed right-4 top-4 z-[9999] flex flex-col gap-3 max-w-sm w-full pointer-events-none">
       {toasts.map((t) => (
         <div
           key={t.id}
-          className={`w-full rounded-lg shadow-lg p-3 border overflow-hidden flex items-start gap-3 transition-transform duration-150 `}
+          className={`w-full rounded-lg shadow-lg p-3 border overflow-hidden flex items-start gap-3 transition-transform duration-150 pointer-events-auto`}
           role="status"
         >
           <div className="flex-1 min-w-0">

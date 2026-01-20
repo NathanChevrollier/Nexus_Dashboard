@@ -4,8 +4,6 @@ import { db } from "@/lib/db";
 import { participants } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
-const SOCKET_EMIT_URL = process.env.SOCKET_EMIT_URL || process.env.SOCKET_SERVER_URL || "http://localhost:4001/emit";
-
 export async function POST(req: Request) {
   try {
     const session = await auth();
@@ -21,15 +19,16 @@ export async function POST(req: Request) {
     const isParticipant = rows.some((r: any) => r.userId === session.user.id);
     if (!isParticipant) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-    // notify all participants except sender
+    // notify all participants except sender via centralized helper
     try {
+      const { emitToUser } = await import('@/lib/socket');
       for (const p of rows) {
         if (p.userId === session.user.id) continue;
-        await fetch(SOCKET_EMIT_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ event: 'chat:typing', targetUserId: p.userId, payload: { conversationId: convId, userId: session.user.id, typing } }),
-        }).catch(() => {});
+        try {
+          await emitToUser(p.userId, 'chat:typing', { conversationId: convId, userId: session.user.id, typing });
+        } catch (e) {
+          // best-effort
+        }
       }
     } catch (e) {
       console.warn('typing emit error', e);

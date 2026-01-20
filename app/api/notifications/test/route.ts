@@ -16,28 +16,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { eventType = "share:created", payload = {} } = body;
 
-    // Envoyer au serveur Socket.io
-    const socketServerUrl = process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || "http://localhost:4001";
-    
-    const response = await fetch(`${socketServerUrl}/emit`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        event: eventType,
-        targetUserId: session.user.id,
-        payload: {
-          ...payload,
-          userId: session.user.id,
-          timestamp: Date.now(),
-        },
-      }),
-    });
+    const { emitToUser } = await import('@/lib/socket');
 
-    if (!response.ok) {
-      throw new Error(`Socket server responded with ${response.status}`);
-    }
+    await emitToUser(session.user.id, eventType, { ...payload, userId: session.user.id, timestamp: Date.now() });
 
     return NextResponse.json({ 
       success: true, 

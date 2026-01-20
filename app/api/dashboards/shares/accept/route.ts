@@ -26,12 +26,8 @@ export async function POST(request: Request) {
 
     // Emit realtime notification to owner (best-effort)
     try {
-      const socketUrl = process.env.SOCKET_SERVER_URL || 'http://localhost:4001/emit';
-      await fetch(socketUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event: 'share:accepted', targetUserId: record.ownerId, payload: { shareId, dashboardId: record.dashboardId, targetUserId: session.user.id } }),
-      });
+      const { emitToUser } = await import('@/lib/socket');
+      await emitToUser(record.ownerId, 'share:accepted', { shareId, dashboardId: record.dashboardId, targetUserId: session.user.id });
     } catch (err) {
       console.warn('Failed to emit share accepted event', err);
     }

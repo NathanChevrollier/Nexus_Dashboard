@@ -66,6 +66,16 @@ export const sessions = mysqlTable('sessions', {
   expires: timestamp('expires').notNull(),
 });
 
+// ============= NOTIFICATION PREFERENCES =============
+export const notificationPreferences = mysqlTable('notification_preferences', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull(),
+  prefs: json('prefs').$type<Record<string, any>>().default({}),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdx: index('notification_prefs_user_idx').on(table.userId),
+}));
+
 // ============= SHARED DASHBOARDS TABLE =============
 export const sharePermissionEnum = mysqlEnum('share_permission', ['read', 'edit']);
 export const shareStatusEnum = mysqlEnum('share_status', ['pending', 'accepted']);
@@ -311,6 +321,22 @@ export const iframeAllowlist = mysqlTable('iframe_allowlist', {
   removed: boolean('removed').default(false).notNull(),
 }, (table) => ({
   originIdx: index('iframe_allowlist_origin_idx').on(table.origin),
+}));
+
+// ============= NOTIFICATIONS TABLE =============
+export const notifications = mysqlTable('notifications', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull(),
+  type: varchar('type', { length: 255 }).notNull(),
+  title: varchar('title', { length: 255 }).notNull(),
+  message: text('message'),
+  payload: json('payload').$type<Record<string, any>>(),
+  link: varchar('link', { length: 1024 }),
+  read: boolean('read').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index('notifications_user_idx').on(table.userId),
+  readIdx: index('notifications_read_idx').on(table.read),
 }));
 
 export const mediaItemsRelations = relations(mediaItems, ({ one }) => ({
