@@ -44,6 +44,8 @@ export const LazyTorrentOverviewWidget = lazy(() => import('@/components/widgets
 export const LazyMonitoringWidget = lazy(() => import('@/components/widgets/monitoring-widget').then(mod => ({ default: mod.MonitoringWidget })));
 export const LazyMediaLibraryWidget = lazy(() => import('@/components/widgets/media-library-widget').then(mod => ({ default: mod.MediaLibraryWidget })));
 export const LazyLibraryWidget = lazy(() => import('@/components/widgets/library-widget').then(mod => ({ default: mod.LibraryWidget })));
+export const LazyGamesWidget = lazy(() => import('@/components/widgets/games-widget'));
+export const LazyGameLeaderboardWidget = lazy(() => import('@/components/widgets/game-leaderboard-widget'));
 
 /**
  * Wrapper avec Suspense pour un widget lazy-loaded
@@ -117,4 +119,6 @@ export const lazyWidgetMap = {
   monitoring: LazyMonitoringWidget,
   'media-library': LazyMediaLibraryWidget,
   'library': LazyLibraryWidget,
+  games: LazyGamesWidget,
+  'game-leaderboard': LazyGameLeaderboardWidget,
 } as const;

@@ -332,6 +332,31 @@ export default function ChatDialog({ onClose }: { onClose?: () => void }) {
         const [moved] = newConvs.splice(idx, 1);
         return [moved, ...newConvs];
       });
+
+      // Show a floating notification and a system notification for non-selected conversations
+      if (conversationId !== selectedId) {
+        const conv = conversations.find(c => c.id === conversationId);
+        const subject = conv?.otherParticipant?.name || conv?.title || 'Conversation';
+        try {
+          addAlert({
+            type: 'info',
+            title: 'Nouveau message',
+            message: message.content,
+            ttl: 6000,
+            subject,
+            icon: <MessageSquarePlus className="h-4 w-4" />
+          });
+        } catch (e) {
+          // ignore alert errors
+        }
+
+        // Browser / system notification
+        try {
+          showBrowserNotification(conversationId, subject, message.content);
+        } catch (e) {
+          // ignore
+        }
+      }
     };
 
     const onTyping = (payload: { conversationId: string; userId: string; typing: boolean }) => {
@@ -358,6 +383,44 @@ export default function ChatDialog({ onClose }: { onClose?: () => void }) {
         messagesEndRef.current.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
       }
     }, 50);
+  };
+
+  // Show browser/system notification and focus/open the conversation on click
+  const showBrowserNotification = (conversationId: string, subject: string, body?: string) => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+      }
+      if (Notification.permission !== 'granted') return;
+
+      const title = subject ? `${subject} — Nouveau message` : 'Nouveau message';
+      const bodyTxt = body && body.length > 200 ? body.slice(0, 200) + '…' : (body || '');
+      const n = new Notification(title, {
+        body: bodyTxt,
+        // Use app favicon as a sensible default icon; replace by avatar URL if available
+        icon: '/favicon.ico',
+        tag: `chat-${conversationId}`,
+      });
+
+      n.onclick = (ev) => {
+        try {
+          window.focus();
+          setSelectedId(conversationId);
+          n.close();
+        } catch (e) {
+          // ignore
+        }
+      };
+
+      // Auto close after a bit
+      setTimeout(() => {
+        try { n.close(); } catch (e) {}
+      }, 6000);
+    } catch (e) {
+      // ignore notification errors
+    }
   };
 
   const handleResize = useCallback((e: MouseEvent) => {

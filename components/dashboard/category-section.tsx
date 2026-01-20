@@ -91,8 +91,14 @@ export function CategorySection({
   return (
     <>
       <div className="mb-6 group">
-        {/* HEADER DE SECTION */}
-        <div className="flex items-center gap-3 p-2 rounded-lg transition-all hover:bg-accent/50">
+        {/* HEADER DE SECTION (entier cliquable pour toggle) */}
+        <div
+          className="flex items-center gap-3 p-2 rounded-lg transition-all hover:bg-accent/50 cursor-pointer"
+          onClick={() => toggleCollapse()}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCollapse(); } }}
+          role="button"
+          tabIndex={0}
+        >
           
           {/* Poignée de drag (si props fournies par le parent draggable) */}
           {isEditMode && dragHandleProps && (
@@ -122,15 +128,12 @@ export function CategorySection({
             </div>
           )}
 
-          {/* Toggle & Titre */}
-          <button 
-            onClick={toggleCollapse} 
-            className="flex items-center gap-2 flex-1 text-left focus:outline-none"
-          >
+          {/* Toggle icon & Titre (non-clickable séparément, le conteneur gère le click) */}
+          <div className="flex items-center gap-2 flex-1 text-left">
             <div className="p-1 rounded-md hover:bg-background transition-colors text-muted-foreground">
               {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </div>
-            
+
             <div className="flex items-center gap-2">
               <span className="text-xl filter drop-shadow-sm">{category.icon}</span>
               <h3 className="text-lg font-semibold tracking-tight text-foreground/90">{category.name}</h3>
@@ -138,7 +141,7 @@ export function CategorySection({
                 {widgets.length}
               </span>
             </div>
-          </button>
+          </div>
 
           {/* Actions d'édition */}
           {isEditMode && (
@@ -147,7 +150,8 @@ export function CategorySection({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-muted-foreground hover:text-primary"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   // Initialize edit fields from latest category values when opening
                   setEditName(category.name);
                   setEditIcon(category.icon || "📁");
@@ -161,7 +165,7 @@ export function CategorySection({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                onClick={handleDelete}
+                onClick={async (e) => { e.stopPropagation(); await handleDelete(); }}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>

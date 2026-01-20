@@ -15,10 +15,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { AnnouncementDetailDialog } from "@/components/admin/announcement-detail-dialog";
 
 export interface Notification {
   id: string;
-  type: 'share:created' | 'share:accepted' | 'share:rejected' | 'iframe_request' | 'iframe_request_approved' | 'message:received';
+  type: 'share:created' | 'share:accepted' | 'share:rejected' | 'iframe_request' | 'iframe_request_approved' | 'message:received' | 'announcement:new';
   title: string;
   message: string;
   timestamp: number;
@@ -32,6 +33,10 @@ export default function NotificationCenter() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [announcementDialog, setAnnouncementDialog] = useState<{
+    open: boolean;
+    announcement: any | null;
+  }>({ open: false, announcement: null });
 
   // Charger les notifications depuis localStorage au montage
   useEffect(() => {
@@ -148,6 +153,27 @@ export default function NotificationCenter() {
       }
     };
 
+    const onAnnouncementNew = (payload: any) => {
+      console.log('[NotificationCenter] announcement:new event received:', payload);
+      try {
+        const { id, title, content, type } = payload;
+        const typeLabels = {
+          info: 'Information',
+          update: 'Mise à jour',
+          alert: 'Alerte'
+        };
+        addNotification(
+          'announcement:new',
+          `📢 ${typeLabels[type as keyof typeof typeLabels] || 'Annonce'}`,
+          title || 'Nouvelle annonce disponible',
+          payload,
+          // On stocke l'ID pour ouvrir le détail plus tard
+        );
+      } catch (e) {
+        console.warn('onAnnouncementNew error', e);
+      }
+    };
+
     console.log('[NotificationCenter] Registering socket event listeners');
     socket.on('share:created', onShareCreated);
     socket.on('share:accepted', onShareAccepted);
@@ -155,6 +181,7 @@ export default function NotificationCenter() {
     socket.on('iframe_request', onIframeRequest);
     socket.on('iframe_request_approved', onIframeApproved);
     socket.on('message:new', onMessageNew);
+    socket.on('announcement:new', onAnnouncementNew);
 
     // Test de connexion
     socket.on('connect', () => {
@@ -175,6 +202,7 @@ export default function NotificationCenter() {
       socket.off('iframe_request', onIframeRequest);
       socket.off('iframe_request_approved', onIframeApproved);
       socket.off('message:new', onMessageNew);
+      socket.off('announcement:new', onAnnouncementNew);
       socket.off('connect');
       socket.off('disconnect');
     };
@@ -202,9 +230,25 @@ export default function NotificationCenter() {
   const deleteAllNotifications = () => {
     setNotifications([]);
   };
-
   const handleNotificationClick = (notification: Notification) => {
     markAsRead(notification.id);
+    // Si c'est une announcement, ouvrir le dialog de détail
+    if (notification.type === 'announcement:new' && notification.payload) {
+      setAnnouncementDialog({
+        open: true,
+        announcement: {
+          id: notification.payload.id,
+          title: notification.payload.title,
+          content: notification.payload.content,
+          type: notification.payload.type,
+          createdAt: notification.payload.createdAt || new Date()
+        }
+      });
+      setIsOpen(false);
+      return;
+    }
+
+    // Sinon, navigation normale
     if (notification.link) {
       router.push(notification.link);
       setIsOpen(false);
@@ -237,12 +281,15 @@ export default function NotificationCenter() {
         return '🔲';
       case 'iframe_request_approved':
         return '✅';
+      case 'announcement:new':
+        return '📢';
       default:
         return '🔔';
     }
   };
 
   return (
+    <>
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <Button
@@ -361,5 +408,12 @@ export default function NotificationCenter() {
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+    
+    <AnnouncementDetailDialog
+      open={announcementDialog.open}
+      onOpenChange={(open) => setAnnouncementDialog({ open, announcement: null })}
+      announcement={announcementDialog.announcement}
+    />
+    </>
   );
 }

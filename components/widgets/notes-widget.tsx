@@ -38,7 +38,8 @@ export function NotesWidget({ widget }: NotesWidgetProps) {
           content,
           textColor,
         },
-      });
+      }, true); // skipRevalidation = true pour éviter POST /dashboard excessifs
+      
       setIsEditing(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);

@@ -242,6 +242,21 @@ export function IntegrationsSettings() {
                 </div>
               )}
 
+              {form.type === 'jellyfin' && (
+                <div className="space-y-2">
+                  <Label>Clé API</Label>
+                  <Input
+                    value={form.apiKey}
+                    onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
+                    placeholder="Clé API Jellyfin/Emby"
+                    required
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Créez une clé API dans Dashboard &gt; API Keys (Jellyfin) ou Settings &gt; API Keys (Emby)
+                  </p>
+                </div>
+              )}
+
               {form.type === 'torrent-client' && (
                 <div className="space-y-2">
                   <Label>Nom d'utilisateur</Label>

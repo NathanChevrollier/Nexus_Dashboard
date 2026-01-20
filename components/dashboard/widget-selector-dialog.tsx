@@ -12,7 +12,9 @@ import {
   Link as LinkIcon, Activity, Frame, Clock, Cloud, StickyNote, BarChart3, 
   Calendar, CheckSquare, Eye, Timer, Bookmark, Quote, CalendarClock, 
   Film, CalendarRange, 
-  BookOpen
+  BookOpen,
+  Gamepad2,
+  Trophy
 } from "lucide-react";
 import type { Widget, Category } from "@/lib/db/schema";
 import { useAlert } from "@/components/ui/confirm-provider";
@@ -25,7 +27,7 @@ interface WidgetSelectorDialogProps {
   onWidgetAdded?: (widget: Widget) => void;
 }
 
-type WidgetType = "link" | "ping" | "link-ping" | "iframe" | "datetime" | "weather" | "notes" | "chart" | "anime-calendar" | "todo-list" | "watchlist" | "timer" | "bookmarks" | "quote" | "countdown" | "universal-calendar" | "movies-tv-calendar";
+type WidgetType = "link" | "ping" | "link-ping" | "iframe" | "datetime" | "weather" | "notes" | "chart" | "anime-calendar" | "todo-list" | "watchlist" | "timer" | "bookmarks" | "quote" | "countdown" | "universal-calendar" | "movies-tv-calendar" | "games" | "game-leaderboard";
 
 const widgetTypes = [
   { type: "link", icon: LinkIcon, label: "Lien", description: "Lien rapide vers un site" },
@@ -47,6 +49,8 @@ const widgetTypes = [
   { type: "movies-tv-calendar", icon: Film, label: "Films & Séries", description: "Sorties cinéma et TV" },
   { type: "media-library", icon: Film, label: "Médiathèque", description: "Page complète films/séries/musiques" },
   { type: "library", icon: BookOpen, label: "Bibliothèque", description: "Bibliothèque" },
+  { type: "games", icon: Gamepad2, label: "Jeux", description: "Collection de mini-jeux" },
+  { type: "game-leaderboard", icon: Trophy, label: "Classement Jeux", description: "Leaderboard des meilleurs scores" },
 ] as const;
 
 export function WidgetSelectorDialog({ open, onOpenChange, dashboardId, categories = [], onWidgetAdded }: WidgetSelectorDialogProps) {

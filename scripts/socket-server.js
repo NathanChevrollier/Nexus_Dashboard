@@ -36,6 +36,15 @@ app.post('/emit', (req, res) => {
   return res.json({ ok: true });
 });
 
+// HTTP endpoint to broadcast to ALL connected users
+app.post('/broadcast', (req, res) => {
+  const { event, data } = req.body || {};
+  if (!event) return res.status(400).json({ error: 'event required' });
+  console.log(`Broadcasting event ${event} to all users`);
+  io.emit(event, data || {});
+  return res.json({ ok: true });
+});
+
 const PORT = process.env.SOCKET_PORT || 4001;
 server.listen(PORT, () => {
   console.log(`Socket server listening on port ${PORT}`);

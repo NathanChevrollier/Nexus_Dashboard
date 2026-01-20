@@ -153,7 +153,8 @@ export async function updateWidget(
     h?: number;
     options?: any;
     categoryId?: string | null;
-  }
+  },
+  skipRevalidation = false // Nouvelle option pour éviter les revalidations excessives
 ) {
   const session = await auth();
   
@@ -189,7 +190,11 @@ export async function updateWidget(
     })
     .where(eq(widgets.id, widgetId));
 
-  revalidatePath("/dashboard");
+  // Revalider seulement si nécessaire (pas pour les updates fréquentes de contenu)
+  if (!skipRevalidation) {
+    revalidatePath("/dashboard");
+  }
+  
   return { success: true };
 }
 

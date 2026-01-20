@@ -15,6 +15,7 @@ import { relations } from 'drizzle-orm';
 // ============= ENUMS =============
 export const userRoleEnum = mysqlEnum('role', ['USER', 'VIP', 'ADMIN']);
 export const userStatusEnum = mysqlEnum('status', ['PENDING', 'ACTIVE', 'BANNED']);
+export const announcementTypeEnum = mysqlEnum('announcement_type', ['info', 'update', 'alert']);
 export const integrationTypeEnum = mysqlEnum('integration_type', [
   'overseerr',
   'torrent-client',
@@ -33,6 +34,7 @@ export const users = mysqlTable('users', {
   password: varchar('password', { length: 255 }),
   role: userRoleEnum.default('USER').notNull(),
   status: userStatusEnum.default('PENDING').notNull(),
+  hasSeenGuide: boolean('has_seen_guide').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
 }, (table) => ({
@@ -211,12 +213,47 @@ export const integrations = mysqlTable('integrations', {
   typeIdx: index('integrations_type_idx').on(table.type),
 }));
 
+// ============= GAME SCORES TABLE =============
+// Table pour stocker les scores des jeux (Snake, 2048, etc.)
+export const gameScores = mysqlTable('game_scores', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull(),
+  gameId: varchar('game_id', { length: 100 }).notNull(), // 'snake', '2048', etc.
+  score: int('score').notNull(),
+  metadata: json('metadata').$type<Record<string, any>>(), // Extra info: level, time, etc.
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index('game_scores_user_id_idx').on(table.userId),
+  gameIdIdx: index('game_scores_game_id_idx').on(table.gameId),
+  scoreIdx: index('game_scores_score_idx').on(table.score),
+}));
+
+// ============= DEPRECATED: GAMES TABLE (no longer needed) =============
+// export const games = mysqlTable('games', {
+//   id: varchar('id', { length: 255 }).primaryKey(),
+//   userId: varchar('user_id', { length: 255 }).notNull(),
+//   title: varchar('title', { length: 255 }).notNull(),
+//   description: text('description'),
+//   icon: text('icon'),
+//   gameUrl: text('game_url'),
+//   gameType: varchar('game_type', { length: 100 }),
+//   config: json('config').$type<Record<string, any>>(),
+//   isActive: boolean('is_active').default(true).notNull(),
+//   order: int('order').default(0).notNull(),
+//   createdAt: timestamp('created_at').defaultNow().notNull(),
+//   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+// }, (table) => ({
+//   userIdIdx: index('games_user_id_idx').on(table.userId),
+//   orderIdx: index('games_order_idx').on(table.order),
+// }));
+
 // ============= RELATIONS =============
 export const usersRelations = relations(users, ({ many }) => ({
   dashboards: many(dashboards),
   calendarEvents: many(calendarEvents),
   integrations: many(integrations),
   mediaItems: many(mediaItems),
+  gameScores: many(gameScores),
 }));
 
 export const dashboardsRelations = relations(dashboards, ({ one, many }) => ({
@@ -237,6 +274,13 @@ export const widgetsRelations = relations(widgets, ({ one }) => ({
 export const integrationsRelations = relations(integrations, ({ one }) => ({
   user: one(users, {
     fields: [integrations.userId],
+    references: [users.id],
+  }),
+}));
+
+export const gameScoresRelations = relations(gameScores, ({ one }) => ({
+  user: one(users, {
+    fields: [gameScores.userId],
     references: [users.id],
   }),
 }));
@@ -293,6 +337,7 @@ export const libraryItems = mysqlTable('library_items', {
   // Customisation
   coverUrl: text('cover_url'),
   linkUrl: text('link_url'),
+  additionalUrl: text('additional_url'),
 
   // Calendrier Manuel
   // ex: "weekly-monday" ou juste une date "2024-05-20"
@@ -308,6 +353,10 @@ export const libraryItems = mysqlTable('library_items', {
   scheduleType: text("schedule_type"), // 'weekly', 'biweekly', 'monthly'
   scheduleDay: text("schedule_day"),   // 'monday', 'tuesday', etc.
   lastReadAt: timestamp("last_read_at"), // Pour le "Lu il y a..."
+  
+  // IDs externes pour synchronisation auto des horaires
+  anilistId: int('anilist_id'),
+  tmdbId: int('tmdb_id'),
   
 }, (table) => ({
   userIdIdx: index('library_items_user_id_idx').on(table.userId),
@@ -387,6 +436,9 @@ export type NewMessage = typeof messages.$inferInsert;
 
 export type Participant = typeof participants.$inferSelect;
 export type NewParticipant = typeof participants.$inferInsert;
+
+export type Announcement = typeof announcements.$inferSelect;
+export type NewAnnouncement = typeof announcements.$inferInsert;
 
 // Theme Configuration Type
 export interface ThemeConfig {
@@ -488,6 +540,22 @@ export interface WidgetOptions {
   hourFormat?: '12h' | '24h';
   compactMode?: boolean;
 }
+
+// ============= ANNOUNCEMENTS TABLE =============
+export const announcements = mysqlTable('announcements', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  title: varchar('title', { length: 255 }).notNull(),
+  content: text('content').notNull(),
+  type: announcementTypeEnum.default('info').notNull(),
+  isPublished: boolean('is_published').default(false).notNull(),
+  createdBy: varchar('created_by', { length: 255 }).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  createdByIdx: index('announcement_created_by_idx').on(table.createdBy),
+  isPublishedIdx: index('announcement_is_published_idx').on(table.isPublished),
+  createdAtIdx: index('announcement_created_at_idx').on(table.createdAt),
+}));
 
 // Metadata pour les événements du calendrier
 export interface EventMetadata {

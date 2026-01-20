@@ -211,10 +211,28 @@ export default function WidgetForm({ widgetType, formState, setFormState, availa
           )}
 
           {widgetType === "torrent-overview" && (
-             <div className="space-y-2">
-               <Label>Limite torrents</Label>
-               <Input type="number" value={formState.limit} onChange={e => setFormState({...formState, limit: e.target.value})} min={1} max={20} />
-             </div>
+             <>
+               <div className="space-y-2">
+                 <Label>Limite torrents actifs</Label>
+                 <Input 
+                   type="number" 
+                   value={formState.limitActive || 10} 
+                   onChange={e => setFormState({...formState, limitActive: parseInt(e.target.value) || 10})} 
+                   min={1} 
+                   max={50} 
+                 />
+               </div>
+               <div className="space-y-2">
+                 <Label>Intervalle de rafraîchissement (secondes)</Label>
+                 <Input 
+                   type="number" 
+                   value={formState.refreshInterval || 5} 
+                   onChange={e => setFormState({...formState, refreshInterval: parseInt(e.target.value) || 5})} 
+                   min={3} 
+                   max={60} 
+                 />
+               </div>
+             </>
           )}
         </div>
       );

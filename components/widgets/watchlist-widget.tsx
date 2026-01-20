@@ -64,7 +64,7 @@ export function WatchlistWidget({ widget }: WatchlistWidgetProps) {
         const { updateWidget } = await import('@/lib/actions/widgets');
         await updateWidget(widget.id, {
           options: { ...widget.options, watchlist: items },
-        });
+        }, true); // skipRevalidation = true pour éviter POST /dashboard excessifs
       } catch (error) {
         console.error(error);
       }

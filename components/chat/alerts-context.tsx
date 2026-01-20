@@ -8,6 +8,9 @@ type Alert = {
   title: string;
   message?: string;
   ttl?: number; // milliseconds
+  // Optional subject to show (person or group name) and optional icon to render
+  subject?: string;
+  icon?: React.ReactNode;
 };
 
 type AlertsContextValue = {

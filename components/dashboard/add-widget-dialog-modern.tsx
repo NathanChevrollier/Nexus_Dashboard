@@ -20,7 +20,8 @@ import type { Widget } from "@/lib/db/schema";
 import { 
   Link as LinkIcon, Activity, Frame, Clock, Cloud, StickyNote, BarChart3, 
   Calendar, CheckSquare, Eye, Timer, Bookmark, Quote, CalendarClock, 
-  CalendarRange, Film, ArrowLeft, Check, ListChecks, Download, Server, Loader2
+  CalendarRange, Film, ArrowLeft, Check, ListChecks, Download, Server, Loader2,
+  Gamepad2
 } from "lucide-react";
   import { BookOpen } from "lucide-react";
 
@@ -30,7 +31,7 @@ interface AddWidgetDialogProps {
   dashboardId: string;
   onWidgetAdded?: (widget: Widget) => void;
 }
-type WidgetType = "link" | "ping" | "link-ping" | "iframe" | "datetime" | "weather" | "notes" | "chart" | "anime-calendar" | "todo-list" | "watchlist" | "timer" | "bookmarks" | "quote" | "countdown" | "universal-calendar" | "movies-tv-calendar" | "media-requests" | "torrent-overview" | "monitoring" | "media-library" | "library";
+type WidgetType = "link" | "ping" | "link-ping" | "iframe" | "datetime" | "weather" | "notes" | "chart" | "anime-calendar" | "todo-list" | "watchlist" | "timer" | "bookmarks" | "quote" | "countdown" | "universal-calendar" | "movies-tv-calendar" | "media-requests" | "torrent-overview" | "monitoring" | "media-library" | "library" | "games";
 
 const widgetDefinitions = [
   { type: "link", icon: LinkIcon, name: "Lien", description: "Raccourci vers un site", color: "from-blue-500 to-blue-600" },
@@ -55,6 +56,7 @@ const widgetDefinitions = [
   { type: "library", icon: BookOpen, name: "Library", description: "Gérer ta collection", color: "from-fuchsia-500 to-pink-500" },
   { type: "torrent-overview", icon: Download, name: "Torrent Overview", description: "Client Torrent", color: "from-blue-500 to-cyan-500" },
   { type: "monitoring", icon: Server, name: "Monitoring", description: "Ressources Serveur", color: "from-amber-500 to-orange-500" },
+  { type: "games", icon: Gamepad2, name: "Jeux", description: "Collection de mini-jeux", color: "from-purple-500 to-pink-600" },
 ];
 
 // Data

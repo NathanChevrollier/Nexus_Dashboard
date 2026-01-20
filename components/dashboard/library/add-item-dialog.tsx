@@ -8,9 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Image as ImageIcon, Loader2, CalendarClock, BookOpen } from 'lucide-react';
+import { Search, Image as ImageIcon, Loader2, CalendarClock, BookOpen, Link2, Sparkles } from 'lucide-react';
 import { addLibraryItem, updateLibraryItem } from '@/lib/actions/library';
 import { searchMedia } from '@/lib/api/anilist';
+import { detectSchedule, formatScheduleInfo, type ScheduleInfo } from '@/lib/api/schedule-detection';
 
 const TYPES = [
   { value: 'manga', label: 'Manga' },
@@ -45,11 +46,18 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
     currentProgress: 0,
     totalProgress: '',
     linkUrl: '',
+    additionalUrl: '',
     coverUrl: '',
     hasSchedule: false,
     scheduleType: 'weekly',
-    scheduleDay: 'monday'
+    scheduleDay: 'monday',
+    anilistId: null as number | null,
+    tmdbId: null as number | null,
   });
+
+  // Auto-detect schedule state
+  const [scheduleDetecting, setScheduleDetecting] = useState(false);
+  const [detectedSchedule, setDetectedSchedule] = useState<ScheduleInfo | null>(null);
 
   // Init Form
   useEffect(() => {
@@ -61,20 +69,25 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
         currentProgress: initialData.currentProgress || 0,
         totalProgress: initialData.totalProgress || '',
         linkUrl: initialData.linkUrl || '',
+        additionalUrl: initialData.additionalUrl || '',
         coverUrl: initialData.coverUrl || '',
         hasSchedule: !!initialData.scheduleType,
         scheduleType: initialData.scheduleType || 'weekly',
         scheduleDay: initialData.scheduleDay || 'monday',
+        anilistId: initialData.anilistId || null,
+        tmdbId: initialData.tmdbId || null,
       });
       setActiveTab('manual');
     } else {
       setFormData({
         title: '', type: 'manhwa', status: 'reading',
-        currentProgress: 0, totalProgress: '', linkUrl: '', coverUrl: '',
-        hasSchedule: false, scheduleType: 'weekly', scheduleDay: 'monday'
+        currentProgress: 0, totalProgress: '', linkUrl: '', additionalUrl: '', coverUrl: '',
+        hasSchedule: false, scheduleType: 'weekly', scheduleDay: 'monday',
+        anilistId: null, tmdbId: null,
       });
       setSearchQuery('');
       setSearchResults([]);
+      setDetectedSchedule(null);
     }
   }, [initialData, open]);
 
@@ -107,15 +120,88 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
     // Détection basique du type si possible, sinon défaut
     const typeMap: any = { 'MANGA': 'manga', 'NOVEL': 'novel', 'ANIME': 'anime' };
     const detectedType = typeMap[item.format] || 'manhwa';
+    const finalType = item.type === 'ANIME' ? 'anime' : detectedType;
+    const finalTitle = item.title?.userPreferred || item.title?.english || item.title?.romaji || 'Titre inconnu';
 
     setFormData(prev => ({
       ...prev,
-      title: item.title?.userPreferred || item.title?.english || item.title?.romaji || 'Titre inconnu',
+      title: finalTitle,
       coverUrl: item.coverImage?.large || item.coverImage?.medium || '',
       linkUrl: item.siteUrl || '',
-      type: item.type === 'ANIME' ? 'anime' : detectedType,
+      type: finalType,
+      anilistId: item.id || null,
     }));
     setActiveTab('manual');
+
+    // Auto-détection automatique pour tous les types
+    console.log('[selectSearchResult] Launching auto-detection for:', finalTitle, finalType);
+    setTimeout(() => {
+      handleAutoDetectSchedule(finalTitle, finalType);
+    }, 150);
+  };
+
+  const handleAutoDetectSchedule = async (titleOverride?: string, typeOverride?: string) => {
+    // Utiliser les paramètres ou les valeurs du form
+    const title = titleOverride || formData.title;
+    const type = typeOverride || formData.type;
+
+    console.log('[AUTO-DETECT] Starting detection...', { title, type, titleType: typeof title });
+
+    // Convertir en string si nécessaire et valider
+    const titleStr = String(title || '').trim();
+    if (!titleStr || titleStr.length < 2) {
+      console.log('[AUTO-DETECT] Validation failed', { title, titleStr, length: titleStr.length });
+      return;
+    }
+
+    console.log('[AUTO-DETECT] Validation passed, fetching...');
+    setScheduleDetecting(true);
+    setDetectedSchedule(null);
+
+    try {
+      const result = await detectSchedule(titleStr, type);
+      console.log('[AUTO-DETECT] Result received:', result);
+      setDetectedSchedule(result);
+
+      if (result && result.scheduleDay && result.scheduleType) {
+        // Auto-remplir les champs d'horaire + les données détectées
+        setFormData(prev => ({
+          ...prev,
+          hasSchedule: true,
+          scheduleType: result.scheduleType as any,
+          scheduleDay: result.scheduleDay as any,
+          // Auto-remplir le type si détecté
+          type: result.detectedType || prev.type,
+          // Auto-remplir le statut si détecté
+          status: result.detectedStatus || prev.status,
+          // Auto-remplir le nombre total si détecté
+          totalProgress: result.totalProgress?.toString() || prev.totalProgress,
+          // Mettre à jour les IDs
+          anilistId: result.source === 'anilist' ? result.externalId || null : prev.anilistId,
+          tmdbId: result.source === 'tmdb' ? result.externalId || null : prev.tmdbId,
+          coverUrl: prev.coverUrl || result.coverUrl || prev.coverUrl,
+        }));
+      } else if (result) {
+        // Horaire détecté mais pas de jour précis - quand même pré-remplir les autres données
+        setFormData(prev => ({
+          ...prev,
+          // Auto-remplir le type si détecté
+          type: result.detectedType || prev.type,
+          // Auto-remplir le statut si détecté
+          status: result.detectedStatus || prev.status,
+          // Auto-remplir le nombre total si détecté
+          totalProgress: result.totalProgress?.toString() || prev.totalProgress,
+          // Mettre à jour les IDs
+          anilistId: result.source === 'anilist' ? result.externalId || null : prev.anilistId,
+          tmdbId: result.source === 'tmdb' ? result.externalId || null : prev.tmdbId,
+          coverUrl: prev.coverUrl || result.coverUrl || prev.coverUrl,
+        }));
+      }
+    } catch (error) {
+      console.error('Schedule detection failed:', error);
+    } finally {
+      setScheduleDetecting(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -129,6 +215,9 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
           : parseInt(String(formData.totalProgress)),
         scheduleType: formData.hasSchedule ? formData.scheduleType : null,
         scheduleDay: formData.hasSchedule ? formData.scheduleDay : null,
+        additionalUrl: formData.additionalUrl ? formData.additionalUrl : null,
+        anilistId: formData.anilistId,
+        tmdbId: formData.tmdbId,
       };
 
       if (initialData?.id) {
@@ -265,6 +354,14 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
             </div>
 
             <div className="space-y-2">
+              <Label>Lien secondaire / Source alternative</Label>
+              <div className="relative">
+                <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input className="pl-9" placeholder="https://..." value={formData.additionalUrl} onChange={e => setFormData({...formData, additionalUrl: e.target.value})} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
               <Label>Image de couverture (URL)</Label>
               <div className="flex gap-3">
                 <Input className="flex-1" placeholder="https://..." value={formData.coverUrl} onChange={e => setFormData({...formData, coverUrl: e.target.value})} />
@@ -283,8 +380,39 @@ export function AddLibraryItemDialog({ open, onOpenChange, onSuccess, initialDat
                   <CalendarClock className="h-4 w-4 text-primary" />
                   <Label htmlFor="schedule-mode" className="cursor-pointer font-medium">Suivi de sortie (Calendrier)</Label>
                 </div>
-                <Switch id="schedule-mode" checked={formData.hasSchedule} onCheckedChange={v => setFormData({...formData, hasSchedule: v})} />
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs gap-1.5"
+                    onClick={() => handleAutoDetectSchedule()}
+                    disabled={!formData.title || scheduleDetecting}
+                    title="Détecter automatiquement l'horaire de sortie"
+                  >
+                    {scheduleDetecting ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3 w-3" />
+                    )}
+                    Auto-détection
+                  </Button>
+                  <Switch id="schedule-mode" checked={formData.hasSchedule} onCheckedChange={v => setFormData({...formData, hasSchedule: v})} />
+                </div>
               </div>
+
+              {detectedSchedule && (
+                <div className="text-xs p-2 rounded bg-primary/10 border border-primary/20 text-primary flex items-center gap-2">
+                  <Sparkles className="h-3 w-3" />
+                  <span>
+                    {detectedSchedule.confidence === 'high' ? '✓ ' : ''}
+                    {formatScheduleInfo(detectedSchedule)}
+                    {detectedSchedule.nextEpisode && (
+                      <span className="ml-2 opacity-70">• Ép. {detectedSchedule.nextEpisode.number}</span>
+                    )}
+                  </span>
+                </div>
+              )}
 
               {formData.hasSchedule && (
                 <div className="grid grid-cols-2 gap-3 pt-1 animate-in slide-in-from-top-1">

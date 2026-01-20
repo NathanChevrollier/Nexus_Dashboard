@@ -132,10 +132,14 @@ export function CategoryGridItem({
 
       {/* HEADER SOLIDE (z-index élevé pour rester au dessus du contenu) */}
       <div 
-        className="flex-none relative flex items-center justify-between px-6 py-4 bg-card z-50 select-none" 
+        className={cn(
+          "flex-none relative flex items-center justify-between px-6 py-4 bg-card z-50 select-none",
+          !isEditMode && "cursor-pointer hover:bg-accent/50 transition-colors"
+        )}
         style={{ 
           background: `linear-gradient(90deg, ${accentColor}08 0%, transparent 100%)`,
         }}
+        onClick={!isEditMode ? onToggleCollapse : undefined}
       >
         <div className="flex items-center gap-5 min-w-0 flex-1">
           {isEditMode && (
@@ -187,14 +191,17 @@ export function CategoryGridItem({
             </Button>
           )}
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-10 w-10 rounded-full bg-background/50 hover:bg-background border border-border/20 hover:border-border/50 shadow-sm transition-all hover:scale-110"
-            onClick={(e) => { e.stopPropagation(); onToggleCollapse(); }}
-          >
-            {isCollapsed ? <ChevronDown className="h-6 w-6 text-muted-foreground" /> : <ChevronUp className="h-6 w-6 text-muted-foreground" />}
-          </Button>
+          {/* Chevron visible uniquement en mode édition */}
+          {isEditMode && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 rounded-full bg-background/50 hover:bg-background border border-border/20 hover:border-border/50 shadow-sm transition-all hover:scale-110"
+              onClick={(e) => { e.stopPropagation(); onToggleCollapse(); }}
+            >
+              {isCollapsed ? <ChevronDown className="h-6 w-6 text-muted-foreground" /> : <ChevronUp className="h-6 w-6 text-muted-foreground" />}
+            </Button>
+          )}
         </div>
       </div>
 

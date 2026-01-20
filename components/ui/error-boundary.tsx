@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, RefreshCcw } from "lucide-react";
 
 interface State {
   hasError: boolean;
@@ -24,7 +24,13 @@ export class ErrorBoundaryInner extends React.Component<{ children: React.ReactN
     console.error("Widget ErrorBoundary caught:", error, info);
   }
 
-  handleReload = () => {
+  // Réinitialiser uniquement ce widget (pas toute la page)
+  handleResetWidget = () => {
+    this.setState({ hasError: false, error: undefined });
+  };
+
+  // Recharger toute la page (fallback)
+  handleReloadPage = () => {
     if (typeof window !== "undefined") window.location.reload();
   };
 
@@ -39,8 +45,16 @@ export class ErrorBoundaryInner extends React.Component<{ children: React.ReactN
               <div className="flex flex-col items-center gap-2 bg-card/70 border border-border rounded-md p-3 text-center max-w-xs">
                 <AlertCircle className="h-6 w-6 text-red-400" />
                 <div className="text-sm font-medium">Erreur du widget</div>
-                <div className="text-xs text-muted-foreground">Le widget a crash — vérifiez la console.</div>
-                <Button variant="outline" size="sm" onClick={this.handleReload}>Recharger</Button>
+                <div className="text-xs text-muted-foreground">Le widget a crashé — vérifiez la console.</div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={this.handleResetWidget}
+                  className="gap-1.5"
+                >
+                  <RefreshCcw className="h-3.5 w-3.5" />
+                  Réessayer
+                </Button>
               </div>
             </div>
           </div>
@@ -62,7 +76,7 @@ export class ErrorBoundaryInner extends React.Component<{ children: React.ReactN
               <a href="/settings" className="inline-block">
                 <Button size="sm">Aller aux paramètres</Button>
               </a>
-              <Button variant="outline" size="sm" onClick={this.handleReload}>Recharger</Button>
+              <Button variant="outline" size="sm" onClick={this.handleReloadPage}>Recharger la page</Button>
             </div>
           </div>
         </div>

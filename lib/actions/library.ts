@@ -27,6 +27,7 @@ export async function addLibraryItem(data: any) {
     ...data,
     currentProgress: parseInt(data.currentProgress) || 0,
     totalProgress: data.totalProgress ? parseInt(data.totalProgress) : null,
+    additionalUrl: data.additionalUrl ? data.additionalUrl : null,
   });
 
   revalidatePath("/dashboard/library");
@@ -37,7 +38,7 @@ export async function updateLibraryItem(id: string, data: any) {
   if (!session?.user) throw new Error("Non autorisé");
 
   await db.update(libraryItems)
-    .set({ ...data, updatedAt: new Date() })
+    .set({ ...data, additionalUrl: data.additionalUrl ? data.additionalUrl : null, updatedAt: new Date() })
     .where(and(eq(libraryItems.id, id), eq(libraryItems.userId, session.user.id)));
 
   revalidatePath("/dashboard/library");

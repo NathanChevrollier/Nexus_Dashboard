@@ -31,6 +31,9 @@ export async function POST(req: Request) {
     }
 
     const webhookUrl = process.env.DISCORD_WEBHOOK_URL || process.env.DISCORD_WEBHOOK;
+    // For debugging: mask webhook url when logging to avoid leaking secrets
+    const maskedWebhook = webhookUrl ? `${webhookUrl.slice(0, 40)}...` : null;
+    console.log('[contact] webhook configured:', !!webhookUrl);
 
     // Préparer un contenu lisible pour DM fallback
     const userLabel = userInfo.name ? `${userInfo.name} (${userInfo.id})` : "Anonyme";
@@ -88,49 +91,59 @@ export async function POST(req: Request) {
 
     const payload = { embeds: [embed] };
 
-    const res = await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const res = await fetch(webhookUrl!, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error('[contact] webhook send failed', { status: res.status, body: text, webhook: maskedWebhook });
 
-      // Discord forum webhooks require a thread_name or thread_id when posting to forum channels
-      // If we detect that specific error, retry by including a thread_name derived from the subject.
-      try {
-        const bodyText = text || "";
-        let parsed: any = null;
-        try { parsed = JSON.parse(bodyText); } catch (e) { /* not JSON */ }
+        // Discord forum webhooks require a thread_name or thread_id when posting to forum channels
+        // If we detect that specific error, retry by including a thread_name derived from the subject.
+        try {
+          const bodyText = text || "";
+          let parsed: any = null;
+          try { parsed = JSON.parse(bodyText); } catch (e) { /* not JSON */ }
 
-        const isForumError =
-          bodyText.includes("thread_name") ||
-          bodyText.includes("thread_id") ||
-          parsed?.code === 220001;
+          const isForumError =
+            bodyText.includes("thread_name") ||
+            bodyText.includes("thread_id") ||
+            parsed?.code === 220001;
 
-        if (isForumError) {
-          const threadName = (subject || "message").toString().slice(0, 100);
-          const forumPayload = { ...payload, thread_name: threadName };
+          if (isForumError) {
+            const threadName = (subject || "message").toString().slice(0, 100);
+            const forumPayload = { ...payload, thread_name: threadName };
 
-          const retry = await fetch(webhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(forumPayload),
-          });
+            const retry = await fetch(webhookUrl!, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(forumPayload),
+            });
 
-          if (retry.ok) {
-            return NextResponse.json({ message: "Message envoyé (webhook, forum thread)" });
+            if (retry.ok) {
+              console.log('[contact] webhook retry succeeded (forum)');
+              return NextResponse.json({ message: "Message envoyé (webhook, forum thread)" });
+            }
+            const retryText = await retry.text().catch(() => "");
+            console.error('[contact] webhook retry failed', { status: retry.status, body: retryText, webhook: maskedWebhook });
           }
+        } catch (e) {
+          console.error('[contact] webhook retry error', e);
         }
-      } catch (e) {
-        // ignore retry errors
+
+        return NextResponse.json({ error: `Erreur webhook: ${res.status} ${text}` }, { status: 500 });
       }
 
-      return NextResponse.json({ error: `Erreur webhook: ${res.status} ${text}` }, { status: 500 });
+      console.log('[contact] webhook send ok', { webhook: maskedWebhook });
+      return NextResponse.json({ message: "Message envoyé (webhook)" });
+    } catch (err) {
+      console.error('[contact] webhook fetch error', err, { webhook: maskedWebhook });
+      return NextResponse.json({ error: `Erreur webhook: ${String(err)}` }, { status: 500 });
     }
-
-    return NextResponse.json({ message: "Message envoyé (webhook)" });
   } catch (err) {
     console.error("Contact API error", err);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });

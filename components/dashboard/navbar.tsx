@@ -2,12 +2,13 @@
 
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { LogOut, Settings, Plus, LayoutDashboard, Menu, X } from "lucide-react";
+import { LogOut, Settings, Plus, LayoutDashboard, Menu, X, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { Dashboard } from "@/lib/db/schema";
 import { useState } from "react";
 import NotificationCenter from "@/components/ui/notification-center";
 import ChatToggle from "@/components/ui/chat-toggle";
+import { AppGuideDialog } from "@/components/guide/app-guide-dialog";
 
 interface NavbarProps {
   user: {
@@ -17,10 +18,12 @@ interface NavbarProps {
   };
   dashboards: Dashboard[];
   currentDashboardId: string;
+  hasSeenGuide?: boolean;
 }
 
-export function Navbar({ user, dashboards, currentDashboardId }: NavbarProps) {
+export function Navbar({ user, dashboards, currentDashboardId, hasSeenGuide = true }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   
   return (
     <nav className="border-b bg-gradient-to-br from-card/50 via-background to-card/30 backdrop-blur-xl shadow-lg sticky top-0 z-50 relative overflow-hidden">
@@ -87,6 +90,18 @@ export function Navbar({ user, dashboards, currentDashboardId }: NavbarProps) {
           
           <div className="h-8 w-px bg-border/50" />
           
+          {!hasSeenGuide && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setGuideOpen(true)}
+              className="gap-2 animate-pulse border-primary/50 hover:border-primary"
+            >
+              <BookOpen className="h-4 w-4" />
+              <span className="hidden lg:inline">Guide de démarrage</span>
+            </Button>
+          )}
+          
           <NotificationCenter />
           <ChatToggle />
           
@@ -148,6 +163,23 @@ export function Navbar({ user, dashboards, currentDashboardId }: NavbarProps) {
               </Button>
             </div>
 
+            {!hasSeenGuide && (
+              <div className="border-t border-border/50 pt-3">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="w-full justify-start gap-2 border-primary/50"
+                  onClick={() => {
+                    setGuideOpen(true);
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  <BookOpen className="h-4 w-4" />
+                  Guide de démarrage
+                </Button>
+              </div>
+            )}
+
             <div className="border-t border-border/50 pt-3 space-y-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase">Utilisateur</p>
               <div className="text-sm">
@@ -179,6 +211,8 @@ export function Navbar({ user, dashboards, currentDashboardId }: NavbarProps) {
           </div>
         </div>
       )}
+      
+      <AppGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
     </nav>
   );
 }

@@ -5,6 +5,7 @@ import { dashboards, widgets, categories } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { Navbar } from "@/components/dashboard/navbar";
+import { checkHasSeenGuide } from "@/lib/actions/users";
 
 // Simple in-memory cache for dashboard data to reduce DB hits during rapid dev reloads
 const DASHBOARD_CACHE_TTL = Number(process.env.DASHBOARD_CACHE_TTL_SECONDS || 5); // seconds
@@ -78,6 +79,9 @@ export default async function DashboardPage() {
     .where(eq(categories.dashboardId, currentDashboard.id))
     .orderBy(categories.order);
 
+  // Récupérer le statut du guide de l'utilisateur
+  const { hasSeenGuide } = await checkHasSeenGuide();
+
   // Cache the payload for a short TTL
   try {
     dashboardCache.set(cacheKeyBase, {
@@ -94,6 +98,7 @@ export default async function DashboardPage() {
         user={session.user} 
         dashboards={userDashboards}
         currentDashboardId={currentDashboard.id}
+        hasSeenGuide={hasSeenGuide}
       />
       <div className="flex-1 overflow-y-auto">
         <DashboardView 

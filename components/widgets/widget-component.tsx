@@ -31,6 +31,8 @@ import { TorrentOverviewWidget } from "./torrent-overview-widget";
 import { MonitoringWidget } from "./monitoring-widget";
 import { MediaLibraryWidget } from "./media-library-widget";
 import { LibraryWidget } from './library-widget';
+import GamesWidget from './games-widget';
+import GameLeaderboardWidget from './game-leaderboard-widget';
 
 interface WidgetComponentProps {
   widget: Widget;
@@ -64,6 +66,8 @@ const WIDGET_REGISTRY: Record<string, React.ComponentType<any>> = {
   "monitoring": MonitoringWidget,
   "media-library": MediaLibraryWidget,
   "library": LibraryWidget,
+  "games": GamesWidget,
+  "game-leaderboard": GameLeaderboardWidget,
 };
 
 // Widgets "Seamless" (Sans bordures par le parent)

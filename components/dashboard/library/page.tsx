@@ -6,7 +6,7 @@ import {
   CheckCircle2, PauseCircle, Clock, BookOpen, 
   Trash2, Loader2, Calendar as CalendarIcon, 
   LayoutGrid, ChevronLeft, ChevronRight, Eye, ArrowLeft,
-  X, ListTodo, Tv
+  X, ListTodo, Tv, Globe, Languages
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -57,6 +57,39 @@ export default function LibraryPage() {
   };
 
   useEffect(() => { loadItems(); }, []);
+
+  // --- Hydration-safe : charger les préférences depuis localStorage au montage ---
+  useEffect(() => {
+    try {
+      const rawView = localStorage.getItem('library-view');
+      if (rawView === 'grid' || rawView === 'calendar') setView(rawView as 'grid' | 'calendar');
+
+      const rawFilter = localStorage.getItem('library-filter');
+      if (rawFilter) setFilter(rawFilter);
+
+      const rawShowAnime = localStorage.getItem('library-show-anime');
+      if (rawShowAnime !== null) setShowAnime(rawShowAnime === 'true');
+
+      const rawShowScans = localStorage.getItem('library-show-scans');
+      if (rawShowScans !== null) setShowScans(rawShowScans === 'true');
+    } catch (e) {
+      // ignore storage errors
+      console.error('Failed to load library prefs from localStorage', e);
+    }
+  }, []);
+
+  // --- Sauvegarder les préférences à chaque changement ---
+  useEffect(() => {
+    try {
+      localStorage.setItem('library-view', view);
+      localStorage.setItem('library-filter', filter);
+      localStorage.setItem('library-show-anime', String(showAnime));
+      localStorage.setItem('library-show-scans', String(showScans));
+    } catch (e) {
+      // ignore storage errors
+      console.error('Failed to save library prefs to localStorage', e);
+    }
+  }, [view, filter, showAnime, showScans]);
 
   const handleItemOpened = async (item: any) => {
     const now = new Date();
@@ -250,6 +283,8 @@ export default function LibraryPage() {
 // --- CARTE ITEM (Visuel amélioré + Dropdown Statut) ---
 function LibraryCard({ item, onUpdate, onEdit, onDelete, onLinkOpened, onStatusChange }: any) {
   const [isEditingProgress, setIsEditingProgress] = useState(false);
+  const isInactive = item.status === 'paused' || item.status === 'dropped';
+  const displayTotal = item.totalProgress ?? (item.type === 'anime' ? 12 : undefined);
   
   const handleOpenLink = () => {
     if (item.linkUrl) { window.open(item.linkUrl, '_blank'); onLinkOpened(item); }
@@ -265,7 +300,7 @@ function LibraryCard({ item, onUpdate, onEdit, onDelete, onLinkOpened, onStatusC
       case 'reading': return <Badge className="bg-green-500/80 hover:bg-green-500 text-[10px]">En cours</Badge>;
       case 'plan_to_read': return <Badge variant="secondary" className="text-[10px]">À lire</Badge>;
       case 'completed': return <Badge className="bg-blue-500/80 hover:bg-blue-500 text-[10px]">Terminé</Badge>;
-      case 'paused': return <Badge variant="outline" className="text-yellow-500 border-yellow-500/50 text-[10px]">Pause</Badge>;
+      case 'paused': return <Badge className="bg-yellow-400/90 hover:bg-yellow-400 text-black text-[10px]">Pause</Badge>;
       case 'dropped': return <Badge variant="destructive" className="text-[10px]">Abandonné</Badge>;
       default: return null;
     }
@@ -280,7 +315,7 @@ function LibraryCard({ item, onUpdate, onEdit, onDelete, onLinkOpened, onStatusC
           <img 
             src={item.coverUrl} 
             alt={item.title} 
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+            className={cn("w-full h-full object-cover transition-transform duration-700 group-hover:scale-105", isInactive ? "opacity-60" : "opacity-100")}
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 text-slate-600">
@@ -292,13 +327,65 @@ function LibraryCard({ item, onUpdate, onEdit, onDelete, onLinkOpened, onStatusC
         {/* OVERLAY ACTIONS */}
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3 backdrop-blur-[1px]">
           {item.linkUrl ? (
-            <Button size="icon" className="h-12 w-12 rounded-full shadow-xl bg-primary hover:bg-primary/90 hover:scale-110 transition-all" onClick={handleOpenLink}>
-              <Play className="h-5 w-5 ml-1 fill-current" />
-            </Button>
+            // Anime: single Play button. Scans: show book + flag icons for primary/alternate
+                  item.type === 'anime' ? (
+              <Button size="icon" className="h-12 w-12 rounded-full shadow-xl bg-primary hover:bg-primary/90 hover:scale-110 transition-all" onClick={(e) => { e.stopPropagation(); handleOpenLink(); }} title="Ouvrir">
+                <Play className="h-5 w-5 ml-1 fill-current" />
+              </Button>
+            ) : (
+              item.additionalUrl ? (
+                <div className="flex gap-3">
+                  <Button size="icon" className="h-12 w-12 rounded-full shadow-xl bg-primary hover:bg-primary/90 hover:scale-110 transition-all" onClick={(e) => { e.stopPropagation(); window.open(item.linkUrl, '_blank'); onLinkOpened(item); }} title="Source française">
+                    <div className="relative flex items-center justify-center w-full h-full">
+                      <BookOpen className="h-4 w-4" />
+                      <span aria-hidden className="absolute -bottom-2 -right-2 text-[11px]">🇫🇷</span>
+                    </div>
+                  </Button>
+                  <Button size="icon" className="h-12 w-12 rounded-full shadow-xl bg-secondary/80 hover:bg-secondary/90 hover:scale-110 transition-all" onClick={(e) => { e.stopPropagation(); window.open(item.additionalUrl, '_blank'); onLinkOpened(item); }} title="Source anglaise">
+                    <div className="relative flex items-center justify-center w-full h-full">
+                      <BookOpen className="h-4 w-4" />
+                      <span aria-hidden className="absolute -bottom-2 -right-2 text-[11px]">en</span>
+                    </div>
+                  </Button>
+                </div>
+              ) : (
+                <Button size="icon" className="h-12 w-12 rounded-full shadow-xl bg-primary hover:bg-primary/90 hover:scale-110 transition-all" onClick={(e) => { e.stopPropagation(); handleOpenLink(); }} title="Ouvrir">
+                  <div className="relative flex items-center justify-center w-full h-full">
+                    <BookOpen className="h-4 w-4" />
+                    <span aria-hidden className="absolute -bottom-2 -right-2 text-[11px]">🇫🇷</span>
+                  </div>
+                </Button>
+              )
+            )
           ) : (
             <span className="text-xs text-white/80 font-medium px-2 py-1 bg-black/50 rounded">Pas de lien</span>
           )}
         </div>
+
+        {/* CHANTIER / PAUSED RIBBON */}
+        {isInactive && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -top-6 -left-24 transform -rotate-12 w-[260px] h-12"
+            style={{
+              background: 'repeating-linear-gradient( -45deg, rgba(255,199,44,0.95) 0 12px, rgba(0,0,0,0.85) 12px 24px)',
+              boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
+              opacity: 0.95,
+              borderRadius: 6,
+            }}
+          />
+        )}
+
+        {/* Status ribbons for other states (similar visual to PAUSED) */}
+        {item.status === 'reading' && (
+          <div aria-hidden className="pointer-events-none absolute -top-6 -left-24 transform -rotate-12 w-[260px] h-12" style={{background:'repeating-linear-gradient(-45deg, rgba(34,197,94,0.95) 0 12px, rgba(0,0,0,0.06) 12px 24px)', boxShadow:'0 6px 18px rgba(0,0,0,0.12)', borderRadius:6, opacity:0.95}} />
+        )}
+        {item.status === 'plan_to_read' && (
+          <div aria-hidden className="pointer-events-none absolute -top-6 -left-24 transform -rotate-12 w-[260px] h-12" style={{background:'repeating-linear-gradient(-45deg, rgba(99,102,241,0.95) 0 12px, rgba(0,0,0,0.06) 12px 24px)', boxShadow:'0 6px 18px rgba(0,0,0,0.08)', borderRadius:6, opacity:0.95}} />
+        )}
+        {item.status === 'completed' && (
+          <div aria-hidden className="pointer-events-none absolute -top-6 -left-24 transform -rotate-12 w-[260px] h-12" style={{background:'repeating-linear-gradient(-45deg, rgba(6,182,212,0.95) 0 12px, rgba(0,0,0,0.06) 12px 24px)', boxShadow:'0 6px 18px rgba(0,0,0,0.08)', borderRadius:6, opacity:0.95}} />
+        )}
 
         {/* Badges Flottants */}
         <div className="absolute top-2 left-2 right-2 flex justify-between items-start pointer-events-none">
@@ -364,12 +451,12 @@ function LibraryCard({ item, onUpdate, onEdit, onDelete, onLinkOpened, onStatusC
                 <span className="font-medium text-foreground group-hover/prog:text-primary transition-colors">
                     {item.type === 'anime' ? 'Épisode' : 'Chap.'} {item.currentProgress}
                 </span>
-                {item.totalProgress && <span className="opacity-60 text-[10px]">Sur {item.totalProgress}</span>}
+                {displayTotal && <span className="opacity-60 text-[10px]">Sur {displayTotal}</span>}
               </div>
               <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                 <div 
                   className={cn("h-full transition-all duration-500 ease-out", item.status === 'completed' ? 'bg-green-500' : 'bg-primary')} 
-                  style={{ width: `${Math.min(100, item.totalProgress ? (item.currentProgress / item.totalProgress) * 100 : (item.currentProgress > 0 ? 10 : 0))}%` }} 
+                  style={{ width: `${Math.min(100, displayTotal ? (item.currentProgress / displayTotal) * 100 : (item.currentProgress > 0 ? 10 : 0))}%` }} 
                 />
               </div>
             </div>

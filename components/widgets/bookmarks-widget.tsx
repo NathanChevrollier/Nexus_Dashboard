@@ -73,7 +73,7 @@ export function BookmarksWidget({ widget }: BookmarksWidgetProps) {
         const { updateWidget } = await import('@/lib/actions/widgets');
         await updateWidget(widget.id, {
           options: { ...widget.options, bookmarks },
-        });
+        }, true); // skipRevalidation = true pour éviter POST /dashboard excessifs
       } catch (error) {
         console.error('Error saving bookmarks:', error);
       }
