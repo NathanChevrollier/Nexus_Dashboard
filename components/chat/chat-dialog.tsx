@@ -240,7 +240,13 @@ export default function ChatDialog({ onClose }: { onClose?: () => void }) {
   useDraggable(dialogRef, "[data-drag-handle]");
 
   const { addAlert } = useAlerts();
+  
+  // Keep refs to some state to avoid stale closures inside socket handlers
+  const conversationsRef = useRef<Conversation[]>(conversations);
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
 
+  const participantsRef = useRef<Participant[]>(participants);
+  useEffect(() => { participantsRef.current = participants; }, [participants]);
   // --- Initial Fetch ---
   useEffect(() => {
     setConversationsLoading(true);
@@ -344,7 +350,7 @@ export default function ChatDialog({ onClose }: { onClose?: () => void }) {
 
       // Show a floating notification and a system notification for non-selected conversations
       if (conversationId !== selectedId) {
-        const conv = conversations.find(c => c.id === conversationId);
+        const conv = conversationsRef.current.find(c => c.id === conversationId);
         const subject = conv?.otherParticipant?.name || conv?.title || 'Conversation';
         try {
           addAlert({
@@ -364,6 +370,15 @@ export default function ChatDialog({ onClose }: { onClose?: () => void }) {
           showBrowserNotification(conversationId, subject, message.content);
         } catch (e) {
           // ignore
+        }
+      } else {
+        // If the message is for the currently open conversation, ensure we have the sender in participants
+        const senderPresent = participantsRef.current.some(p => p.userId === message.senderId);
+        if (!senderPresent) {
+          fetch(`/api/chat/conversations/${conversationId}/participants`)
+            .then(r => { if (r.ok) return r.json(); return null; })
+            .then(d => { if (d) setParticipants(d || []); })
+            .catch(() => {});
         }
       }
     };

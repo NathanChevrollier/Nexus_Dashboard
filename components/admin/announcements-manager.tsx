@@ -48,6 +48,9 @@ export default function AnnouncementsManager() {
     isPublished: false,
   });
 
+  // Track explicit creation mode so the inline form can be shown when clicking "Nouvelle annonce"
+  const [isCreating, setIsCreating] = useState(false);
+
   useEffect(() => {
     loadAnnouncements();
   }, []);
@@ -112,15 +115,19 @@ export default function AnnouncementsManager() {
       type: "info",
       isPublished: false,
     });
+    setIsCreating(false);
   };
 
   const openCreateDialog = async () => {
     setEditingAnnouncement(null);
     resetForm();
     // Le formulaire sera affiché inline
+    setIsCreating(true);
   };
 
   const openEditDialog = (announcement: Announcement) => {
+    // disable creation mode when editing
+    setIsCreating(false);
     setEditingAnnouncement(announcement);
     setFormData({
       title: announcement.title,
@@ -163,7 +170,7 @@ export default function AnnouncementsManager() {
         </Button>
       </div>
 
-      {(editingAnnouncement !== null || formData.title || formData.content) && (
+      {(editingAnnouncement !== null || isCreating || formData.title || formData.content) && (
         <Card>
           <CardHeader>
             <CardTitle>

@@ -114,10 +114,10 @@ for i in {1..30}; do
 done
 echo ""
 
- # Migrations depuis l'hôte (drizzle-kit en devDependencies)
-echo "🗄️  Exécution des migrations (host)..."
-npm run db:push || {
-    echo "⚠️  Les migrations ont échoué (host). Essayez: npm run db:push";
+ # Migrations : exécuter à l'intérieur du conteneur (évite npm install sur l'hôte)
+echo "🗄️  Exécution des migrations (container)..."
+docker-compose -f $COMPOSE_FILE run --rm migrator || {
+    echo "⚠️  Les migrations via le conteneur ont échoué. Vous pouvez vérifier les logs: docker-compose -f $COMPOSE_FILE logs migrator";
 }
 
 # Seed admin si absent (local dev)
@@ -126,7 +126,7 @@ if [ "$MODE" = "dev" ]; then
     COUNT=$(docker exec nexus-mysql mysql -unexus -pnexus_password_2025 -N -e "SELECT COUNT(*) FROM nexus_dashboard.users WHERE email='admin@nexus.local';" 2>/dev/null || echo 0)
     if [ "$COUNT" = "0" ]; then
         echo "🌱 Seeding admin user..."
-        if npm run seed; then
+        if docker-compose -f $COMPOSE_FILE exec -T app npm run seed; then
             echo "✅ Admin seed OK (admin@nexus.local / admin123)"
         else
             echo "⚠️ Seed a échoué (peut-être déjà présent)"

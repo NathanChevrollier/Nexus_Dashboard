@@ -48,6 +48,12 @@ const GAMES: Game[] = [
     icon: "🟦",
     gameUrl: "/games/tetris",
   },
+  {
+    id: "money-maker",
+    title: "Money Maker",
+    icon: "💰",
+    gameUrl: "/games/MoneyMaker",
+  },
 ];
 
 export default function GamesWidget({
