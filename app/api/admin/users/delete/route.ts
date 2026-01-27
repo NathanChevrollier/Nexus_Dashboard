@@ -33,6 +33,18 @@ export async function POST(request: Request) {
 
     const { userId } = parsed.data;
 
+    // Check if target user is the owner (protected)
+    const targetUser = await db.query.users.findFirst({
+      where: (users, { eq }) => eq(users.id, userId),
+    });
+
+    if (targetUser?.isOwner) {
+      return NextResponse.json(
+        { error: "Le propriétaire de l'application ne peut pas être supprimé" },
+        { status: 403 }
+      );
+    }
+
     // Prevent admins from deleting their own account
     if (session.user.id === userId) {
       return NextResponse.json({ error: "Vous ne pouvez pas supprimer votre propre compte" }, { status: 403 });

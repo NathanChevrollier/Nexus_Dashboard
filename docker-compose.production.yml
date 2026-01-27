@@ -80,7 +80,7 @@ services:
       NEXTAUTH_SECRET_FILE: /run/secrets/nextauth_secret
       NODE_ENV: production
       NEXT_PUBLIC_TMDB_API_KEY: ${NEXT_PUBLIC_TMDB_API_KEY}
-      # IMPORTANT : Le client utilisera cette URL pour se connecter
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL}
       NEXT_PUBLIC_SOCKET_SERVER_URL: https://nexus.chevrolliernathan.fr
       SOCKET_EMIT_URL: "http://socket:4001"
     command: 

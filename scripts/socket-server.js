@@ -26,23 +26,41 @@ app.use(bodyParser.json());
 
 // État du Marché
 let market = {
+  // Aligne le serveur sur les mêmes tickers que le client fallback MoneyMaker
   stocks: {
-    'NEXUS': { name: 'Nexus Corp', price: 100, volatility: 0.05, history: [] },
-    'CRYPTO': { name: 'DogeCoin 2.0', price: 50, volatility: 0.15, history: [] },
-    'GOLD': { name: 'Or Numérique', price: 200, volatility: 0.02, history: [] },
-    'AI': { name: 'Skynet Inc', price: 150, volatility: 0.08, history: [] },
-    'ENERGY': { name: 'Fusion Core', price: 80, volatility: 0.04, history: [] },
+    'BTC': { name: 'Bitcoin', price: 64000, volatility: 0.08, history: [] },
+    'ETH': { name: 'Ethereum', price: 3400, volatility: 0.07, history: [] },
+    'NVDA': { name: 'Nvidia Corp', price: 900, volatility: 0.03, history: [] },
+    'AAPL': { name: 'Apple Inc.', price: 175, volatility: 0.02, history: [] },
+    'EUR/USD': { name: 'Euro / Dollar', price: 1.08, volatility: 0.005, history: [] },
+    'JPY/USD': { name: 'Yen / Dollar', price: 0.0065, volatility: 0.006, history: [] },
+    'DOGE': { name: 'DogeCoin', price: 0.15, volatility: 0.15, history: [] },
+    'AI-START': { name: 'Unknown AI Startup', price: 10, volatility: 0.25, history: [] },
   },
   players: {}, 
   lastUpdate: Date.now()
 };
+
+// Initialiser l'historique des stocks au démarrage
+Object.keys(market.stocks).forEach(symbol => {
+  const stock = market.stocks[symbol];
+  // Générer un historique initial de 30 points
+  for (let i = 0; i < 30; i++) {
+    stock.history.push(stock.price);
+  }
+});
 
 // Helper pour le classement
 function getLeaderboard() {
   return Object.values(market.players)
     .sort((a, b) => b.netWorth - a.netWorth)
     .slice(0, 10)
-    .map(p => ({ name: p.name, netWorth: p.netWorth }));
+    .map(p => ({
+      userId: p.userId,
+      userName: p.name,
+      name: p.name,
+      netWorth: p.netWorth
+    }));
 }
 
 // Boucle de Simulation (Ticker) - Tourne toutes les 2 secondes
@@ -134,36 +152,72 @@ io.on('connection', (socket) => {
   // --- Monitoring ---
   socket.emit('system:status', lastCheck);
   
-  socket.on('identify', (userId) => {
-    if (!userId) return;
-    socket.join(userId);
+  socket.on('identify', (payload) => {
+    const userKey = typeof payload === 'string'
+      ? payload
+      : (payload && typeof payload.userId === 'string'
+          ? payload.userId
+          : (payload && typeof payload.id === 'string' ? payload.id : null));
 
-    // --- Initialisation Joueur Trader ---
-    if (!market.players[userId]) {
-      market.players[userId] = {
-        userId,
-        name: `Trader-${userId.slice(0,4)}`,
-        cash: 1000, // Capital de départ
+    const userName = typeof payload === 'object' && payload.userName 
+      ? payload.userName 
+      : null;
+
+    if (!userKey) return;
+    
+    socket.data = socket.data || {};
+    socket.data.userId = userKey;
+    socket.join(userKey);
+
+    if (!market.players[userKey]) {
+      market.players[userKey] = {
+        userId: userKey,
+        name: userName || `Trader-${userKey.slice(0,4)}`,
+        cash: 1000,
         holdings: {},
         netWorth: 1000
       };
+    } else if (userName) {
+      market.players[userKey].name = userName;
     }
-    // Envoyer le portefeuille perso au joueur identifié
-    socket.emit('trader:portfolio', market.players[userId]);
+    
+    socket.emit('trader:portfolio', market.players[userKey]);
   });
 
   // --- Actions de Jeu Trader ---
   
+  socket.on('trader:getState', () => {
+    const response = {
+      stocks: market.stocks,
+      leaderboard: getLeaderboard()
+    };
+    
+    if (socket.data?.userId && market.players[socket.data.userId]) {
+      response.portfolio = market.players[socket.data.userId];
+    }
+    
+    socket.emit('trader:state', response);
+  });
+
   socket.on('trader:buy', ({ userId, symbol, quantity }) => {
     const player = market.players[userId];
     const stock = market.stocks[symbol];
+    
     if (!player || !stock || quantity <= 0) return;
 
     const cost = stock.price * quantity;
+    
     if (player.cash >= cost) {
-      player.cash -= cost;
+      player.cash = parseFloat((player.cash - cost).toFixed(2));
       player.holdings = player.holdings || {};
       player.holdings[symbol] = (player.holdings[symbol] || 0) + quantity;
+      
+      let stocksValue = 0;
+      Object.keys(player.holdings).forEach(sym => {
+        stocksValue += (player.holdings[sym] || 0) * (market.stocks[sym]?.price || 0);
+      });
+      player.netWorth = parseFloat((player.cash + stocksValue).toFixed(2));
+      
       socket.emit('trader:portfolio', player);
     }
   });
@@ -171,12 +225,22 @@ io.on('connection', (socket) => {
   socket.on('trader:sell', ({ userId, symbol, quantity }) => {
     const player = market.players[userId];
     const stock = market.stocks[symbol];
+    
     if (!player || !stock || quantity <= 0) return;
 
-    if (player.holdings && player.holdings[symbol] >= quantity) {
+    const owned = player.holdings?.[symbol] || 0;
+    
+    if (player.holdings && owned >= quantity) {
       const gain = stock.price * quantity;
-      player.cash += gain;
+      player.cash = parseFloat((player.cash + gain).toFixed(2));
       player.holdings[symbol] -= quantity;
+      
+      let stocksValue = 0;
+      Object.keys(player.holdings).forEach(sym => {
+        stocksValue += (player.holdings[sym] || 0) * (market.stocks[sym]?.price || 0);
+      });
+      player.netWorth = parseFloat((player.cash + stocksValue).toFixed(2));
+      
       socket.emit('trader:portfolio', player);
     }
   });
@@ -230,7 +294,6 @@ app.post('/emit', (req, res) => {
 app.post('/broadcast', (req, res) => {
   const { event, data } = req.body || {};
   if (!event) return res.status(400).json({ error: 'event required' });
-  console.log(`Broadcasting event ${event} to all users`);
   io.emit(event, data || {});
   return res.json({ ok: true });
 });

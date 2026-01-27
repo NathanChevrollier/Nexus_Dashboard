@@ -17,6 +17,7 @@ interface User {
   email: string | null;
   role: "USER" | "VIP" | "ADMIN";
   status: "PENDING" | "ACTIVE" | "BANNED";
+  isOwner?: boolean;
   createdAt: string;
 }
 
@@ -254,19 +255,27 @@ export function UserManagementSettings() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <p className="font-medium truncate">{user.name}</p>
+                    {user.isOwner && (
+                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 gap-1">
+                        <Shield className="h-3 w-3" /> Propriétaire
+                      </Badge>
+                    )}
                     {roleBadge(user.role)}
                     {statusBadge(user.status)}
                   </div>
                   <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+                  {user.isOwner && (
+                    <p className="text-xs text-purple-600 mt-1">⚠️ Compte protégé - Aucune modification possible</p>
+                  )}
                 </div>
                 <div className="flex w-full sm:w-auto gap-2 flex-col sm:flex-row">
                   <select
                     value={user.role}
-                    disabled={savingId === user.id || user.id === currentUserId}
+                    disabled={savingId === user.id || user.id === currentUserId || user.isOwner}
                     onChange={(e) =>
                       updateUser(user.id, { role: e.target.value as User["role"] })
                     }
-                    className="px-3 py-1.5 border rounded-md text-sm bg-background w-full sm:w-auto"
+                    className="px-3 py-1.5 border rounded-md text-sm bg-background w-full sm:w-auto disabled:opacity-50"
                   >
                     <option value="USER">USER</option>
                     <option value="VIP">VIP</option>
@@ -275,7 +284,7 @@ export function UserManagementSettings() {
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={savingId === user.id || user.id === currentUserId}
+                    disabled={savingId === user.id || user.id === currentUserId || user.isOwner}
                     onClick={() => updateUser(user.id, { status: "BANNED" })}
                     className="w-full sm:w-auto"
                   >
@@ -284,7 +293,7 @@ export function UserManagementSettings() {
                   <Button
                     size="sm"
                     variant="destructive"
-                    disabled={savingId === user.id || user.id === currentUserId}
+                    disabled={savingId === user.id || user.id === currentUserId || user.isOwner}
                     onClick={() => deleteUser(user.id)}
                     className="w-full sm:w-auto"
                   >
@@ -293,7 +302,7 @@ export function UserManagementSettings() {
                   <Button
                     size="sm"
                     variant="secondary"
-                    disabled={savingId === user.id || user.id === currentUserId}
+                    disabled={savingId === user.id || user.id === currentUserId || user.isOwner}
                     onClick={() => resetUser(user.id)}
                     className="w-full sm:w-auto"
                   >

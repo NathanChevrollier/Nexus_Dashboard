@@ -34,6 +34,7 @@ export const users = mysqlTable('users', {
   password: varchar('password', { length: 255 }),
   role: userRoleEnum.default('USER').notNull(),
   status: userStatusEnum.default('PENDING').notNull(),
+  isOwner: boolean('is_owner').default(false).notNull(), // Super admin intouchable
   hasSeenGuide: boolean('has_seen_guide').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
@@ -581,6 +582,19 @@ export const announcements = mysqlTable('announcements', {
   createdByIdx: index('announcement_created_by_idx').on(table.createdBy),
   isPublishedIdx: index('announcement_is_published_idx').on(table.isPublished),
   createdAtIdx: index('announcement_created_at_idx').on(table.createdAt),
+}));
+
+// ============= ROLE PERMISSIONS TABLE =============
+export const rolePermissions = mysqlTable('role_permissions', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  role: userRoleEnum.notNull(),
+  permission: varchar('permission', { length: 100 }).notNull(),
+  enabled: boolean('enabled').default(true).notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  roleIdx: index('role_permissions_role_idx').on(table.role),
+  permissionIdx: index('role_permissions_permission_idx').on(table.permission),
+  uniqueRolePermission: index('unique_role_permission').on(table.role, table.permission),
 }));
 
 // Metadata pour les événements du calendrier

@@ -2,604 +2,587 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, RotateCcw, Home, Trophy } from "lucide-react";
+import { Play, Pause, RotateCcw, Home, Trophy, ArrowDownToLine, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
-type Board = (number | null)[][];
-
-type LeaderboardEntry = {
-  userId: string;
-  userName: string;
-  bestScore: number;
-  createdAt: string;
-};
-
-const BOARD_WIDTH = 10;
-const BOARD_HEIGHT = 20;
-
-const useResponsiveCellSize = () => {
-  const [cellSize, setCellSize] = useState(30);
-  
-  useEffect(() => {
-    const updateSize = () => {
-      const width = window.innerWidth;
-      if (width >= 1536) setCellSize(42);
-      else if (width >= 1280) setCellSize(38);
-      else if (width >= 1024) setCellSize(34);
-      else if (width >= 768) setCellSize(30);
-      else setCellSize(26);
-    };
-    
-    updateSize();
-    window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
-  }, []);
-  
-  return cellSize;
-};
-
-const PIECES = {
-  I: [[1, 1, 1, 1]],
-  O: [
-    [1, 1],
-    [1, 1],
-  ],
-  T: [
-    [0, 1, 0],
-    [1, 1, 1],
-  ],
-  L: [
-    [1, 0],
-    [1, 0],
-    [1, 1],
-  ],
-  J: [
-    [0, 1],
-    [0, 1],
-    [1, 1],
-  ],
-  S: [
-    [0, 1, 1],
-    [1, 1, 0],
-  ],
-  Z: [
-    [1, 1, 0],
-    [0, 1, 1],
-  ],
-};
-
-const PIECE_COLORS: Record<string, string> = {
-  I: "#00F0F0",
-  O: "#F0F000",
-  T: "#A000F0",
-  L: "#F0A000",
-  J: "#0000F0",
-  S: "#00F000",
-  Z: "#F00000",
-};
-
-type PieceType = keyof typeof PIECES;
-
-interface Piece {
+// --- TYPES ---
+type Board = (string | null)[][];
+type PieceType = 'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L';
+type Piece = {
   type: PieceType;
-  shape: number[][];
+  matrix: number[][];
   x: number;
   y: number;
-}
+  color: string;
+};
 
-export default function TetrisGame() {
+// --- CONFIG ---
+const COLS = 10;
+const ROWS = 20;
+const BLOCK_SIZE = 30; // Taille de base, ajustée responsivement
+const LOCK_DELAY = 500; // Temps avant qu'une pièce se bloque au sol
+
+const PIECES: Record<PieceType, { shape: number[][], color: string }> = {
+  I: { shape: [[0,0,0,0], [1,1,1,1], [0,0,0,0], [0,0,0,0]], color: '#00f0f0' }, // Cyan
+  O: { shape: [[1,1], [1,1]], color: '#f0f000' }, // Yellow
+  T: { shape: [[0,1,0], [1,1,1], [0,0,0]], color: '#a000f0' }, // Purple
+  S: { shape: [[0,1,1], [1,1,0], [0,0,0]], color: '#00f000' }, // Green
+  Z: { shape: [[1,1,0], [0,1,1], [0,0,0]], color: '#f00000' }, // Red
+  J: { shape: [[1,0,0], [1,1,1], [0,0,0]], color: '#0000f0' }, // Blue
+  L: { shape: [[0,0,1], [1,1,1], [0,0,0]], color: '#f0a000' }, // Orange
+};
+
+export default function TetrisCanvas() {
   const router = useRouter();
   const { data: session } = useSession();
-  const CELL_SIZE = useResponsiveCellSize();
 
-  const [board, setBoard] = useState<Board>(
-    Array(BOARD_HEIGHT)
-      .fill(null)
-      .map(() => Array(BOARD_WIDTH).fill(null))
-  );
-  const [currentPiece, setCurrentPiece] = useState<Piece | null>(null);
+  // --- STATE ---
+  const [gameState, setGameState] = useState<"IDLE" | "PLAYING" | "PAUSED" | "GAMEOVER">("IDLE");
   const [score, setScore] = useState(0);
+  const [lines, setLines] = useState(0);
   const [level, setLevel] = useState(1);
-  const [linesCleared, setLinesCleared] = useState(0);
-  const [gameOver, setGameOver] = useState(false);
-  const [isPaused, setIsPaused] = useState(true);
-  const [bestScore, setBestScore] = useState<number | null>(null);
-  const [scoreSaved, setScoreSaved] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [nextPiece, setNextPiece] = useState<Piece | null>(null);
+    const [highScore, setHighScore] = useState(0);
+    const [leaderboard, setLeaderboard] = useState<{ name: string; score: number }[]>([]);
+  
+  // --- REFS (ENGINE) ---
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const holdCanvasRef = useRef<HTMLCanvasElement>(null);
+  const nextCanvasRef = useRef<HTMLCanvasElement>(null);
+  
+  const gameRef = useRef({
+    board: Array.from({ length: ROWS }, () => Array(COLS).fill(null)) as Board,
+    piece: null as Piece | null,
+    nextPiece: null as Piece | null,
+    holdPiece: null as Piece | null,
+    canHold: true,
+    dropCounter: 0,
+    dropInterval: 800,
+    lastTime: 0,
+    score: 0,
+    lines: 0,
+    level: 1,
+    particles: [] as {x: number, y: number, vx: number, vy: number, color: string, life: number}[]
+  });
 
-  const dropIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const requestRef = useRef<number | null>(null);
 
+  // --- INITIALIZATION ---
   useEffect(() => {
-    const fetchBestScore = async () => {
+        const fetchBestScore = async () => {
       try {
         const res = await fetch("/api/games/scores?gameId=tetris&userOnly=true");
         if (res.ok) {
-          const data = await res.json();
-          if (data?.score) setBestScore(data.score);
+           const data = await res.json();
+           if (data?.score) setHighScore(data.score);
         }
-      } catch (error) {
-        console.error("Error fetching best score:", error);
-      }
+      } catch (e) { console.error(e); }
     };
-    fetchBestScore();
+        const fetchLeaderboard = async () => {
+            try {
+                const res = await fetch("/api/games/scores?gameId=tetris&limit=5");
+                if (res.ok) {
+                    const data = await res.json();
+                    if (Array.isArray(data)) setLeaderboard(data);
+                }
+            } catch (e) { console.error(e); }
+        };
+        fetchBestScore();
+        fetchLeaderboard();
   }, []);
 
-  useEffect(() => {
-    const fetchLeaderboard = async () => {
-      try {
-        const res = await fetch("/api/games/scores?gameId=tetris&limit=10");
-        if (res.ok) {
-          const data = await res.json();
-          setLeaderboard(data);
-        }
-      } catch (error) {
-        console.error("Error fetching leaderboard:", error);
-      }
-    };
-    fetchLeaderboard();
-  }, []);
+  // --- ENGINE LOGIC ---
 
-  useEffect(() => {
-    const saveScore = async () => {
-      if (gameOver && score > 0 && !scoreSaved && session?.user) {
-        setScoreSaved(true);
-        try {
-          const res = await fetch("/api/games/scores", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              gameId: "tetris",
-              score,
-              metadata: { level, linesCleared },
-            }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.isNewBest) setBestScore(score);
-            const leaderRes = await fetch("/api/games/scores?gameId=tetris&limit=10");
-            if (leaderRes.ok) {
-              const leaderData = await leaderRes.json();
-              setLeaderboard(leaderData);
-            }
-          }
-        } catch (error) {
-          console.error("Error saving score:", error);
-        }
-      }
-    };
-    saveScore();
-  }, [gameOver, score, scoreSaved, session, level, linesCleared]);
-
-  const createPiece = useCallback((): Piece => {
-    const types = Object.keys(PIECES) as PieceType[];
-    const type = types[Math.floor(Math.random() * types.length)];
-    return {
+  const createPiece = (type: PieceType): Piece => ({
       type,
-      shape: PIECES[type],
-      x: Math.floor(BOARD_WIDTH / 2) - Math.floor(PIECES[type][0].length / 2),
+      matrix: PIECES[type].shape,
+      x: Math.floor((COLS - PIECES[type].shape[0].length) / 2),
       y: 0,
-    };
-  }, []);
+      color: PIECES[type].color
+  });
 
-  useEffect(() => {
-    if (!currentPiece && !gameOver && !isPaused) {
-      if (nextPiece) {
-        setCurrentPiece(nextPiece);
-        setNextPiece(createPiece());
-      } else {
-        setCurrentPiece(createPiece());
-        setNextPiece(createPiece());
-      }
-    }
-  }, [currentPiece, gameOver, isPaused, createPiece, nextPiece]);
-
-  const isValidMove = useCallback(
-    (piece: Piece, newX: number, newY: number, newShape?: number[][]): boolean => {
-      const shape = newShape || piece.shape;
-      for (let y = 0; y < shape.length; y++) {
-        for (let x = 0; x < shape[y].length; x++) {
-          if (shape[y][x]) {
-            const boardX = newX + x;
-            const boardY = newY + y;
-            if (
-              boardX < 0 ||
-              boardX >= BOARD_WIDTH ||
-              boardY >= BOARD_HEIGHT ||
-              (boardY >= 0 && board[boardY][boardX] !== null)
-            ) {
-              return false;
-            }
-          }
-        }
-      }
-      return true;
-    },
-    [board]
-  );
-
-  const mergePieceToBoard = useCallback(() => {
-    if (!currentPiece) return;
-
-    const newBoard = board.map(row => [...row]);
-    currentPiece.shape.forEach((row, y) => {
-      row.forEach((cell, x) => {
-        if (cell) {
-          const boardY = currentPiece.y + y;
-          const boardX = currentPiece.x + x;
-          if (boardY >= 0 && boardY < BOARD_HEIGHT && boardX >= 0 && boardX < BOARD_WIDTH) {
-            newBoard[boardY][boardX] = PIECE_COLORS[currentPiece.type] as any;
-          }
-        }
-      });
-    });
-
-    setBoard(newBoard);
-
-    const fullRows: number[] = [];
-    newBoard.forEach((row, i) => {
-      if (row.every(cell => cell !== null)) {
-        fullRows.push(i);
-      }
-    });
-
-    if (fullRows.length > 0) {
-      const clearedBoard = newBoard.filter((_, i) => !fullRows.includes(i));
-      const emptyRows = Array(fullRows.length)
-        .fill(null)
-        .map(() => Array(BOARD_WIDTH).fill(null));
-      setBoard([...emptyRows, ...clearedBoard]);
-      
-      const points = [40, 100, 300, 1200][fullRows.length - 1] * level;
-      setScore(s => s + points);
-      setLinesCleared(l => l + fullRows.length);
-      
-      const newLevel = Math.floor((linesCleared + fullRows.length) / 10) + 1;
-      if (newLevel !== level) {
-        setLevel(newLevel);
-      }
-    }
-
-    setCurrentPiece(null);
-  }, [currentPiece, board, level, linesCleared]);
-
-  const movePieceDown = useCallback(() => {
-    if (!currentPiece || isPaused || gameOver) return;
-
-    if (isValidMove(currentPiece, currentPiece.x, currentPiece.y + 1)) {
-      setCurrentPiece({ ...currentPiece, y: currentPiece.y + 1 });
-    } else {
-      if (currentPiece.y <= 0) {
-        setGameOver(true);
-        setIsPaused(true);
-        return;
-      }
-      mergePieceToBoard();
-    }
-  }, [currentPiece, isPaused, gameOver, isValidMove, mergePieceToBoard]);
-
-  useEffect(() => {
-    if (!isPaused && !gameOver) {
-      const speed = Math.max(50, 400 - (level - 1) * 60);
-      dropIntervalRef.current = setInterval(movePieceDown, speed);
-      return () => {
-        if (dropIntervalRef.current) clearInterval(dropIntervalRef.current);
-      };
-    }
-  }, [movePieceDown, isPaused, gameOver, level]);
-
-  const rotatePiece = useCallback(() => {
-    if (!currentPiece || isPaused || gameOver) return;
-
-    const rotated = currentPiece.shape[0].map((_, i) =>
-      currentPiece.shape.map(row => row[i]).reverse()
-    );
-
-    if (isValidMove(currentPiece, currentPiece.x, currentPiece.y, rotated)) {
-      setCurrentPiece({ ...currentPiece, shape: rotated });
-    }
-  }, [currentPiece, isPaused, gameOver, isValidMove]);
-
-  const movePiece = useCallback(
-    (dx: number) => {
-      if (!currentPiece || isPaused || gameOver) return;
-
-      if (isValidMove(currentPiece, currentPiece.x + dx, currentPiece.y)) {
-        setCurrentPiece({ ...currentPiece, x: currentPiece.x + dx });
-      }
-    },
-    [currentPiece, isPaused, gameOver, isValidMove]
-  );
-
-  const hardDrop = useCallback(() => {
-    if (!currentPiece || isPaused || gameOver) return;
-
-    let newY = currentPiece.y;
-    while (isValidMove(currentPiece, currentPiece.x, newY + 1)) {
-      newY++;
-    }
-    setCurrentPiece({ ...currentPiece, y: newY });
-    setTimeout(mergePieceToBoard, 50);
-  }, [currentPiece, isPaused, gameOver, isValidMove, mergePieceToBoard]);
-
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (gameOver) return;
-
-      switch (e.key) {
-        case "ArrowLeft":
-          e.preventDefault();
-          movePiece(-1);
-          break;
-        case "ArrowRight":
-          e.preventDefault();
-          movePiece(1);
-          break;
-        case "ArrowDown":
-          e.preventDefault();
-          movePieceDown();
-          break;
-        case "ArrowUp":
-        case " ":
-          e.preventDefault();
-          rotatePiece();
-          break;
-        case "Enter":
-          e.preventDefault();
-          hardDrop();
-          break;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyPress);
-    return () => window.removeEventListener("keydown", handleKeyPress);
-  }, [movePiece, movePieceDown, rotatePiece, hardDrop, gameOver]);
-
-  const resetGame = () => {
-    setBoard(
-      Array(BOARD_HEIGHT)
-        .fill(null)
-        .map(() => Array(BOARD_WIDTH).fill(null))
-    );
-    setCurrentPiece(null);
-    setNextPiece(null);
-    setScore(0);
-    setLevel(1);
-    setLinesCleared(0);
-    setGameOver(false);
-    setIsPaused(true);
-    setScoreSaved(false);
+  const getRandomPiece = () => {
+      const types = "IJLOSTZ";
+      return createPiece(types[Math.floor(Math.random() * types.length)] as PieceType);
   };
 
-  const renderBoard = () => {
-    const displayBoard = board.map(row => [...row]);
-
-    if (currentPiece) {
-      currentPiece.shape.forEach((row, y) => {
-        row.forEach((cell, x) => {
-          if (cell) {
-            const boardY = currentPiece.y + y;
-            const boardX = currentPiece.x + x;
-            if (boardY >= 0 && boardY < BOARD_HEIGHT && boardX >= 0 && boardX < BOARD_WIDTH) {
-              displayBoard[boardY][boardX] = PIECE_COLORS[currentPiece.type] as any;
-            }
+  const collide = (board: Board, piece: Piece) => {
+      const m = piece.matrix;
+      for (let y = 0; y < m.length; ++y) {
+          for (let x = 0; x < m[y].length; ++x) {
+              if (m[y][x] !== 0 && (board[y + piece.y] && board[y + piece.y][x + piece.x]) !== null) {
+                  return true;
+              }
           }
-        });
-      });
-    }
+      }
+      return false;
+  };
 
-    return displayBoard;
+  const merge = (board: Board, piece: Piece) => {
+      piece.matrix.forEach((row, y) => {
+          row.forEach((value, x) => {
+              if (value !== 0) {
+                  // Check boundaries to prevent crash if piece is partially out (game over scenario)
+                  if(board[y + piece.y] && board[y + piece.y][x + piece.x] !== undefined) {
+                      board[y + piece.y][x + piece.x] = piece.color;
+                  }
+              }
+          });
+      });
+  };
+
+  const rotate = (matrix: number[][]) => {
+      const N = matrix.length;
+      const result = matrix.map((row, i) =>
+          row.map((val, j) => matrix[N - 1 - j][i])
+      );
+      return result;
+  };
+
+  const playerRotate = (dir: 1 | -1) => {
+      const state = gameRef.current;
+      if (!state.piece) return;
+
+      const pos = state.piece.x;
+      let offset = 1;
+      const originalMatrix = state.piece.matrix;
+      state.piece.matrix = rotate(state.piece.matrix);
+      
+      // Wall Kick (Basic)
+      while (collide(state.board, state.piece)) {
+          state.piece.x += offset;
+          offset = -(offset + (offset > 0 ? 1 : -1));
+          if (offset > state.piece.matrix[0].length) {
+              // Rotation impossible, revert
+              state.piece.matrix = originalMatrix;
+              state.piece.x = pos;
+              return;
+          }
+      }
+  };
+
+  const arenaSweep = () => {
+      const state = gameRef.current;
+      let rowCount = 0;
+      
+      outer: for (let y = state.board.length - 1; y > 0; --y) {
+          for (let x = 0; x < state.board[y].length; ++x) {
+              if (state.board[y][x] === null) {
+                  continue outer;
+              }
+          }
+
+          const row = state.board.splice(y, 1)[0].fill(null);
+          state.board.unshift(row);
+          ++y;
+          rowCount++;
+
+          // Particles effect for cleared line
+          for(let i=0; i<20; i++) {
+              state.particles.push({
+                  x: Math.random() * COLS * BLOCK_SIZE,
+                  y: y * BLOCK_SIZE,
+                  vx: (Math.random() - 0.5) * 10,
+                  vy: (Math.random() - 0.5) * 10,
+                  color: '#fff',
+                  life: 1.0
+              });
+          }
+      }
+
+      if (rowCount > 0) {
+          const points = [0, 40, 100, 300, 1200];
+          state.score += points[rowCount] * state.level;
+          state.lines += rowCount;
+          state.level = Math.floor(state.lines / 10) + 1;
+          state.dropInterval = Math.max(80, 900 - (state.level - 1) * 120); // Faster baseline
+          
+          setScore(state.score);
+          setLines(state.lines);
+          setLevel(state.level);
+      }
+  };
+
+  const playerDrop = () => {
+      const state = gameRef.current;
+      if (!state.piece) return;
+      
+      state.piece.y++;
+      if (collide(state.board, state.piece)) {
+          state.piece.y--;
+          merge(state.board, state.piece);
+          playerReset();
+          arenaSweep();
+      }
+      state.dropCounter = 0;
+  };
+
+  const playerReset = () => {
+      const state = gameRef.current;
+      state.piece = state.nextPiece || getRandomPiece();
+      state.nextPiece = getRandomPiece();
+      state.canHold = true;
+
+      if (collide(state.board, state.piece)) {
+          setGameState("GAMEOVER");
+          handleGameOver();
+      }
+  };
+
+  const handleGameOver = async () => {
+      const state = gameRef.current;
+      if(state.score > highScore) setHighScore(state.score);
+      
+      if (state.score > 0 && session?.user) {
+          try {
+              await fetch("/api/games/scores", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ 
+                      gameId: "tetris", 
+                      score: state.score, 
+                      metadata: { level: state.level, lines: state.lines } 
+                  }),
+              });
+              // Refresh leaderboard after saving score
+              const res = await fetch("/api/games/scores?gameId=tetris&limit=5");
+              if (res.ok) {
+                  const data = await res.json();
+                  if (Array.isArray(data)) setLeaderboard(data);
+              }
+          } catch(e) { console.error(e); }
+      }
+  };
+
+  const playerHold = () => {
+      const state = gameRef.current;
+      if (!state.canHold || !state.piece) return;
+
+      if (!state.holdPiece) {
+          state.holdPiece = createPiece(state.piece.type);
+          playerReset();
+      } else {
+          const temp = createPiece(state.piece.type);
+          state.piece = createPiece(state.holdPiece.type);
+          state.holdPiece = temp;
+      }
+      state.canHold = false;
+  };
+
+  // --- RENDER ---
+  const drawMatrix = (ctx: CanvasRenderingContext2D, matrix: (string|null|number)[][], offset: {x: number, y: number}, color?: string, ghost = false) => {
+      matrix.forEach((row, y) => {
+          row.forEach((value, x) => {
+              if (value !== 0 && value !== null) {
+                  ctx.fillStyle = ghost ? 'rgba(255, 255, 255, 0.1)' : (color || (value as string));
+                  ctx.fillRect((x + offset.x) * BLOCK_SIZE, (y + offset.y) * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                  
+                  // Detail
+                  if(!ghost) {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect((x + offset.x) * BLOCK_SIZE, (y + offset.y) * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                    
+                    // Shine
+                    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                    ctx.fillRect((x + offset.x) * BLOCK_SIZE, (y + offset.y) * BLOCK_SIZE, BLOCK_SIZE, 5);
+                  }
+              }
+          });
+      });
+  };
+
+  const render = (time: number) => {
+      if(gameState !== "PLAYING") return;
+      
+      const state = gameRef.current;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const deltaTime = time - state.lastTime;
+      state.lastTime = time;
+
+      state.dropCounter += deltaTime;
+      if (state.dropCounter > state.dropInterval) {
+          playerDrop();
+      }
+
+      // Draw Background
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw Grid
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 1;
+      for(let x=0; x<COLS; x++) { ctx.beginPath(); ctx.moveTo(x*BLOCK_SIZE,0); ctx.lineTo(x*BLOCK_SIZE,canvas.height); ctx.stroke(); }
+      for(let y=0; y<ROWS; y++) { ctx.beginPath(); ctx.moveTo(0,y*BLOCK_SIZE); ctx.lineTo(canvas.width,y*BLOCK_SIZE); ctx.stroke(); }
+
+      // Draw Board
+      drawMatrix(ctx, state.board, {x: 0, y: 0});
+
+      // Draw Ghost Piece
+      if (state.piece) {
+          const ghost = { ...state.piece };
+          while (!collide(state.board, ghost)) {
+              ghost.y++;
+          }
+          ghost.y--;
+          drawMatrix(ctx, ghost.matrix, {x: ghost.x, y: ghost.y}, undefined, true);
+      
+          // Draw Active Piece
+          drawMatrix(ctx, state.piece.matrix, {x: state.piece.x, y: state.piece.y}, state.piece.color);
+      }
+
+      // Particles
+      state.particles = state.particles.filter(p => p.life > 0);
+      state.particles.forEach(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.life -= 0.05;
+          ctx.fillStyle = `rgba(255,255,255,${p.life})`;
+          ctx.fillRect(p.x, p.y, 4, 4);
+      });
+
+      // Aux Canvas (Next & Hold)
+      renderAux(nextCanvasRef.current, state.nextPiece);
+      renderAux(holdCanvasRef.current, state.holdPiece);
+
+      requestRef.current = requestAnimationFrame(render);
+  };
+
+  const renderAux = (cvs: HTMLCanvasElement | null, piece: Piece | null) => {
+      if(!cvs) return;
+      const ctx = cvs.getContext('2d');
+      if(!ctx) return;
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0,0,cvs.width,cvs.height);
+      if(piece) {
+          // Center piece
+          const offsetX = (4 - piece.matrix[0].length) / 2;
+          const offsetY = (4 - piece.matrix.length) / 2;
+          drawMatrix(ctx, piece.matrix, {x: offsetX, y: offsetY}, piece.color);
+      }
+  };
+
+  // --- CONTROLS ---
+  const handleInput = useCallback((key: string) => {
+      if(gameState === "IDLE") startGame();
+      const state = gameRef.current;
+      if(gameState !== "PLAYING" || !state.piece) return;
+
+      switch(key) {
+          case 'ArrowLeft': 
+              state.piece.x--;
+              if (collide(state.board, state.piece)) state.piece.x++;
+              break;
+          case 'ArrowRight':
+              state.piece.x++;
+              if (collide(state.board, state.piece)) state.piece.x--;
+              break;
+          case 'ArrowDown':
+              playerDrop();
+              break;
+          case 'ArrowUp':
+          case 'x':
+              playerRotate(1);
+              break;
+          case 'Space': // Hard Drop
+              while(!collide(state.board, state.piece)) {
+                  state.piece.y++;
+              }
+              state.piece.y--;
+              merge(state.board, state.piece);
+              playerReset();
+              arenaSweep();
+              state.dropCounter = 0;
+              break;
+          case 'c': // Hold
+          case 'Shift':
+              playerHold();
+              break;
+      }
+  }, [gameState]);
+
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault();
+          if(e.key === " " && (gameState === "PLAYING")) handleInput('Space');
+          else if(e.key === "Escape") setGameState(prev => prev === "PLAYING" ? "PAUSED" : "PLAYING");
+          else handleInput(e.key);
+      };
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleInput, gameState]);
+
+  useEffect(() => {
+      if (gameState === "PLAYING") {
+          gameRef.current.lastTime = performance.now();
+          requestRef.current = requestAnimationFrame(render);
+      } else {
+          cancelAnimationFrame(requestRef.current!);
+      }
+      return () => cancelAnimationFrame(requestRef.current!);
+  }, [gameState]);
+
+  const startGame = () => {
+      gameRef.current = {
+          board: Array.from({ length: ROWS }, () => Array(COLS).fill(null)),
+          piece: null,
+          nextPiece: getRandomPiece(),
+          holdPiece: null,
+          canHold: true,
+          dropCounter: 0,
+          dropInterval: 800,
+          lastTime: performance.now(),
+          score: 0,
+          lines: 0,
+          level: 1,
+          particles: []
+      };
+      playerReset();
+      setScore(0);
+      setLines(0);
+      setLevel(1);
+      setGameState("PLAYING");
   };
 
   return (
-    <div className="flex flex-col lg:flex-row items-start justify-center min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-black p-4 gap-6">
-      <div className="bg-card rounded-xl shadow-2xl p-6 w-full max-w-2xl">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            🟦 Tetris
-          </h1>
-          <div className="flex items-center gap-4">
-            {bestScore !== null && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Trophy className="h-4 w-4" />
-                <span>Meilleur: {bestScore}</span>
-              </div>
-            )}
-          </div>
-        </div>
+    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-4 font-mono select-none overflow-hidden text-white">
+      
+      {/* HEADER */}
+      <div className="w-full max-w-4xl flex justify-between items-center mb-6 bg-slate-900/50 p-4 rounded-xl border border-blue-500/20 backdrop-blur-md">
+         <h1 className="text-3xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-600">
+            TETRIS <span className="text-xs not-italic text-slate-500 font-normal ml-2">CANVAS</span>
+         </h1>
+         <div className="flex gap-6">
+            <div className="text-center">
+                <p className="text-[10px] text-slate-500 uppercase">Score</p>
+                <p className="text-xl font-bold font-mono">{score}</p>
+            </div>
+            <div className="text-center">
+                <p className="text-[10px] text-slate-500 uppercase">Lines</p>
+                <p className="text-xl font-bold font-mono text-green-400">{lines}</p>
+            </div>
+            <div className="text-center">
+                <p className="text-[10px] text-slate-500 uppercase">Level</p>
+                <p className="text-xl font-bold font-mono text-yellow-400">{level}</p>
+            </div>
+            <div className="text-center hidden sm:block">
+                <p className="text-[10px] text-slate-500 uppercase">Best</p>
+                <p className="text-xl font-bold font-mono text-blue-300">{Math.max(score, highScore)}</p>
+            </div>
+         </div>
+      </div>
 
-        <div className="flex gap-6 items-start justify-center">
-          <div
-            className="relative shadow-2xl overflow-hidden"
-            style={{
-              width: BOARD_WIDTH * CELL_SIZE,
-              height: BOARD_HEIGHT * CELL_SIZE,
-              background: "linear-gradient(180deg, #1a1a2e 0%, #0f0f1e 100%)",
-              border: "4px solid #7c3aed",
-              borderRadius: "8px",
-            }}
-          >
-            {renderBoard().map((row, y) =>
-              row.map((cell, x) => (
-                <div
-                  key={`${x}-${y}`}
-                  className="absolute transition-all duration-75"
-                  style={{
-                    left: x * CELL_SIZE,
-                    top: y * CELL_SIZE,
-                    width: CELL_SIZE,
-                    height: CELL_SIZE,
-                    background: cell
-                      ? `linear-gradient(135deg, ${cell} 0%, ${cell}dd 100%)`
-                      : "transparent",
-                    border: cell ? "1px solid rgba(255, 255, 255, 0.2)" : "1px solid rgba(255, 255, 255, 0.05)",
-                    boxShadow: cell
-                      ? "inset 2px 2px 4px rgba(255, 255, 255, 0.3), inset -2px -2px 4px rgba(0, 0, 0, 0.3)"
-                      : "none",
-                    borderRadius: "2px",
-                  }}
-                />
-              ))
-            )}
-
-            {gameOver && (
-              <div className="absolute inset-0 bg-black/80 flex items-center justify-center flex-col gap-4 backdrop-blur-sm z-30">
-                <div className="text-4xl font-bold text-red-500 animate-bounce">
-                  Game Over!
-                </div>
-                <div className="text-2xl text-white">Score final: {score}</div>
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+          
+          {/* LEFT PANEL (HOLD) */}
+          <div className="hidden lg:flex flex-col gap-4">
+              <div className="bg-slate-900 p-4 rounded-lg border border-slate-800">
+                  <p className="text-xs text-slate-500 mb-2 uppercase font-bold">Hold (C)</p>
+                  <canvas ref={holdCanvasRef} width={BLOCK_SIZE*4} height={BLOCK_SIZE*4} className="bg-black rounded border border-slate-700 w-[120px] h-[120px]" />
               </div>
-            )}
-
-            {isPaused && !gameOver && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center backdrop-blur-sm z-30">
-                <div className="text-3xl font-bold text-white animate-pulse">
-                  PAUSE
-                </div>
+              <div className="bg-slate-900 p-4 rounded-lg border border-slate-800 text-xs text-slate-400 space-y-1">
+                  <p>⬅️ ➡️ Move</p>
+                  <p>⬆️ Rotate</p>
+                  <p>⬇️ Soft Drop</p>
+                  <p>SPACE Hard Drop</p>
               </div>
-            )}
           </div>
 
+          {/* MAIN BOARD */}
+          <div className="relative border-[4px] border-slate-800 bg-black rounded shadow-[0_0_50px_rgba(59,130,246,0.15)]">
+               <canvas 
+                  ref={canvasRef} 
+                  width={COLS * BLOCK_SIZE} 
+                  height={ROWS * BLOCK_SIZE} 
+                  className="block"
+               />
+               
+               {/* OVERLAYS */}
+               {gameState !== "PLAYING" && (
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center flex-col gap-6 animate-in fade-in z-20">
+                        {gameState === "GAMEOVER" && (
+                            <div className="text-center animate-bounce">
+                                <h2 className="text-5xl font-black text-red-600">GAME OVER</h2>
+                                <p className="text-slate-300 mt-2">Score: {score}</p>
+                            </div>
+                        )}
+                        {gameState === "PAUSED" && <h2 className="text-4xl font-bold text-white animate-pulse">PAUSE</h2>}
+                        {gameState === "IDLE" && <h2 className="text-5xl font-black text-blue-500">READY?</h2>}
+                        
+                        <Button 
+                            onClick={startGame} 
+                            className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg px-8 py-6 rounded-full"
+                        >
+                            {gameState === "PAUSED" ? "RESUME" : "PLAY"}
+                        </Button>
+                    </div>
+               )}
+          </div>
+
+          {/* RIGHT PANEL (NEXT) */}
           <div className="flex flex-col gap-4">
-            <div className="bg-muted/30 p-4 rounded-lg">
-              <div className="text-sm font-semibold mb-1">Score</div>
-              <div className="text-2xl font-bold">{score}</div>
-            </div>
-            <div className="bg-muted/30 p-4 rounded-lg">
-              <div className="text-sm font-semibold mb-1">Niveau</div>
-              <div className="text-2xl font-bold">{level}</div>
-            </div>
-            <div className="bg-muted/30 p-4 rounded-lg">
-              <div className="text-sm font-semibold mb-1">Lignes</div>
-              <div className="text-2xl font-bold">{linesCleared}</div>
-            </div>
-            {nextPiece && (
-              <div className="bg-muted/30 p-4 rounded-lg">
-                <div className="text-sm font-semibold mb-2">Suivant</div>
-                <div
-                  className="relative mx-auto"
-                  style={{
-                    width: 4 * CELL_SIZE * 0.6,
-                    height: 4 * CELL_SIZE * 0.6,
-                  }}
-                >
-                  {nextPiece.shape.map((row, y) =>
-                    row.map(
-                      (cell, x) =>
-                        cell && (
-                          <div
-                            key={`${x}-${y}`}
-                            className="absolute"
-                            style={{
-                              left: x * CELL_SIZE * 0.6,
-                              top: y * CELL_SIZE * 0.6,
-                              width: CELL_SIZE * 0.6,
-                              height: CELL_SIZE * 0.6,
-                              background: `linear-gradient(135deg, ${PIECE_COLORS[nextPiece.type]} 0%, ${PIECE_COLORS[nextPiece.type]}dd 100%)`,
-                              border: "1px solid rgba(255, 255, 255, 0.2)",
-                              boxShadow:
-                                "inset 2px 2px 4px rgba(255, 255, 255, 0.3), inset -2px -2px 4px rgba(0, 0, 0, 0.3)",
-                              borderRadius: "2px",
-                            }}
-                          />
-                        )
-                    )
-                  )}
-                </div>
+              <div className="bg-slate-900 p-4 rounded-lg border border-slate-800">
+                  <p className="text-xs text-slate-500 mb-2 uppercase font-bold">Next</p>
+                  <canvas ref={nextCanvasRef} width={BLOCK_SIZE*4} height={BLOCK_SIZE*4} className="bg-black rounded border border-slate-700 w-[120px] h-[120px]" />
               </div>
-            )}
+
+                            <div className="bg-slate-800/90 p-4 rounded-lg border-2 border-blue-500/30 w-[220px] shadow-xl backdrop-blur-sm">
+                                    <h3 className="text-sm font-bold flex items-center gap-2 text-white mb-3">
+                                        <Trophy className="w-4 h-4 text-yellow-400" /> Classement
+                                    </h3>
+                                    {leaderboard.length === 0 ? (
+                                        <p className="text-sm text-slate-400">Aucun score enregistré</p>
+                                    ) : (
+                                        <div className="space-y-2 text-sm">
+                                            {leaderboard.map((entry, index) => {
+                                                const name = (entry as any).userName || (entry as any).name || 'Anonyme';
+                                                const score = (entry as any).score ?? (entry as any).bestScore ?? 0;
+                                                const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index+1}`;
+                                                return (
+                                                    <div
+                                                        key={(entry as any).userId || name + index}
+                                                        className={cn(
+                                                            "flex items-center gap-3 p-3 rounded-lg",
+                                                            index < 3 ? "bg-blue-500/10 border border-blue-500/30" : "bg-slate-800/60 border border-slate-800"
+                                                        )}
+                                                    >
+                                                        <div className="w-8 text-center text-lg">{medal}</div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-medium truncate">{name}</p>
+                                                        </div>
+                                                        <div className="text-sm font-mono text-blue-300">{score.toLocaleString()}</div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                            </div>
+              
+              {/* MOBILE CONTROLS (VISIBLE ONLY ON SMALL SCREENS) */}
+              <div className="lg:hidden grid grid-cols-3 gap-2 mt-4">
+                 <div/>
+                 <Button size="icon" variant="secondary" onPointerDown={() => handleInput('ArrowUp')}><RotateCw/></Button>
+                 <div/>
+                 <Button size="icon" variant="secondary" onPointerDown={() => handleInput('ArrowLeft')}><ChevronLeft/></Button>
+                 <Button size="icon" variant="secondary" onPointerDown={() => handleInput('ArrowDown')}><ChevronDown/></Button>
+                 <Button size="icon" variant="secondary" onPointerDown={() => handleInput('ArrowRight')}><ChevronRight/></Button>
+                 <Button size="icon" variant="secondary" className="col-span-3 mt-2 bg-blue-900/50" onPointerDown={() => handleInput('Space')}><ArrowDownToLine/></Button>
+              </div>
           </div>
-        </div>
 
-        <div className="flex items-center justify-center gap-3 mt-6">
-          <Button onClick={() => router.push("/dashboard")} size="lg" variant="outline">
-            <Home className="mr-2 h-5 w-5" />
-            Dashboard
-          </Button>
-          <Button
-            onClick={() => setIsPaused(!isPaused)}
-            disabled={gameOver}
-            size="lg"
-            variant={isPaused ? "default" : "secondary"}
-          >
-            {isPaused ? (
-              <>
-                <Play className="mr-2 h-5 w-5" />
-                Jouer
-              </>
-            ) : (
-              <>
-                <Pause className="mr-2 h-5 w-5" />
-                Pause
-              </>
-            )}
-          </Button>
-          <Button onClick={resetGame} size="lg" variant="outline">
-            <RotateCcw className="mr-2 h-5 w-5" />
-            Recommencer
-          </Button>
-        </div>
-
-        <div className="mt-6 p-4 bg-muted/30 rounded-lg">
-          <h3 className="font-semibold mb-2 text-sm">Instructions:</h3>
-          <ul className="text-xs text-muted-foreground space-y-1">
-            <li>• ⬅️➡️ Déplacer la pièce</li>
-            <li>• ⬆️ ou Espace pour faire pivoter</li>
-            <li>• ⬇️ Accélérer la descente</li>
-            <li>• Entrée pour chute rapide</li>
-            <li>• Complétez des lignes pour marquer des points</li>
-          </ul>
-        </div>
       </div>
 
-      <div className="bg-card rounded-xl shadow-2xl p-6 w-full lg:w-80">
-        <h2 className="text-xl font-bold flex items-center gap-2 mb-4">
-          <Trophy className="h-5 w-5 text-yellow-500" />
-          Classement
-        </h2>
-        {leaderboard.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            Aucun score enregistré
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {leaderboard.map((entry, index) => (
-              <div
-                key={entry.userId}
-                className={cn(
-                  "flex items-center gap-3 p-3 rounded-lg transition-all",
-                  index < 3
-                    ? "bg-gradient-to-r from-purple-500/10 to-transparent border border-purple-500/20"
-                    : "bg-muted/50",
-                  session?.user?.id === entry.userId && "ring-2 ring-primary"
-                )}
-              >
-                <div className="flex-shrink-0 w-8 flex items-center justify-center font-bold text-lg">
-                  {index === 0 && "🥇"}
-                  {index === 1 && "🥈"}
-                  {index === 2 && "🥉"}
-                  {index > 2 && `#${index + 1}`}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {entry.userName || "Anonyme"}
-                    {session?.user?.id === entry.userId && (
-                      <span className="text-xs text-primary ml-2">(Vous)</span>
-                    )}
-                  </p>
-                </div>
-                <div className="flex-shrink-0">
-                  <p className="text-lg font-bold text-purple-500">
-                    {entry.bestScore.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="mt-8">
+         <Button variant="outline" size="lg" onClick={() => router.push("/dashboard")} className="bg-slate-800/80 border-2 border-red-500/50 text-white hover:bg-red-500/20 hover:border-red-500 transition-all font-semibold">
+            <Home className="mr-2 h-5 w-5" /> Quitter
+        </Button>
       </div>
+
     </div>
   );
 }

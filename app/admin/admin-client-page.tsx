@@ -6,7 +6,8 @@ import { UserManagement } from "@/components/admin/user-management";
 import IframeRequestsAdmin from "@/components/admin/iframe-requests-admin";
 import IframeAllowlistAdmin from "@/components/admin/iframe-allowlist-admin";
 import AnnouncementsManager from "@/components/admin/announcements-manager";
-import { Users, MessageSquare, Shield, Megaphone } from "lucide-react";
+import PermissionsManager from "@/components/admin/permissions-manager";
+import { Users, MessageSquare, Shield, Megaphone, ShieldCheck } from "lucide-react";
 import { User } from "@/lib/db/schema";
 
 interface AdminClientPageProps {
@@ -26,10 +27,14 @@ export default function AdminClientPage({ users }: AdminClientPageProps) {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="users" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Utilisateurs
+          </TabsTrigger>
+          <TabsTrigger value="permissions" className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4" />
+            Permissions
           </TabsTrigger>
           <TabsTrigger value="iframe-requests" className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />
@@ -47,6 +52,10 @@ export default function AdminClientPage({ users }: AdminClientPageProps) {
 
         <TabsContent value="users" className="space-y-4">
           <UserManagement users={users} />
+        </TabsContent>
+
+        <TabsContent value="permissions" className="space-y-4">
+          <PermissionsManager />
         </TabsContent>
 
         <TabsContent value="iframe-requests" className="space-y-4">

@@ -13,7 +13,8 @@ import {
   ArrowLeft,
   MessageSquare,
   Megaphone,
-  List
+  List,
+  ShieldCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ import { UserManagementSettings } from "@/components/settings/user-management-se
 import IframeAllowlistAdmin from "@/components/admin/iframe-allowlist-admin";
 import IframeRequestsAdmin from "@/components/admin/iframe-requests-admin";
 import AnnouncementsManager from "@/components/admin/announcements-manager";
+import PermissionsManager from "@/components/admin/permissions-manager";
 
 type MenuItem = {
   id: string;
@@ -55,6 +57,7 @@ export default function SettingsPage() {
     { id: "contact", label: "Contact", icon: MessageSquare, section: "user" },
     ...(isAdmin ? [
       { id: "admin-users", label: "Utilisateurs", icon: Users, section: "admin" as const, badge: "Admin" },
+      { id: "admin-permissions", label: "Permissions", icon: ShieldCheck, section: "admin" as const, badge: "Admin" },
       { id: "admin-iframe", label: "Iframe", icon: List, section: "admin" as const },
       { id: "admin-announcements", label: "Patch Notes", icon: Megaphone, section: "admin" as const },
     ] : []),
@@ -249,6 +252,20 @@ export default function SettingsPage() {
                 </div>
                 <Separator className="mb-6" />
                 <UserManagementSettings />
+              </>
+            )}
+
+            {activeTab === "admin-permissions" && isAdmin && (
+              <>
+                <div className="mb-6">
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-2xl font-bold">Gestion des Permissions (RBAC)</h1>
+                    <Badge variant="destructive">Admin</Badge>
+                  </div>
+                  <p className="text-muted-foreground">Configurez les permissions granulaires par rôle utilisateur.</p>
+                </div>
+                <Separator className="mb-6" />
+                <PermissionsManager />
               </>
             )}
 

@@ -1,290 +1,644 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { useSocket } from '@/components/ui/socket-provider';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, TrendingDown, DollarSign, Wallet, Trophy, Activity, ArrowRight } from 'lucide-react';
+import { 
+  TrendingUp, TrendingDown, Wallet, Activity, 
+  Home, Zap, RefreshCw, History, Newspaper, 
+    Target, Globe, Rocket, ShieldAlert, Trophy 
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export default function TraderGamePage() {
-  const { data: session } = useSession();
-  const socket = useSocket();
-  const [stocks, setStocks] = useState<any>({});
-  const [leaderboard, setLeaderboard] = useState<any[]>([]);
-  const [portfolio, setPortfolio] = useState<any>(null);
-  const [selectedStock, setSelectedStock] = useState<string | null>(null);
-  const [tradeAmount, setTradeAmount] = useState(1);
+// --- CONFIGURATION ---
+const MAX_HISTORY = 40;
+const STOCK_EMOJI: Record<string, string> = {
+    BTC: '🟧',          // Bitcoin
+    ETH: '🔷',          // Ethereum
+    NVDA: '🖥️',        // Nvidia / GPU
+    AAPL: '🍎',         // Apple
+    'EUR/USD': '🇪🇺',   // Euro/Dollar
+    'JPY/USD': '💴',    // Yen/Dollar
+    DOGE: '🐕',         // Dogecoin
+    'AI-START': '✨'     // AI startup
+};
 
-  // Initialisation et Écouteurs Socket
+// --- TYPES ---
+type MarketType = 'CRYPTO' | 'STOCK' | 'FOREX' | 'STARTUP';
+
+type Stock = {
+  symbol: string;
+  name: string;
+  price: number;
+  type: MarketType;
+  history: number[];
+  volatility: number; // Force des mouvements
+  riskFactor: number; // Probabilité de crash/moon
+};
+
+type LeaderboardEntry = {
+    userId?: string;
+    userName?: string;
+    name?: string;
+    score?: number;
+    bestScore?: number;
+    netWorth?: number;
+};
+
+// --- DONNÉES INITIALES (Pour éviter l'écran blanc) ---
+const INITIAL_STOCKS: Record<string, Stock> = {
+  'BTC': { symbol: 'BTC', name: 'Bitcoin', price: 64000, type: 'CRYPTO', history: Array(MAX_HISTORY).fill(64000), volatility: 0.08, riskFactor: 0.05 },
+  'ETH': { symbol: 'ETH', name: 'Ethereum', price: 3400, type: 'CRYPTO', history: Array(MAX_HISTORY).fill(3400), volatility: 0.07, riskFactor: 0.04 },
+  'NVDA': { symbol: 'NVDA', name: 'Nvidia Corp', price: 900, type: 'STOCK', history: Array(MAX_HISTORY).fill(900), volatility: 0.03, riskFactor: 0.01 },
+  'AAPL': { symbol: 'AAPL', name: 'Apple Inc.', price: 175, type: 'STOCK', history: Array(MAX_HISTORY).fill(175), volatility: 0.02, riskFactor: 0.01 },
+  'EUR/USD': { symbol: 'EUR/USD', name: 'Euro / Dollar', price: 1.08, type: 'FOREX', history: Array(MAX_HISTORY).fill(1.08), volatility: 0.005, riskFactor: 0.001 },
+  'JPY/USD': { symbol: 'JPY/USD', name: 'Yen / Dollar', price: 0.0065, type: 'FOREX', history: Array(MAX_HISTORY).fill(0.0065), volatility: 0.006, riskFactor: 0.001 },
+  'DOGE': { symbol: 'DOGE', name: 'DogeCoin', price: 0.15, type: 'CRYPTO', history: Array(MAX_HISTORY).fill(0.15), volatility: 0.15, riskFactor: 0.1 },
+  'AI-START': { symbol: 'AI-START', name: 'Unknown AI Startup', price: 10, type: 'STARTUP', history: Array(MAX_HISTORY).fill(10), volatility: 0.25, riskFactor: 0.2 },
+};
+
+// --- COMPOSANT GRAPHIQUE SVG ---
+const StockChart = ({ data, color, height = 60 }: { data: number[], color: string, height?: number }) => {
+  if (!data || data.length < 2) return <div className="h-full w-full bg-muted/10 animate-pulse" />;
+
+  const max = Math.max(...data) * 1.02;
+  const min = Math.min(...data) * 0.98;
+  const range = max - min || 1; // Eviter division par zero
+  const width = 100;
+  
+  const points = data.map((price, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = 100 - ((price - min) / range) * 100;
+    return `${x},${y}`;
+  }).join(' ');
+
+  const strokeColor = color === 'green' ? '#22c55e' : '#ef4444';
+  const fillColor = color === 'green' ? '#22c55e20' : '#ef444420';
+
+  return (
+    <div className="w-full overflow-hidden" style={{ height: `${height}px` }}>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
+        <path d={`M0,100 L0,${100 - ((data[0]-min)/range)*100} ${points} L100,100 Z`} fill={fillColor} stroke="none" />
+        <polyline points={points} fill="none" stroke={strokeColor} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      </svg>
+    </div>
+  );
+};
+
+export default function TraderTerminal() {
+  const { data: session } = useSession();
+  const router = useRouter();
+  const socket = useSocket();
+
+  // --- STATE ---
+  const [stocks, setStocks] = useState<Record<string, Stock>>(INITIAL_STOCKS);
+  const [portfolio, setPortfolio] = useState({ cash: 10000, holdings: {} as Record<string, number>, netWorth: 10000 });
+  const [selectedSymbol, setSelectedSymbol] = useState<string>('BTC');
+  const [tradeAmount, setTradeAmount] = useState(1);
+  const [logs, setLogs] = useState<{msg: string, type: 'success'|'error'|'info', time: string}[]>([]);
+  const [news, setNews] = useState<string>("Ouverture des marchés mondiaux...");
+  const [isConnected, setIsConnected] = useState(false);
+    const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+
+  // --- SOUNDS ---
+  const playSound = (type: 'buy' | 'sell' | 'click' | 'alert') => {
+    try {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        const now = ctx.currentTime;
+        if (type === 'buy') {
+            osc.frequency.setValueAtTime(600, now);
+            osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
+        } else if (type === 'sell') {
+            osc.frequency.setValueAtTime(1000, now);
+            osc.frequency.exponentialRampToValueAtTime(600, now + 0.1);
+        } else if (type === 'alert') {
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(200, now);
+            osc.frequency.linearRampToValueAtTime(100, now + 0.3);
+        } else {
+            osc.frequency.setValueAtTime(800, now); // Click
+        }
+        
+        gain.gain.setValueAtTime(0.05, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start();
+        osc.stop(now + 0.15);
+    } catch (e) { console.error(e); }
+  };
+
+  // --- HELPERS ---
+    const addLog = useCallback((msg: string, type: 'success'|'error'|'info') => {
+      setLogs(prev => [{ msg, type, time: new Date().toLocaleTimeString() }, ...prev].slice(0, 6));
+  }, []);
+
+  // --- SOCKET HANDLERS ---
   useEffect(() => {
     if (!socket) return;
 
-    // Mise à jour globale (Prix + Classement)
-    socket.on('trader:update', (data: any) => {
-      setStocks(data.stocks);
-      setLeaderboard(data.leaderboard);
-    });
+    const handleConnect = () => {
+        setIsConnected(true);
+        addLog("Connecté au serveur boursier", "info");
+        console.log('🔌 Socket connected, session:', session);
+        if (session?.user?.id) {
+            // Envoyer userId et userName pour l'identification
+            const identifyPayload = { 
+                userId: session.user.id,
+                userName: session.user.name || session.user.email?.split('@')[0] || 'Trader'
+            };
+            console.log('🔵 Sending identify:', identifyPayload);
+            socket.emit('identify', identifyPayload);
+        } else {
+            console.warn('⚠️ No session.user.id available, cannot identify');
+            addLog("Session non trouvée", "error");
+        }
+        socket.emit('trader:getState');
+    };
 
-    // Mise à jour personnelle
-    socket.on('trader:portfolio', (data: any) => {
-      setPortfolio(data);
-    });
+    const handleDisconnect = () => {
+        setIsConnected(false);
+        setNews("Connexion au marché perdue. Vérifie le serveur socket.");
+        addLog("Déconnecté du serveur boursier", "error");
+    };
 
-    // Envoyer le nom du joueur si connecté
-    if (session?.user?.id) {
-        // Petit délai pour assurer que le serveur a créé le joueur
-        setTimeout(() => {
-            socket.emit('trader:rename', { 
-                userId: session.user.id, 
-                name: session.user.name || `Trader-${session.user.id.slice(0,4)}` 
+    const handleState = (data: any) => {
+        console.log('📊 trader:state/update received:', data);
+        if (data?.stocks) {
+            setStocks(prev => {
+                // Transformer les données du serveur pour ajouter le champ 'symbol' manquant
+                const transformedStocks: Record<string, Stock> = {};
+                Object.keys(data.stocks).forEach(symbol => {
+                    const serverStock = data.stocks[symbol];
+                    transformedStocks[symbol] = {
+                        ...serverStock,
+                        symbol: symbol, // Ajouter le symbol qui manque
+                        type: serverStock.type || 'CRYPTO', // Type par défaut si manquant
+                        volatility: serverStock.volatility || 0.05,
+                        riskFactor: serverStock.riskFactor || 0.01,
+                        history: serverStock.history || []
+                    };
+                });
+                
+                const nextStocks = transformedStocks;
+                const mover = Object.keys(nextStocks || {}).find(sym => {
+                    const prevPrice = prev[sym]?.price;
+                    const newPrice = nextStocks[sym]?.price;
+                    if (prevPrice === undefined || newPrice === undefined || prevPrice === 0) return false;
+                    return Math.abs((newPrice - prevPrice) / prevPrice) > 0.05;
+                });
+
+                if (mover) {
+                    const prevPrice = prev[mover]?.price || 0;
+                    const newPrice = nextStocks[mover]?.price || 0;
+                    const delta = prevPrice ? ((newPrice - prevPrice) / prevPrice) * 100 : 0;
+                    setNews(`Mouvement marqué sur ${mover}: ${delta.toFixed(1)}%`);
+                }
+
+                return nextStocks;
             });
-        }, 1000);
+        }
+
+        if (data?.portfolio) {
+            console.log('💼 Portfolio update from state:', data.portfolio);
+            setPortfolio(data.portfolio);
+        }
+        if (data?.leaderboard) {
+            console.log('🏆 Leaderboard update:', data.leaderboard);
+            setLeaderboard(data.leaderboard);
+        }
+    };
+
+    const handlePortfolio = (data: any) => {
+        console.log('💰 trader:portfolio received:', data);
+        setPortfolio(data);
+        // Confirmer la mise à jour dans les logs
+        if (data.cash !== undefined) {
+            addLog(`Portfolio: $${data.cash.toFixed(0)} cash, $${(data.netWorth || 0).toFixed(0)} total`, "success");
+        }
+    };
+
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+    socket.on('trader:update', handleState);
+    socket.on('trader:state', handleState);
+    socket.on('trader:portfolio', handlePortfolio);
+
+    if (socket.connected) {
+        handleConnect();
     }
 
     return () => {
-      socket.off('trader:update');
-      socket.off('trader:portfolio');
+        socket.off('connect', handleConnect);
+        socket.off('disconnect', handleDisconnect);
+        socket.off('trader:update', handleState);
+        socket.off('trader:state', handleState);
+        socket.off('trader:portfolio', handlePortfolio);
     };
-  }, [socket, session]);
+  }, [socket, session?.user?.id, addLog]);
 
-  // Actions
-  const handleBuy = () => {
-    if (!selectedStock || !session?.user?.id) return;
-    socket.emit('trader:buy', { userId: session.user.id, symbol: selectedStock, quantity: tradeAmount });
+  // Effet séparé pour identifier le joueur quand la session devient disponible
+  useEffect(() => {
+    if (!socket?.connected) {
+      console.log('❌ Socket not connected, cannot identify');
+      return;
+    }
+    if (!session?.user?.id) {
+      console.log('❌ No session.user.id, cannot identify');
+      return;
+    }
+    
+    console.log('👤 Session available, sending identify');
+    const identifyPayload = { 
+        userId: session.user.id,
+        userName: session.user.name || session.user.email?.split('@')[0] || 'Trader'
+    };
+    console.log('📤 Emitting identify:', identifyPayload);
+    socket.emit('identify', identifyPayload);
+    
+    // Petit délai puis demander l'état
+    setTimeout(() => {
+      console.log('📤 Requesting state after identify');
+      socket.emit('trader:getState');
+    }, 100);
+  }, [socket?.connected, session?.user?.id, session?.user?.name, session?.user?.email]);
+
+    // Assure toujours un symbole sélectionné qui existe dans les données reçues
+    useEffect(() => {
+        if (selectedSymbol && stocks[selectedSymbol]) return;
+        const fallback = Object.keys(stocks)[0];
+        if (fallback) setSelectedSymbol(fallback);
+    }, [stocks, selectedSymbol]);
+
+  const handleTransaction = (type: 'BUY' | 'SELL') => {
+    const stock = stocks[selectedSymbol];
+    if (!stock || !socket?.connected || !session?.user?.id) {
+      console.error('❌ Cannot trade:', { hasStock: !!stock, socketConnected: socket?.connected, hasUserId: !!session?.user?.id });
+      addLog("Impossible de trader (connexion ou session manquante)", "error");
+      return;
+    }
+
+    const cost = stock.price * tradeAmount;
+
+    if (type === 'BUY') {
+        console.log(`🛒 Attempting to buy ${tradeAmount} ${stock.symbol} for $${cost.toFixed(2)}`);
+        console.log(`💰 Current cash: $${portfolio.cash.toFixed(2)}`);
+        
+        if (portfolio.cash >= cost) {
+            // Envoyer la commande au serveur - le serveur mettra à jour et renverra le portfolio
+            const buyPayload = { userId: session.user.id, symbol: stock.symbol, quantity: tradeAmount };
+            console.log('📤 Emitting trader:buy:', buyPayload);
+            socket.emit('trader:buy', buyPayload);
+            playSound('buy');
+            addLog(`Commande d'achat: ${tradeAmount} ${stock.symbol}`, "info");
+        } else {
+            console.warn(`⚠️ Insufficient funds: need $${cost.toFixed(2)}, have $${portfolio.cash.toFixed(2)}`);
+            playSound('alert');
+            addLog("Fonds insuffisants", "error");
+        }
+    } else {
+        const owned = portfolio.holdings[stock.symbol] || 0;
+        console.log(`📦 Attempting to sell ${tradeAmount} ${stock.symbol}`);
+        console.log(`📊 Currently own: ${owned}`);
+        
+        if (owned >= tradeAmount) {
+            // Envoyer la commande au serveur - le serveur mettra à jour et renverra le portfolio
+            const sellPayload = { userId: session.user.id, symbol: stock.symbol, quantity: tradeAmount };
+            console.log('📤 Emitting trader:sell:', sellPayload);
+            socket.emit('trader:sell', sellPayload);
+            playSound('sell');
+            addLog(`Commande de vente: ${tradeAmount} ${stock.symbol}`, "info");
+        } else {
+            console.warn(`⚠️ Insufficient holdings: need ${tradeAmount}, have ${owned}`);
+            playSound('alert');
+            addLog("Pas assez d'actions", "error");
+        }
+    }
   };
 
-  const handleSell = () => {
-    if (!selectedStock || !session?.user?.id) return;
-    socket.emit('trader:sell', { userId: session.user.id, symbol: selectedStock, quantity: tradeAmount });
-  };
-
-  if (!stocks || Object.keys(stocks).length === 0) {
-    return (
-        <div className="h-screen flex items-center justify-center bg-background">
-            <div className="flex flex-col items-center gap-4 animate-pulse">
-                <Activity className="w-12 h-12 text-primary" />
-                <h2 className="text-xl font-bold">Connexion au marché...</h2>
-            </div>
-        </div>
-    );
+  // --- VARIABLES DÉRIVÉES ET SÉCURITÉ ---
+  // C'est ici qu'on corrige ton bug "Cannot read properties of undefined"
+    const currentStock = stocks[selectedSymbol];
+  
+  // Si pour une raison ou une autre l'action n'existe pas, on affiche un loader
+  if (!currentStock) {
+      return (
+          <div className="h-screen bg-black text-green-500 flex items-center justify-center flex-col gap-4 font-mono">
+              <Activity className="animate-spin w-12 h-12"/>
+              <p>INITIALISATION DU MARCHÉ...</p>
+              <Button onClick={() => window.location.reload()} variant="outline">Forcer le rechargement</Button>
+          </div>
+      );
   }
 
-  // Calculs d'affichage
-  const currentStock = selectedStock ? stocks[selectedStock] : null;
-  const userCash = portfolio?.cash || 0;
-  const userNetWorth = portfolio?.netWorth || 0;
+  const isUp = currentStock.history[currentStock.history.length - 1] >= currentStock.history[0];
+    const tradingDisabled = !isConnected;
+  
+  // Calcul Fortune
+  const totalNetWorth = portfolio.cash + Object.keys(portfolio.holdings).reduce((acc, key) => {
+      const price = stocks[key]?.price || 0;
+      return acc + (portfolio.holdings[key] * price);
+  }, 0);
 
-  return (
-    <div className="min-h-screen bg-background p-4 md:p-6 lg:p-8 flex flex-col gap-6">
+  // Icone par type
+  const getTypeIcon = (type: MarketType) => {
+      switch(type) {
+          case 'CRYPTO': return <Zap className="w-3 h-3 text-yellow-400"/>;
+          case 'STOCK': return <Target className="w-3 h-3 text-blue-400"/>;
+          case 'FOREX': return <Globe className="w-3 h-3 text-green-400"/>;
+          case 'STARTUP': return <Rocket className="w-3 h-3 text-purple-400"/>;
+      }
+  };
+
+    return (
+        <div className="relative min-h-screen bg-[#050505] text-gray-200 font-mono flex flex-col overflow-hidden selection:bg-green-900/50">
       
-      {/* HEADER: Stats Joueur */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-4 flex items-center gap-4 bg-card border-primary/20">
-          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-            <Wallet className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground font-medium uppercase">Cash Disponible</p>
-            <h2 className="text-2xl font-bold font-mono">${userCash.toFixed(2)}</h2>
-          </div>
-        </Card>
-
-        <Card className="p-4 flex items-center gap-4 bg-card border-indigo-500/20">
-          <div className="w-12 h-12 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-500">
-            <TrendingUp className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground font-medium uppercase">Fortune Totale</p>
-            <h2 className="text-2xl font-bold font-mono">${userNetWorth.toFixed(2)}</h2>
-          </div>
-        </Card>
-
-        <Card className="p-4 flex items-center gap-4 bg-card border-amber-500/20">
-          <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
-            <Trophy className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground font-medium uppercase">Classement</p>
-            <h2 className="text-2xl font-bold">
-               #{leaderboard.findIndex((p: any) => p.name === (session?.user?.name || portfolio?.name)) + 1 || '-'}
-            </h2>
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
-        
-        {/* COLONNE GAUCHE: Marché */}
-        <Card className="lg:col-span-2 flex flex-col overflow-hidden">
-          <div className="p-4 border-b bg-muted/30 flex justify-between items-center">
-            <h3 className="font-bold flex items-center gap-2">
-                <Activity className="w-5 h-5 text-primary"/> Marché en direct
-            </h3>
-            <Badge variant="outline" className="animate-pulse bg-green-500/10 text-green-500 border-green-500/20">LIVE</Badge>
-          </div>
-          
-          <ScrollArea className="flex-1 p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {Object.keys(stocks).map(symbol => {
-                const stock = stocks[symbol];
-                const prevPrice = stock.history[stock.history.length - 2] || stock.price;
-                const isUp = stock.price >= prevPrice;
-                const isSelected = selectedStock === symbol;
-
-                return (
-                  <div 
-                    key={symbol}
-                    onClick={() => setSelectedStock(symbol)}
-                    className={cn(
-                        "cursor-pointer rounded-xl border p-4 transition-all duration-200 hover:shadow-lg relative overflow-hidden group",
-                        isSelected ? "border-primary bg-primary/5 ring-1 ring-primary" : "bg-card border-border hover:border-primary/50"
-                    )}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                        <div>
-                            <h4 className="font-bold text-lg">{symbol}</h4>
-                            <p className="text-xs text-muted-foreground">{stock.name}</p>
-                        </div>
-                        <div className={cn("text-right font-mono", isUp ? "text-green-500" : "text-red-500")}>
-                            <div className="text-xl font-bold">${stock.price.toFixed(2)}</div>
-                            <div className="text-xs flex items-center justify-end gap-1">
-                                {isUp ? <TrendingUp className="w-3 h-3"/> : <TrendingDown className="w-3 h-3"/>}
-                                {Math.abs(((stock.price - prevPrice)/prevPrice)*100).toFixed(2)}%
-                            </div>
-                        </div>
-                    </div>
-                    
-                    {/* Mini Visualisation Graphique (Sparkline simulée) */}
-                    <div className="h-8 flex items-end gap-1 mt-2 opacity-50">
-                        {stock.history.slice(-15).map((p: number, i: number) => (
-                            <div 
-                                key={i} 
-                                className={cn("w-full rounded-t-sm transition-all duration-500", isUp ? "bg-green-500" : "bg-red-500")}
-                                style={{ height: `${(p / (Math.max(...stock.history)*1.1)) * 100}%` }}
-                            />
-                        ))}
-                    </div>
-
-                    {/* Holdings Badge */}
-                    {portfolio?.holdings[symbol] > 0 && (
-                        <div className="absolute top-2 right-2">
-                            <Badge variant="secondary" className="text-[10px] h-5">
-                                Détenu: {portfolio.holdings[symbol]}
-                            </Badge>
-                        </div>
-                    )}
-                  </div>
-                );
-              })}
+      {/* 1. TOP BAR */}
+    <header className="h-14 border-b border-white/10 bg-[#0a0a0a] flex items-center justify-between px-4 z-10 shrink-0">
+        <div className="flex items-center gap-3">
+            <div className="bg-green-500/10 p-1.5 rounded border border-green-500/20">
+                <Activity className="text-green-500 w-5 h-5" />
             </div>
-          </ScrollArea>
-        </Card>
-
-        {/* COLONNE DROITE: Action & Leaderboard */}
-        <div className="flex flex-col gap-6">
-            
-            {/* PANEL DE TRADING */}
-            <Card className="flex flex-col bg-card border-primary/20 shadow-lg">
-                <div className="p-4 border-b bg-primary/5">
-                    <h3 className="font-bold text-lg flex items-center gap-2">
-                        <DollarSign className="w-5 h-5"/> Trading
-                    </h3>
-                </div>
-                
-                <div className="p-6 space-y-6">
-                    {selectedStock ? (
-                        <>
-                            <div className="space-y-1">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm text-muted-foreground">Action sélectionnée</span>
-                                    <span className="font-bold text-xl">{stocks[selectedStock].name}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm text-muted-foreground">Prix actuel</span>
-                                    <span className="font-mono text-lg">${stocks[selectedStock].price.toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm text-muted-foreground">Vos actions</span>
-                                    <span className="font-mono">{portfolio?.holdings[selectedStock] || 0}</span>
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-xs font-semibold uppercase text-muted-foreground">Quantité</label>
-                                <div className="flex items-center gap-2">
-                                    <Button variant="outline" size="icon" onClick={() => setTradeAmount(Math.max(1, tradeAmount - 1))}>-</Button>
-                                    <div className="flex-1 text-center font-mono text-lg font-bold bg-muted/50 py-2 rounded">{tradeAmount}</div>
-                                    <Button variant="outline" size="icon" onClick={() => setTradeAmount(tradeAmount + 1)}>+</Button>
-                                </div>
-                                <div className="flex justify-between text-xs text-muted-foreground px-1">
-                                    <span>Total: ${ (stocks[selectedStock].price * tradeAmount).toFixed(2) }</span>
-                                    <span className="text-primary cursor-pointer hover:underline" onClick={() => setTradeAmount(10)}>x10</span>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <Button 
-                                    variant="default" 
-                                    className="w-full bg-green-600 hover:bg-green-700 text-white"
-                                    onClick={handleBuy}
-                                    disabled={userCash < stocks[selectedStock].price * tradeAmount}
-                                >
-                                    ACHETER
-                                </Button>
-                                <Button 
-                                    variant="default" 
-                                    className="w-full bg-red-600 hover:bg-red-700 text-white"
-                                    onClick={handleSell}
-                                    disabled={!portfolio?.holdings[selectedStock] || portfolio.holdings[selectedStock] < tradeAmount}
-                                >
-                                    VENDRE
-                                </Button>
-                            </div>
-                        </>
-                    ) : (
-                        <div className="text-center py-8 text-muted-foreground">
-                            <ArrowRight className="w-10 h-10 mx-auto mb-2 opacity-20"/>
-                            <p>Sélectionnez une action sur le marché pour commencer à trader.</p>
-                        </div>
-                    )}
-                </div>
-            </Card>
-
-            {/* LEADERBOARD */}
-            <Card className="flex-1 flex flex-col min-h-0 bg-card/50">
-                <div className="p-4 border-b">
-                    <h3 className="font-bold flex items-center gap-2">
-                        <Trophy className="w-4 h-4 text-amber-500"/> Top Traders
-                    </h3>
-                </div>
-                <ScrollArea className="flex-1">
-                    <div className="divide-y divide-border/50">
-                        {leaderboard.map((player, index) => (
-                            <div key={index} className={cn("p-3 flex justify-between items-center", player.name === (session?.user?.name || portfolio?.name) && "bg-primary/10")}>
-                                <div className="flex items-center gap-3">
-                                    <span className={cn(
-                                        "w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold",
-                                        index === 0 ? "bg-amber-500 text-white" : 
-                                        index === 1 ? "bg-slate-400 text-white" :
-                                        index === 2 ? "bg-orange-700 text-white" : "bg-muted text-muted-foreground"
-                                    )}>
-                                        {index + 1}
-                                    </span>
-                                    <span className="text-sm font-medium truncate max-w-[120px]">{player.name}</span>
-                                </div>
-                                <span className="font-mono text-sm font-bold">${player.netWorth.toFixed(0)}</span>
-                            </div>
-                        ))}
-                    </div>
-                </ScrollArea>
-            </Card>
+            <h1 className="font-bold tracking-wider text-sm md:text-base text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500">
+                MONEYMAKER <span className="text-[10px] text-green-500 ml-1">PRO</span>
+            </h1>
         </div>
 
-      </div>
+        <div className="flex items-center gap-6 text-sm">
+            <div className="hidden md:block text-right">
+                <p className="text-[10px] text-gray-500 uppercase">Cash</p>
+                <p className="font-bold text-white">${portfolio.cash.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+            </div>
+            <div className="text-right">
+                <p className="text-[10px] text-gray-500 uppercase">Net Worth</p>
+                <p className={cn("font-bold", totalNetWorth >= 10000 ? "text-green-400" : "text-red-400")}>
+                    ${totalNetWorth.toLocaleString(undefined, {maximumFractionDigits: 0})}
+                </p>
+            </div>
+            <div className="hidden md:flex items-center gap-2 text-[11px] px-2 py-1 rounded border border-white/10 bg-white/5">
+                <span className={cn("w-2 h-2 rounded-full", isConnected ? "bg-green-400" : "bg-red-500 animate-pulse")}></span>
+                <span className="uppercase tracking-wide text-gray-400">{isConnected ? "Socket connecté" : "Socket déconnecté"}</span>
+            </div>
+            <Button 
+                onClick={() => router.push('/dashboard')} 
+                size="sm"
+                className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 h-8 text-xs"
+            >
+                <Home className="w-3 h-3 mr-2" /> EXIT
+            </Button>
+        </div>
+      </header>
+
+      {!isConnected && (
+        <div className="absolute inset-0 z-20 bg-gradient-to-br from-red-950 via-black to-red-900/70 backdrop-blur flex items-center justify-center p-6">
+            <div className="max-w-md w-full bg-black/60 border border-red-800/50 rounded-xl shadow-2xl p-6 space-y-4 text-center">
+                <div className="mx-auto w-12 h-12 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center animate-pulse">
+                    <ShieldAlert className="w-6 h-6 text-red-300" />
+                </div>
+                <div className="space-y-2">
+                    <p className="text-sm tracking-wide text-red-200 uppercase">Connexion perdue</p>
+                    <h2 className="text-xl font-black text-white">Serveur marché indisponible</h2>
+                    <p className="text-xs text-red-100/80">Vérifie le container socket ou ta connexion réseau puis relance. Aucun fallback n'est activé.</p>
+                </div>
+                <div className="flex gap-3 justify-center">
+                    <Button variant="outline" className="border-red-500/40 text-red-100" onClick={() => socket?.connect()}>Reconnecter</Button>
+                    <Button className="bg-white/10 hover:bg-white/20 text-white" onClick={() => router.push('/dashboard')}>Retour Dashboard</Button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* 2. MAIN GRID */}
+      <main className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-0 overflow-hidden">
+        
+        {/* LEFT: MARKET WATCH (Liste) */}
+        <aside className="col-span-12 md:col-span-3 border-b md:border-b-0 md:border-r border-white/10 bg-[#080808] flex flex-col max-h-[200px] md:max-h-none overflow-hidden">
+            <div className="p-3 border-b border-white/5 bg-white/[0.02] flex justify-between items-center">
+                <span className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-2">
+                    <RefreshCw className="w-3 h-3" /> Assets
+                </span>
+                <Badge variant="outline" className="text-[9px] h-4 border-white/10 text-gray-500">{Object.keys(stocks).length}</Badge>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+                {Object.entries(stocks).map(([symbol, stock]) => {
+                    const historyForChange = stock.history.length >= 2
+                      ? stock.history[stock.history.length - Math.min(10, stock.history.length - 1)]
+                      : stock.price;
+                    const priceChange = stock.price - historyForChange;
+                    const isStockUp = priceChange >= 0;
+                
+                    return (
+                        <div 
+                            key={symbol}
+                            onClick={() => { setSelectedSymbol(symbol); playSound('click'); }}
+                            className={cn(
+                                "p-3 border-b border-white/5 cursor-pointer hover:bg-white/5 relative transition-colors",
+                                selectedSymbol === symbol && "bg-white/10 border-l-2 border-l-green-500"
+                            )}
+                        >
+                            <div className="flex justify-between items-center mb-1">
+                                <div className="flex items-center gap-2">
+                                    {getTypeIcon(stock.type)}
+                                    <span className="font-bold text-sm text-gray-200 flex items-center gap-2">
+                                        <span>{STOCK_EMOJI[symbol] || '📈'}</span>
+                                        {symbol}
+                                    </span>
+                                </div>
+                                <span className={cn("text-xs font-mono", isStockUp ? "text-green-500" : "text-red-500")}>
+                                    ${stock.price < 1 ? stock.price.toFixed(4) : stock.price.toFixed(2)}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-[10px] text-gray-600">{stock.type}</span>
+                                {portfolio.holdings[symbol] > 0 && (
+                                    <span className="text-[9px] bg-blue-900/30 text-blue-400 px-1.5 rounded">
+                                        x{portfolio.holdings[symbol]}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </aside>
+
+        {/* CENTER: CHART */}
+        <section className="col-span-12 md:col-span-6 flex flex-col bg-[#050505] relative min-h-[300px]">
+            {/* Chart Info */}
+            <div className="absolute top-4 left-4 z-10">
+                <h2 className="text-2xl font-black text-white flex items-center gap-2">
+                    <span className="inline-flex items-center gap-2 px-2 py-1 rounded bg-white/5 border border-white/10">
+                        {getTypeIcon(currentStock.type)}
+                        <span>{STOCK_EMOJI[currentStock.symbol] || '📈'}</span>
+                        {currentStock.symbol}
+                    </span>
+                    {currentStock.type === 'STARTUP' && <ShieldAlert className="w-4 h-4 text-purple-500 animate-pulse" />}
+                </h2>
+                <div className="flex items-center gap-2 mt-1">
+                     <Badge variant="secondary" className="bg-white/5 text-gray-400 hover:bg-white/10 text-[10px] h-5 border-0">
+                        {currentStock.name}
+                     </Badge>
+                     <Badge variant="outline" className={cn("text-[10px] h-5 border-0", isUp ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500")}>
+                        {isUp ? "BULLISH" : "BEARISH"}
+                     </Badge>
+                </div>
+            </div>
+            
+            <div className="absolute top-4 right-4 z-10 text-right">
+                <p className={cn("text-3xl font-mono font-bold", isUp ? "text-green-500" : "text-red-500")}>
+                    ${currentStock.price < 1 ? currentStock.price.toFixed(5) : currentStock.price.toFixed(2)}
+                </p>
+                <p className="text-[10px] text-gray-500 mt-1">VOLATILITÉ: {(currentStock.volatility * 100).toFixed(1)}%</p>
+            </div>
+
+            {/* SVG Chart */}
+            <div className="flex-1 relative flex items-center justify-center pt-20 pb-10 px-0">
+                 {/* Background Grid */}
+                 <div className="absolute inset-0 grid grid-cols-6 gap-px bg-white/[0.02] pointer-events-none">
+                    <div/><div/><div/><div/><div/><div/>
+                 </div>
+                 
+                 <div className="w-full h-full z-0 px-4">
+                    <StockChart data={currentStock.history} color={isUp ? 'green' : 'red'} height={400} />
+                 </div>
+            </div>
+
+            {/* News Footer */}
+            <div className="h-8 bg-[#0a0a0a] border-t border-white/10 flex items-center px-3 gap-2 overflow-hidden shrink-0">
+                <Newspaper className="w-3 h-3 text-orange-500 shrink-0" />
+                <div className="whitespace-nowrap text-[10px] text-gray-400 animate-pulse">
+                    <span className="text-orange-500 font-bold mr-2">NEWS:</span> {news}
+                </div>
+            </div>
+        </section>
+
+        {/* RIGHT: TRADING PANEL */}
+        <aside className="col-span-12 md:col-span-3 border-t md:border-t-0 md:border-l border-white/10 bg-[#080808] flex flex-col">
+            <div className="p-4 border-b border-white/5">
+                <h3 className="text-xs font-bold text-white flex items-center gap-2 mb-4">
+                    <Zap className="w-3 h-3 text-yellow-500" /> OPÉRATIONS
+                </h3>
+
+                <div className="space-y-4">
+                    {/* Amount Selector */}
+                    <div className="bg-white/5 p-3 rounded border border-white/5">
+                        <div className="flex justify-between text-[10px] text-gray-500 mb-2">
+                            <span>QUANTITÉ</span>
+                            <span className="text-blue-400">MAX: {Math.floor(portfolio.cash / currentStock.price)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                             <Button variant="secondary" size="icon" onClick={() => setTradeAmount(Math.max(1, tradeAmount - 1))} className="h-8 w-8 bg-white/10 text-white">-</Button>
+                             <div className="flex-1 text-center font-mono text-lg font-bold text-white">{tradeAmount}</div>
+                             <Button variant="secondary" size="icon" onClick={() => setTradeAmount(tradeAmount + 1)} className="h-8 w-8 bg-white/10 text-white">+</Button>
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                            {[1, 10, 100].map(v => (
+                                <button 
+                                    key={v}
+                                    onClick={() => setTradeAmount(v)}
+                                    className="flex-1 bg-black hover:bg-white/10 text-[9px] py-1 rounded border border-white/10 transition-colors"
+                                >
+                                    x{v}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Cost Calc */}
+                    <div className="flex justify-between text-xs px-1">
+                        <span className="text-gray-500">Total Estimé:</span>
+                        <span className="text-white font-mono">${(currentStock.price * tradeAmount).toFixed(2)}</span>
+                    </div>
+
+                    {/* Buttons */}
+                    <div className="grid grid-cols-2 gap-2">
+                        <Button 
+                            onClick={() => handleTransaction('BUY')}
+                            disabled={tradingDisabled || portfolio.cash < currentStock.price * tradeAmount}
+                            className="bg-green-600 hover:bg-green-500 text-white font-bold text-xs h-10"
+                        >
+                            ACHETER
+                        </Button>
+                        <Button 
+                            onClick={() => handleTransaction('SELL')}
+                            disabled={tradingDisabled || !portfolio.holdings[selectedSymbol] || portfolio.holdings[selectedSymbol] < tradeAmount}
+                            className="bg-red-600 hover:bg-red-500 text-white font-bold text-xs h-10"
+                        >
+                            VENDRE
+                        </Button>
+                    </div>
+                    {tradingDisabled && (
+                        <p className="text-[10px] text-red-400 mt-2 flex items-center gap-1">
+                            <ShieldAlert className="w-3 h-3" /> Connexion requise pour trader.
+                        </p>
+                    )}
+                </div>
+            </div>
+
+            {/* Transaction Logs */}
+            <div className="flex-1 flex flex-col min-h-[150px] bg-[#050505]">
+                <div className="p-2 border-b border-white/5 bg-white/[0.02] text-[10px] font-bold text-gray-500 uppercase flex gap-2 items-center">
+                    <History className="w-3 h-3" /> Activité Récente
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-2 font-mono text-[10px]">
+                    {logs.length === 0 && <span className="text-gray-700 italic block text-center mt-4">Aucune activité</span>}
+                    {logs.map((log, i) => (
+                        <div key={i} className="flex gap-2 border-l-2 border-white/10 pl-2 py-1 animate-in slide-in-from-left-2 fade-in">
+                            <span className="text-gray-600">{log.time.split(' ')[0]}</span>
+                            <span className={cn(
+                                log.type === 'success' ? "text-green-400" : log.type === 'error' ? "text-red-400" : "text-blue-400"
+                            )}>
+                                {log.msg}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            {/* Leaderboard */}
+            <div className="border-t border-white/10 bg-[#080808] p-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2 mb-3">
+                    <Trophy className="w-4 h-4 text-yellow-400" /> Classement
+                </h3>
+                {leaderboard.length === 0 ? (
+                    <p className="text-xs text-gray-600">Aucun trader actif</p>
+                ) : (
+                    <div className="space-y-2">
+                        {leaderboard.map((entry, index) => {
+                            const netWorth = entry.netWorth ?? 0;
+                            const userName = entry.userName || 'Anonyme';
+                            const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index+1}`;
+                            const isCurrentUser = session?.user?.id && entry.userId === session.user.id;
+                            return (
+                                <div
+                                    key={entry.userId || userName + index}
+                                    className={cn(
+                                        "flex items-center gap-3 p-2 rounded-lg border transition-colors",
+                                        isCurrentUser ? "bg-green-500/10 border-green-500/30" : "border-white/5",
+                                        index < 3 && !isCurrentUser ? "bg-white/5" : ""
+                                    )}
+                                >
+                                    <div className="w-8 text-center text-lg">{medal}</div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-medium truncate text-white">
+                                            {userName} {isCurrentUser && <span className="text-green-400 ml-1">(Vous)</span>}
+                                        </p>
+                                    </div>
+                                    <div className="text-xs font-mono text-green-400">${netWorth.toLocaleString()}</div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        </aside>
+
+      </main>
     </div>
   );
 }

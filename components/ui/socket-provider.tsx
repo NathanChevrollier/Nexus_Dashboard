@@ -36,14 +36,15 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     setSocket(socket);
 
     socket.on("connect", () => {
-      // console.log("Socket connected via provider");
+      console.log("✅ Socket connecté via provider", { id: socket.id, userId: session?.user?.id });
       if (session?.user?.id) {
+        console.log("📤 Envoi de identify avec userId:", session.user.id);
         socket.emit("identify", session.user.id);
       }
     });
 
     socket.on("connect_error", (err: any) => {
-      console.warn("Socket connection error:", err);
+      console.error("❌ Socket connection error:", err);
     });
 
     return () => {

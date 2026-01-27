@@ -57,6 +57,18 @@ export async function PATCH(request: Request) {
 
     const { userId, status, role } = validatedData.data;
 
+    // Check if target user is the owner (protected)
+    const targetUser = await db.query.users.findFirst({
+      where: (users, { eq }) => eq(users.id, userId),
+    });
+
+    if (targetUser?.isOwner) {
+      return NextResponse.json(
+        { error: "Le propriétaire de l'application ne peut pas être modifié" },
+        { status: 403 }
+      );
+    }
+
     // Prevent admins from banning or demoting themselves
     if (session.user.id === userId) {
       if (status === "BANNED") {

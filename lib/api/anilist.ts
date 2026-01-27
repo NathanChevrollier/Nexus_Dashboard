@@ -364,3 +364,42 @@ export async function searchMedia(
     throw error;
   }
 }
+
+/**
+ * Get full media details by AniList id (useful to fetch nextAiringEpisode for a specific media)
+ */
+export async function getMediaById(id: number): Promise<any | null> {
+  try {
+    const QUERY = `
+      query ($id: Int) {
+        Media(id: $id) {
+          id
+          title { romaji english native userPreferred }
+          coverImage { large medium color }
+          format
+          status
+          episodes
+          chapters
+          nextAiringEpisode { airingAt episode timeUntilAiring }
+          siteUrl
+          genres
+          averageScore
+        }
+      }
+    `;
+
+    const response = await fetch(ANILIST_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ query: QUERY, variables: { id } }),
+    });
+
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (data.errors || !data.data?.Media) return null;
+    return data.data.Media;
+  } catch (error) {
+    console.error('getMediaById failed:', error);
+    return null;
+  }
+}

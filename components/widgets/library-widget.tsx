@@ -87,7 +87,7 @@ export function LibraryWidget({ widget }: LibraryWidgetProps) {
         <div className="flex items-center gap-2 text-primary font-medium">
           <Library className="w-4 h-4" />
           <span className="text-xs uppercase tracking-wider">
-            {isCompact ? 'En cours' : 'Lectures'}
+            {isCompact ? 'En cours' : 'Bibliothèque'}
           </span>
         </div>
         <Button 

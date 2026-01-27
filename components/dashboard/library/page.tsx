@@ -23,6 +23,8 @@ import { getLibraryItems, updateLibraryItem, deleteLibraryItem } from '@/lib/act
 import { cn } from '@/lib/utils';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, addWeeks, subWeeks, formatDistanceToNow, differenceInCalendarWeeks } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { getMediaById } from '@/lib/api/anilist';
+import { syncAllAnimeItems } from '@/lib/api/anime-sync';
 
 export default function LibraryPage() {
   const [items, setItems] = useState<any[]>([]);
@@ -37,6 +39,7 @@ export default function LibraryPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [currentWeek, setCurrentWeek] = useState(new Date());
+  const [syncing, setSyncing] = useState(false);
 
   const confirm = useConfirm();
   const router = useRouter();
@@ -53,6 +56,25 @@ export default function LibraryPage() {
       setItems(processedData);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSyncAnime = async () => {
+    setSyncing(true);
+    try {
+      const results = await syncAllAnimeItems(items);
+      const updated = results.filter(r => r.updated).length;
+      if (updated > 0) {
+        alert(`${updated} anime(s) synchronisé(s) avec succès !`);
+        await loadItems();
+      } else {
+        alert('Tous les animés sont à jour !');
+      }
+    } catch (error) {
+      alert('Erreur lors de la synchronisation');
+      console.error(error);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -236,6 +258,23 @@ export default function LibraryPage() {
               ))}
             </div>
           )}
+          
+          {/* Bouton sync anime (visible seulement en vue calendrier) */}
+          {view === 'calendar' && (
+            <div className="flex items-center gap-2">
+              <Button 
+                onClick={handleSyncAnime} 
+                disabled={syncing}
+                variant="outline"
+                size="sm"
+                className="gap-2"
+              >
+                {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clock className="h-4 w-4" />}
+                Synchroniser les animés
+              </Button>
+            </div>
+          )}
+          
           {/* Toggle affichage Animés / Scans */}
           <div className="flex items-center gap-4 mt-2">
             <div className="flex items-center gap-2">
@@ -273,7 +312,7 @@ export default function LibraryPage() {
               </div>
             ) : (
               <div className="w-full h-full pb-6">
-                <WeeklyCalendarView items={filteredItems} currentWeek={currentWeek} onWeekChange={setCurrentWeek} onLinkOpened={handleItemOpened} />
+                <WeeklyCalendarView items={filteredItems} currentWeek={currentWeek} onWeekChange={setCurrentWeek} onLinkOpened={handleItemOpened} onItemsChange={setItems} />
               </div>
             )}
           </ScrollArea>
@@ -540,34 +579,146 @@ function InlineProgressEditor({ item, onClose, onAutoSave }: { item: any, onClos
 }
 
 // --- CALENDRIER HEBDOMADAIRE REFAIT (Taille et Interactivité) ---
-function WeeklyCalendarView({ items, currentWeek, onWeekChange, onLinkOpened }: any) {
+function WeeklyCalendarView({ items, currentWeek, onWeekChange, onLinkOpened, onItemsChange }: any) {
+  const [liveScheduleMap, setLiveScheduleMap] = useState<Record<number, any>>({});
+  const [loadingSchedule, setLoadingSchedule] = useState(false);
+  const [incrementing, setIncrementing] = useState<string | null>(null);
+
+  const handleIncrementProgress = async (e: React.MouseEvent, item: any) => {
+    e.stopPropagation(); // Empêcher l'ouverture du lien
+    setIncrementing(item.id);
+    try {
+      const newProgress = (item.currentProgress || 0) + 1;
+      // Mise à jour optimiste
+      if (onItemsChange) {
+        onItemsChange((prev: any[]) => prev.map((i: any) => i.id === item.id ? { ...i, currentProgress: newProgress } : i));
+      }
+      await updateLibraryItem(item.id, { currentProgress: newProgress });
+      setIncrementing(null);
+    } catch (e) {
+      console.error('Failed to increment progress', e);
+      setIncrementing(null);
+    }
+  };
+
+  // Fetch live next-episode info for anime items that have anilistId
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoadingSchedule(true);
+      try {
+        const animeIds = Array.from(new Set(items.filter((it: any) => it.anilistId && it.type === 'anime').map((it: any) => Number(it.anilistId)))) as number[];
+        if (animeIds.length === 0) {
+          if (mounted) {
+            setLiveScheduleMap({});
+            setLoadingSchedule(false);
+          }
+          return;
+        }
+
+        const map: Record<number, any> = {};
+        // fetch in sequence to avoid bursting proxy (could be batched later)
+        for (const id of animeIds) {
+          try {
+            const media = await getMediaById(id);
+            if (media) map[id] = media;
+          } catch (e) {
+            // ignore per-media errors
+          }
+        }
+
+        if (mounted) {
+          setLiveScheduleMap(map);
+          setLoadingSchedule(false);
+        }
+      } catch (e) {
+        if (mounted) setLoadingSchedule(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [items, currentWeek]); // Re-fetch quand on change de semaine aussi
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
   const days = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
   const getItemsForDay = (day: Date) => {
     const dayName = format(day, 'EEEE').toLowerCase();
+    
     return items.filter((item: any) => {
-      if (!item.scheduleDay) return false;
-      if (item.scheduleDay.toLowerCase() !== dayName) return false;
+      // Ne pas afficher les items en pause/abandonnés SAUF si l'utilisateur les a en "reading" localement
+      if ((item.status === 'paused' || item.status === 'dropped') && item.status !== 'reading') {
+        return false;
+      }
 
-      // Filter logic (biweekly/monthly) unchanged...
-      const freq = (item.scheduleType || 'weekly');
-      if (freq === 'weekly') return true;
-      if (freq === 'biweekly') {
-        const anchor = item.createdAt ? new Date(item.createdAt) : item.updatedAt ? new Date(item.updatedAt) : new Date();
-        try {
-          const anchorWeekStart = startOfWeek(anchor, { weekStartsOn: 1 });
-          const targetWeekStart = startOfWeek(day, { weekStartsOn: 1 });
-          const diffWeeks = Math.abs(differenceInCalendarWeeks(targetWeekStart, anchorWeekStart));
-          return diffWeeks % 2 === 0;
-        } catch (e) { return true; }
+      // Fonction helper pour vérifier l'horaire manuel
+      const matchesManualSchedule = () => {
+        if (!item.scheduleDay) return false;
+        if (item.scheduleDay.toLowerCase() !== dayName) return false;
+        
+        const freq = (item.scheduleType || 'weekly');
+        if (freq === 'weekly') return true;
+        
+        if (freq === 'biweekly') {
+          const anchor = item.createdAt ? new Date(item.createdAt) : item.updatedAt ? new Date(item.updatedAt) : new Date();
+          try {
+            const anchorWeekStart = startOfWeek(anchor, { weekStartsOn: 1 });
+            const targetWeekStart = startOfWeek(day, { weekStartsOn: 1 });
+            const diffWeeks = Math.abs(differenceInCalendarWeeks(targetWeekStart, anchorWeekStart));
+            return diffWeeks % 2 === 0;
+          } catch (e) { return true; }
+        }
+        
+        if (freq === 'monthly') {
+          const anchor = item.createdAt ? new Date(item.createdAt) : new Date();
+          return anchor.getDate() === day.getDate();
+        }
+        
+        return true;
+      };
+
+      // Pour les animés avec AniList ID
+      if (item.type === 'anime' && item.anilistId) {
+        const media = liveScheduleMap?.[Number(item.anilistId)];
+        
+        // Si données AniList chargées
+        if (media) {
+          // 1. Si anime terminé sur AniList ET l'utilisateur l'a aussi marqué terminé → ne pas afficher
+          if (media.status === 'FINISHED' && item.status === 'completed') {
+            return false;
+          }
+          
+          // 2. Si nextAiringEpisode existe
+          if (media.nextAiringEpisode) {
+            const airingDate = new Date(media.nextAiringEpisode.airingAt * 1000);
+            const airingWeekStart = startOfWeek(airingDate, { weekStartsOn: 1 });
+            const targetWeekStart = startOfWeek(day, { weekStartsOn: 1 });
+            
+            // Si on est dans la semaine de diffusion du prochain épisode, utiliser la date exacte AniList
+            if (airingWeekStart.getTime() === targetWeekStart.getTime()) {
+              return isSameDay(airingDate, day);
+            }
+            
+            // Si on consulte une semaine future (après le prochain épisode), utiliser l'horaire manuel
+            if (targetWeekStart > airingWeekStart) {
+              return matchesManualSchedule();
+            }
+            
+            // Si on consulte une semaine passée (avant le prochain épisode), utiliser l'horaire manuel
+            if (targetWeekStart < airingWeekStart) {
+              return matchesManualSchedule();
+            }
+          }
+          
+          // 3. Pas de nextAiringEpisode (horaire irrégulier ou anime terminé) → utiliser l'horaire manuel
+          return matchesManualSchedule();
+        }
+        
+        // Données pas encore chargées → utiliser l'horaire manuel temporairement
+        return matchesManualSchedule();
       }
-      if (freq === 'monthly') {
-         const anchor = item.createdAt ? new Date(item.createdAt) : new Date();
-         return anchor.getDate() === day.getDate(); // Simple monthly matching
-      }
-      return true;
+
+      // Pour les scans/manga ou animés sans AniList ID → horaire manuel uniquement
+      return matchesManualSchedule();
     });
   };
 
@@ -577,6 +728,9 @@ function WeeklyCalendarView({ items, currentWeek, onWeekChange, onLinkOpened }: 
         <h2 className="font-bold flex gap-2 items-center text-lg">
           <CalendarIcon className="w-5 h-5 text-primary"/> 
           <span className="capitalize">{format(weekStart, 'MMMM yyyy', {locale:fr})}</span>
+          {loadingSchedule && (
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground ml-2" />
+          )}
         </h2>
         <div className="flex items-center bg-background rounded-lg border shadow-sm p-0.5">
           <Button variant="ghost" size="icon" className="h-8 w-8 rounded-md" onClick={() => onWeekChange(subWeeks(currentWeek, 1))}><ChevronLeft className="w-4 h-4"/></Button>
@@ -601,22 +755,55 @@ function WeeklyCalendarView({ items, currentWeek, onWeekChange, onLinkOpened }: 
               
               {/* Contenu Jour */}
               <div className="p-2 space-y-2 flex-1 flex flex-col">
-                {dayItems.length === 0 && isToday && (
+                {loadingSchedule && dayItems.length === 0 && (
                   <div className="flex-1 flex flex-col items-center justify-center opacity-30 text-xs italic text-center px-2 min-h-[100px]">
-                    <Clock className="w-8 h-8 mb-2 opacity-50"/>
-                    Rien aujourd'hui
+                    <Loader2 className="w-6 h-6 mb-2 animate-spin opacity-50"/>
+                    Chargement...
                   </div>
                 )}
                 
-                {dayItems.map((item: any) => (
+                {!loadingSchedule && dayItems.length === 0 && (
+                  <div className="flex-1 flex flex-col items-center justify-center opacity-30 text-xs italic text-center px-2 min-h-[100px]">
+                    <Clock className="w-8 h-8 mb-2 opacity-50"/>
+                    {isToday ? "Rien aujourd'hui" : "Pas de sortie"}
+                  </div>
+                )}
+                
+                {dayItems.map((item: any) => {
+                  // Déterminer si c'est un anime avec vraie date AniList ou horaire manuel
+                  const media = item.type === 'anime' && item.anilistId ? liveScheduleMap?.[Number(item.anilistId)] : null;
+                  const nextEp = media?.nextAiringEpisode;
+                  const airingDate = nextEp ? new Date(nextEp.airingAt * 1000) : null;
+                  
+                  // Déterminer si on affiche les données exactes AniList ou une estimation
+                  const airingWeekStart = airingDate ? startOfWeek(airingDate, { weekStartsOn: 1 }) : null;
+                  const currentDayWeekStart = startOfWeek(day, { weekStartsOn: 1 });
+                  const isExactAiringWeek = airingWeekStart !== null && airingWeekStart.getTime() === currentDayWeekStart.getTime() && airingDate !== null && isSameDay(airingDate, day);
+                  const isManualSchedule = item.scheduleDay && !isExactAiringWeek;
+                  
+                  // Calculer le numéro d'épisode estimé pour les semaines futures
+                  let estimatedEpisode = null;
+                  if (item.type === 'anime' && nextEp && airingDate && !isExactAiringWeek) {
+                    // Calculer combien de semaines se sont écoulées depuis l'épisode connu
+                    const weeksDiff = differenceInCalendarWeeks(day, airingDate);
+                    if (weeksDiff > 0 && item.scheduleType === 'weekly') {
+                      // Pour un anime hebdomadaire, ajouter une semaine = +1 épisode
+                      estimatedEpisode = nextEp.episode + weeksDiff;
+                    } else if (weeksDiff > 0 && item.scheduleType === 'biweekly') {
+                      // Pour un anime bimensuel, +1 épisode tous les 2 semaines
+                      estimatedEpisode = nextEp.episode + Math.floor(weeksDiff / 2);
+                    }
+                  }
+                  
+                  return (
                   <div 
                     key={item.id} 
                     className={cn(
-                        "flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5",
+                        "flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 group/card",
                         item.type === 'anime' ? "bg-indigo-500/10 border-indigo-500/30 hover:bg-indigo-500/20" : "bg-card hover:border-primary/50"
                     )}
                     onClick={() => { if(item.linkUrl) window.open(item.linkUrl, '_blank'); onLinkOpened(item); }}
-                    title="Cliquez pour ouvrir"
+                    title={isManualSchedule ? "Horaire manuel (estimation)" : "Cliquez pour ouvrir"}
                   >
                     {/* Mini Cover */}
                     <div className="h-12 w-9 bg-muted rounded overflow-hidden shrink-0 border border-border/50 relative shadow-sm">
@@ -625,6 +812,10 @@ function WeeklyCalendarView({ items, currentWeek, onWeekChange, onLinkOpened }: 
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-slate-800"><BookOpen className="w-3 h-3 text-white/30" /></div>
                       )}
+                      {/* Badge indicateur horaire manuel */}
+                      {isManualSchedule && (
+                        <div className="absolute top-0 right-0 w-2 h-2 bg-yellow-500 rounded-full border border-background" title="Horaire manuel" />
+                      )}
                     </div>
                     
                     <div className="min-w-0 flex-1">
@@ -632,14 +823,56 @@ function WeeklyCalendarView({ items, currentWeek, onWeekChange, onLinkOpened }: 
                         {item.type === 'anime' && <Tv className="w-3 h-3 text-indigo-500"/>}
                         {item.title}
                       </div>
-                      <div className="text-[10px] text-muted-foreground flex flex-wrap gap-1 mt-1">
+                      <div className="text-[10px] text-muted-foreground flex flex-wrap gap-1 mt-1 items-center">
                         <span className="bg-background/50 px-1 rounded border">
                             {item.type === 'anime' ? 'Ep.' : 'Ch.'} {item.currentProgress}
                         </span>
+                        {/* Show exact episode info from AniList */}
+                        {isExactAiringWeek && nextEp && (
+                          <>
+                            <span className="text-[10px] text-primary font-semibold">
+                              → Ep. {nextEp.episode}
+                            </span>
+                            {airingDate && (
+                              <span className="text-[10px] text-muted-foreground opacity-90">
+                                • {format(airingDate, 'HH:mm', { locale: fr })}
+                              </span>
+                            )}
+                          </>
+                        )}
+                        {/* Show estimated episode number for future weeks */}
+                        {!isExactAiringWeek && estimatedEpisode && (
+                          <span className="text-[10px] text-yellow-600 dark:text-yellow-500 font-semibold">
+                            → Ep. {estimatedEpisode} ~
+                          </span>
+                        )}
+                        {/* Indicateur horaire manuel */}
+                        {isManualSchedule && !estimatedEpisode && (
+                          <span className="text-[10px] text-yellow-600 dark:text-yellow-500 italic opacity-80">
+                            ~ horaire estimé
+                          </span>
+                        )}
                       </div>
                     </div>
+                    
+                    {/* Bouton +1 pour les animés */}
+                    {item.type === 'anime' && (
+                      <button
+                        onClick={(e) => handleIncrementProgress(e, item)}
+                        disabled={incrementing === item.id}
+                        className="shrink-0 h-6 w-6 rounded-md bg-primary/20 hover:bg-primary/30 border border-primary/40 flex items-center justify-center transition-all opacity-0 group-hover/card:opacity-100 disabled:opacity-50"
+                        title="Marquer l'épisode comme vu (+1)"
+                      >
+                        {incrementing === item.id ? (
+                          <Loader2 className="w-3 h-3 text-primary animate-spin" />
+                        ) : (
+                          <Plus className="w-3 h-3 text-primary" />
+                        )}
+                      </button>
+                    )}
                   </div>
-                ))}
+                );
+                })}
               </div>
             </div>
           );

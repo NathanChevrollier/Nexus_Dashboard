@@ -2,575 +2,518 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, RotateCcw, Home, Trophy } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Play, Pause, Home, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Trophy } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { cn } from "@/lib/utils";
 
-type Position = { x: number; y: number };
+// --- TYPES ---
+type Point = { x: number; y: number };
 type Direction = "UP" | "DOWN" | "LEFT" | "RIGHT";
+type Particle = { x: number; y: number; vx: number; vy: number; life: number; color: string };
 
+// --- CONFIGURATION ---
 const GRID_SIZE = 20;
-const INITIAL_SPEED = 150;
+const INITIAL_SPEED = 140; // Vitesse de jeu (logique)
+const SPEED_INCREMENT = 2; // Accélération par fruit
+const MIN_SPEED = 60;
 
-const useResponsiveCellSize = () => {
-  const [cellSize, setCellSize] = useState(20);
-  
-  useEffect(() => {
-    const updateSize = () => {
-      const width = window.innerWidth;
-      if (width >= 1536) setCellSize(32);
-      else if (width >= 1280) setCellSize(28);
-      else if (width >= 1024) setCellSize(24);
-      else if (width >= 768) setCellSize(20);
-      else setCellSize(16);
-    };
-    
-    updateSize();
-    window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
-  }, []);
-  
-  return cellSize;
-};
-
-type LeaderboardEntry = {
-  userId: string;
-  userName: string;
-  bestScore: number;
-  createdAt: string;
-};
-
-export default function SnakeGame() {
+export default function SnakeCanvas() {
   const router = useRouter();
   const { data: session } = useSession();
-  const CELL_SIZE = useResponsiveCellSize();
-  const [snake, setSnake] = useState<Position[]>([{ x: 10, y: 10 }]);
-  const [food, setFood] = useState<Position>({ x: 15, y: 15 });
-  const [direction, setDirection] = useState<Direction>("RIGHT");
-  const [gameOver, setGameOver] = useState(false);
-  const [isPaused, setIsPaused] = useState(true);
-  const [score, setScore] = useState(0);
-  const [bestScore, setBestScore] = useState<number | null>(null);
-  const [scoreSaved, setScoreSaved] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const directionRef = useRef<Direction>("RIGHT");
 
-  // Charger le meilleur score au démarrage
+  // --- STATE ---
+  const [gameState, setGameState] = useState<"IDLE" | "PLAYING" | "PAUSED" | "GAMEOVER">("IDLE");
+  const [score, setScore] = useState(0);
+  const [highScore, setHighScore] = useState(0);
+    const [leaderboard, setLeaderboard] = useState<{ name: string; score: number }[]>([]);
+
+  // --- REFS (MOTEUR) ---
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // État du jeu (Mutable pour éviter les re-renders React)
+  const gameRef = useRef({
+    snake: [{ x: 10, y: 10 }, { x: 10, y: 11 }, { x: 10, y: 12 }], // Position actuelle
+    prevSnake: [{ x: 10, y: 10 }, { x: 10, y: 11 }, { x: 10, y: 12 }], // Position précédente (pour interpolation)
+    food: { x: 15, y: 5 },
+    direction: "UP" as Direction,
+    nextDirection: "UP" as Direction, // Buffer d'input
+    lastTick: 0,
+    speed: INITIAL_SPEED,
+    particles: [] as Particle[],
+    score: 0
+  });
+
+    const requestRef = useRef<number | null>(null);
+
+  // --- INITIALISATION ---
   useEffect(() => {
     const fetchBestScore = async () => {
       try {
         const res = await fetch("/api/games/scores?gameId=snake&userOnly=true");
         if (res.ok) {
-          const data = await res.json();
-          if (data?.score) {
-            setBestScore(data.score);
-          }
+           const data = await res.json();
+           if (data?.score) setHighScore(data.score);
         }
-      } catch (error) {
-        console.error("Error fetching best score:", error);
-      }
+      } catch (e) { console.error(e); }
     };
-    fetchBestScore();
+        const fetchLeaderboard = async () => {
+            try {
+                const res = await fetch("/api/games/scores?gameId=snake&limit=5");
+                if (res.ok) {
+                    const data = await res.json();
+                    if (Array.isArray(data)) setLeaderboard(data);
+                }
+            } catch (e) { console.error(e); }
+        };
+        fetchBestScore();
+        fetchLeaderboard();
   }, []);
 
-  // Charger le leaderboard
-  useEffect(() => {
-    const fetchLeaderboard = async () => {
-      try {
-        const res = await fetch("/api/games/scores?gameId=snake&limit=10");
-        if (res.ok) {
-          const data = await res.json();
-          setLeaderboard(data);
-        }
-      } catch (error) {
-        console.error("Error fetching leaderboard:", error);
-      }
-    };
-    fetchLeaderboard();
-  }, []);
-
-  // Sauvegarder le score quand le jeu se termine
-  useEffect(() => {
-    const saveScore = async () => {
-      if (gameOver && score > 0 && !scoreSaved && session?.user) {
-        setScoreSaved(true);
-        try {
-          const res = await fetch("/api/games/scores", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              gameId: "snake",
-              score,
-              metadata: { snakeLength: snake.length },
-            }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.isNewBest) {
-              setBestScore(score);
-            }
-            // Recharger le leaderboard
-            const leaderRes = await fetch("/api/games/scores?gameId=snake&limit=10");
-            if (leaderRes.ok) {
-              const leaderData = await leaderRes.json();
-              setLeaderboard(leaderData);
-            }
-          }
-        } catch (error) {
-          console.error("Error saving score:", error);
-        }
-      }
-    };
-    saveScore();
-  }, [gameOver, score, scoreSaved, session, snake.length]);
-
-  const generateFood = useCallback(() => {
-    const newFood = {
-      x: Math.floor(Math.random() * GRID_SIZE),
-      y: Math.floor(Math.random() * GRID_SIZE),
-    };
-    setFood(newFood);
-  }, []);
-
-  const resetGame = () => {
-    setSnake([{ x: 10, y: 10 }]);
-    setDirection("RIGHT");
-    directionRef.current = "RIGHT";
-    generateFood();
-    setGameOver(false);
-    setIsPaused(true);
-    setScore(0);
-    setScoreSaved(false);
-  };
-
-  const checkCollision = (head: Position, snakeBody: Position[]) => {
-    // Wall collision
-    if (head.x < 0 || head.x >= GRID_SIZE || head.y < 0 || head.y >= GRID_SIZE) {
-      return true;
+  // --- LOGIQUE DU JEU ---
+  const spawnParticles = (x: number, y: number, color: string) => {
+    for (let i = 0; i < 15; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 0.5 + 0.2;
+      gameRef.current.particles.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 1.0,
+        color
+      });
     }
-    // Self collision
-    return snakeBody.some((segment) => segment.x === head.x && segment.y === head.y);
   };
 
-  const moveSnake = useCallback(() => {
-    if (isPaused || gameOver) return;
+  const updateLogic = () => {
+    const state = gameRef.current;
+    
+    // 1. Mise à jour de la direction
+    state.direction = state.nextDirection;
 
-    setSnake((prevSnake) => {
-      const head = { ...prevSnake[0] };
+    // 2. Sauvegarde de l'état précédent pour l'interpolation
+    // On doit copier profondément les objets pour ne pas garder la référence
+    state.prevSnake = state.snake.map(p => ({ ...p }));
 
-      switch (directionRef.current) {
-        case "UP":
-          head.y -= 1;
-          break;
-        case "DOWN":
-          head.y += 1;
-          break;
-        case "LEFT":
-          head.x -= 1;
-          break;
-        case "RIGHT":
-          head.x += 1;
-          break;
-      }
+    // 3. Calcul de la nouvelle tête
+    const head = { ...state.snake[0] };
+    switch (state.direction) {
+      case "UP": head.y -= 1; break;
+      case "DOWN": head.y += 1; break;
+      case "LEFT": head.x -= 1; break;
+      case "RIGHT": head.x += 1; break;
+    }
 
-      if (checkCollision(head, prevSnake)) {
-        setGameOver(true);
-        setIsPaused(true);
-        return prevSnake;
-      }
+    // 4. Collisions (Mur ou Soi-même)
+    // Note: On vérifie collision murale stricte.
+    // Pour soi-même, on ignore le dernier segment car il va bouger.
+    if (
+        head.x < 0 || head.x >= GRID_SIZE || 
+        head.y < 0 || head.y >= GRID_SIZE ||
+        state.snake.some((s, i) => i !== state.snake.length - 1 && s.x === head.x && s.y === head.y)
+    ) {
+        handleGameOver();
+        return;
+    }
 
-      const newSnake = [head, ...prevSnake];
+    // 5. Mouvement
+    // On ajoute la nouvelle tête au début
+    state.snake.unshift(head);
 
-      // Check if food is eaten
-      if (head.x === food.x && head.y === food.y) {
-        setScore((s) => s + 10);
-        generateFood();
-      } else {
-        newSnake.pop();
-      }
+    // 6. Manger
+    if (head.x === state.food.x && head.y === state.food.y) {
+        // Score
+        state.score += 10;
+        setScore(state.score);
+        
+        // Particules
+        spawnParticles(head.x, head.y, "#ef4444"); // Rouge fruit
 
-      return newSnake;
+        // Accélération
+        state.speed = Math.max(MIN_SPEED, state.speed - SPEED_INCREMENT);
+
+        // Nouvelle nourriture
+        let newFood: Point;
+        let isOnSnake: boolean;
+        do {
+            newFood = {
+                x: Math.floor(Math.random() * GRID_SIZE),
+                y: Math.floor(Math.random() * GRID_SIZE)
+            };
+            // eslint-disable-next-line no-loop-func
+            isOnSnake = state.snake.some(s => s.x === newFood.x && s.y === newFood.y);
+        } while (isOnSnake);
+        state.food = newFood;
+        
+        // On ne retire PAS la queue, donc le serpent grandit
+    } else {
+        // On retire la queue pour garder la même taille
+        state.snake.pop();
+    }
+  };
+
+  const handleGameOver = async () => {
+    setGameState("GAMEOVER");
+    const finalScore = gameRef.current.score;
+    
+    if (finalScore > highScore) setHighScore(finalScore);
+
+    if (finalScore > 0 && session?.user) {
+        try {
+            await fetch("/api/games/scores", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    gameId: "snake", 
+                    score: finalScore, 
+                    metadata: { length: gameRef.current.snake.length } 
+                }),
+            });
+        } catch(e) { console.error(e); }
+    }
+  };
+
+  // --- BOUCLE DE RENDU (CANVAS) ---
+  const render = (time: number) => {
+    if (gameState !== "PLAYING") return;
+
+    const state = gameRef.current;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Gestion du temps logique (Update fixe)
+    if (time - state.lastTick > state.speed) {
+        updateLogic();
+        state.lastTick = time;
+    }
+    
+    // Calcul de l'interpolation (0.0 à 1.0)
+    // Cela détermine où nous sommes ENTRE deux cases de la grille
+    const progress = Math.min((time - state.lastTick) / state.speed, 1.0);
+
+    // --- DESSIN ---
+    
+    // 1. Nettoyage
+    const width = canvas.width;
+    const height = canvas.height;
+    const cellSize = width / GRID_SIZE;
+    ctx.clearRect(0, 0, width, height);
+
+    // 2. Grille Subtile (Background)
+    ctx.strokeStyle = "rgba(34, 197, 94, 0.1)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i <= GRID_SIZE; i++) {
+        ctx.moveTo(i * cellSize, 0); ctx.lineTo(i * cellSize, height);
+        ctx.moveTo(0, i * cellSize); ctx.lineTo(width, i * cellSize);
+    }
+    ctx.stroke();
+
+    // 3. Food (Avec effet Pulse)
+    const foodX = state.food.x * cellSize + cellSize / 2;
+    const foodY = state.food.y * cellSize + cellSize / 2;
+    const pulse = Math.sin(time / 200) * 2;
+    
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "#ef4444";
+    ctx.fillStyle = "#ef4444";
+    ctx.beginPath();
+    ctx.arc(foodX, foodY, (cellSize / 3) + pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0; // Reset
+
+    // 4. Serpent (Corps fluide)
+    if (state.snake.length > 0) {
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.lineWidth = cellSize * 0.8; // Serpent épais
+        
+        // Dégradé néon
+        const gradient = ctx.createLinearGradient(0, 0, width, height);
+        gradient.addColorStop(0, "#4ade80");
+        gradient.addColorStop(1, "#16a34a");
+        ctx.strokeStyle = gradient;
+        
+        // Glow effect
+        ctx.shadowColor = "#22c55e";
+        ctx.shadowBlur = 20;
+
+        ctx.beginPath();
+        
+        // Dessin des segments interpolés
+        state.snake.forEach((segment, i) => {
+            // Trouver la position précédente correspondante
+            // Si le serpent vient de grandir, le dernier segment n'a pas de "prev" correspondant unique
+            // Mais logic update gère ça.
+            
+            // Pour le segment i, sa position précédente est prevSnake[i]
+            // Si i >= prevSnake.length (nouveau segment), on prend prevSnake[last]
+            const prev = state.prevSnake[i] || state.prevSnake[state.prevSnake.length - 1];
+
+            const currentX = prev.x + (segment.x - prev.x) * progress;
+            const currentY = prev.y + (segment.y - prev.y) * progress;
+
+            const drawX = currentX * cellSize + cellSize / 2;
+            const drawY = currentY * cellSize + cellSize / 2;
+
+            if (i === 0) {
+                ctx.moveTo(drawX, drawY);
+                
+                // Dessin des yeux (Détail extra)
+                // On calcule la position des yeux basés sur la direction interpolée
+                // C'est un peu complexe en canvas pur pour un code court, on laisse le style simple "Tube"
+            } else {
+                ctx.lineTo(drawX, drawY);
+            }
+        });
+        ctx.stroke();
+        
+        // Yeux sur la tête (calculée à part pour être au dessus)
+        const headPrev = state.prevSnake[0];
+        const headCurr = state.snake[0];
+        const headX = (headPrev.x + (headCurr.x - headPrev.x) * progress) * cellSize + cellSize/2;
+        const headY = (headPrev.y + (headCurr.y - headPrev.y) * progress) * cellSize + cellSize/2;
+        
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "black";
+        ctx.beginPath();
+        ctx.arc(headX, headY, cellSize * 0.2, 0, Math.PI * 2); // Oeil simple
+        ctx.fill();
+    }
+
+    // 5. Particules
+    state.particles = state.particles.filter(p => p.life > 0);
+    state.particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life = Math.max(0, p.life - 0.02);
+        if (p.life <= 0) return; // Skip if fully faded to avoid negative radius
+        
+        const px = p.x * cellSize + cellSize/2; // Offset par rapport à la grille
+        const py = p.y * cellSize + cellSize/2;
+        const life = p.life;
+        const radius = Math.max(0.0001, cellSize * 0.15 * life);
+
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = life;
+        ctx.beginPath();
+        ctx.arc(px, py, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
     });
-  }, [isPaused, gameOver, food, generateFood]);
+
+    requestRef.current = requestAnimationFrame(render);
+  };
+
+  // --- CONTROLS ---
+  const handleInput = useCallback((newDir: Direction) => {
+    if (gameState === "IDLE") startGame();
+    
+    const currentDir = gameRef.current.direction;
+    const opposites = { UP: 'DOWN', DOWN: 'UP', LEFT: 'RIGHT', RIGHT: 'LEFT' };
+    
+    // Empêcher le demi-tour immédiat
+    if (opposites[newDir] !== currentDir) {
+        // Empêcher le spam de touches (max 1 changement par tick est géré par la logique,
+        // mais on update nextDirection. Si on appuie 2 fois vite, seule la dernière compte ici.
+        // Pour être parfait il faudrait une queue, mais c'est suffisant pour la fluidité Canvas)
+        gameRef.current.nextDirection = newDir;
+    }
+  }, [gameState]);
 
   useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (gameOver) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
+        
+        if (e.key === " " && (gameState === "PLAYING" || gameState === "PAUSED")) {
+            setGameState(prev => prev === "PLAYING" ? "PAUSED" : "PLAYING");
+            return;
+        }
 
-      switch (e.key) {
-        case "ArrowUp":
-          if (directionRef.current !== "DOWN") {
-            setDirection("UP");
-            directionRef.current = "UP";
-          }
-          break;
-        case "ArrowDown":
-          if (directionRef.current !== "UP") {
-            setDirection("DOWN");
-            directionRef.current = "DOWN";
-          }
-          break;
-        case "ArrowLeft":
-          if (directionRef.current !== "RIGHT") {
-            setDirection("LEFT");
-            directionRef.current = "LEFT";
-          }
-          break;
-        case "ArrowRight":
-          if (directionRef.current !== "LEFT") {
-            setDirection("RIGHT");
-            directionRef.current = "RIGHT";
-          }
-          break;
-        case " ":
-          e.preventDefault();
-          setIsPaused((p) => !p);
-          break;
-      }
+        switch(e.key) {
+            case "ArrowUp": handleInput("UP"); break;
+            case "ArrowDown": handleInput("DOWN"); break;
+            case "ArrowLeft": handleInput("LEFT"); break;
+            case "ArrowRight": handleInput("RIGHT"); break;
+        }
     };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleInput, gameState]);
 
-    window.addEventListener("keydown", handleKeyPress);
-    return () => window.removeEventListener("keydown", handleKeyPress);
-  }, [gameOver]);
-
+  // --- LIFECYCLE ---
   useEffect(() => {
-    const interval = setInterval(moveSnake, INITIAL_SPEED);
-    return () => clearInterval(interval);
-  }, [moveSnake]);
+    if (gameState === "PLAYING") {
+        gameRef.current.lastTick = performance.now();
+        requestRef.current = requestAnimationFrame(render);
+    } else {
+        if (requestRef.current) cancelAnimationFrame(requestRef.current);
+    }
+    return () => {
+        if (requestRef.current) cancelAnimationFrame(requestRef.current);
+    };
+  }, [gameState]);
+
+  // Resize Canvas High DPI
+  useEffect(() => {
+      const canvas = canvasRef.current;
+      if(canvas) {
+          const size = Math.min(window.innerWidth - 40, 600); // Max 600px
+          // Pour High DPI screens
+          const dpr = window.devicePixelRatio || 1;
+          canvas.width = size * dpr;
+          canvas.height = size * dpr;
+          canvas.style.width = `${size}px`;
+          canvas.style.height = `${size}px`;
+          const ctx = canvas.getContext('2d');
+          if(ctx) ctx.scale(dpr, dpr);
+      }
+  }, []);
+
+  const startGame = () => {
+    gameRef.current = {
+        snake: [{ x: 10, y: 10 }, { x: 10, y: 11 }, { x: 10, y: 12 }],
+        prevSnake: [{ x: 10, y: 10 }, { x: 10, y: 11 }, { x: 10, y: 12 }],
+        food: { x: 15, y: 5 },
+        direction: "UP",
+        nextDirection: "UP",
+        lastTick: performance.now(),
+        speed: INITIAL_SPEED,
+        particles: [],
+        score: 0
+    };
+    setScore(0);
+    setGameState("PLAYING");
+  };
 
   return (
-    <div className="flex flex-col lg:flex-row items-start justify-center min-h-screen bg-gradient-to-br from-green-950 to-emerald-900 p-4 gap-6">
-      <div className="bg-card rounded-xl shadow-2xl p-6 max-w-2xl w-full">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            🐍 Snake Game
-          </h1>
-          <div className="flex items-center gap-4">
-            {bestScore !== null && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Trophy className="h-4 w-4" />
-                <span>Meilleur: {bestScore}</span>
-              </div>
-            )}
-            <div className="text-xl font-semibold">Score: {score}</div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-4 font-mono select-none overflow-hidden">
+      
+      {/* Background Effect */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-green-900/20 via-[#020617] to-[#020617] pointer-events-none" />
 
-        <div
-          className="relative mx-auto shadow-2xl overflow-hidden"
-          style={{
-            width: GRID_SIZE * CELL_SIZE + 16,
-            height: GRID_SIZE * CELL_SIZE + 16,
-            background: 'linear-gradient(135deg, #1a4d1a 0%, #0d260d 100%)',
-            border: '8px solid transparent',
-            borderImage: 'repeating-linear-gradient(45deg, #2d5016 0px, #2d5016 10px, #3d6b1f 10px, #3d6b1f 20px) 8',
-            borderRadius: '12px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6), inset 0 0 0 2px rgba(139, 195, 74, 0.3)',
-          }}
-        >
-          {/* Texture d'herbe en fond */}
-          <div 
-            className="absolute inset-0 opacity-20 pointer-events-none"
-            style={{
-              backgroundImage: `
-                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(76, 175, 80, 0.3) 2px, rgba(76, 175, 80, 0.3) 4px),
-                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(76, 175, 80, 0.3) 2px, rgba(76, 175, 80, 0.3) 4px)
-              `,
-            }}
-          />
-          
-          {/* Buissons décoratifs dans les coins */}
-          <div className="absolute top-0 left-0 text-3xl" style={{ transform: 'translate(-4px, -4px)' }}>🌿</div>
-          <div className="absolute top-0 right-0 text-3xl" style={{ transform: 'translate(4px, -4px)' }}>🌿</div>
-          <div className="absolute bottom-0 left-0 text-3xl" style={{ transform: 'translate(-4px, 4px)' }}>🌿</div>
-          <div className="absolute bottom-0 right-0 text-3xl" style={{ transform: 'translate(4px, 4px)' }}>🌿</div>
-          
-          <div
-            className="relative w-full h-full"
-            style={{
-              width: GRID_SIZE * CELL_SIZE,
-              height: GRID_SIZE * CELL_SIZE,
-              margin: '8px',
-            }}
-          >
-          {/* Snake */}
-          {snake.map((segment, index) => {
-            const isHead = index === 0;
-            const isTail = index === snake.length - 1;
-            
-            // Calculer la direction pour la rotation de la tête
-            let rotation = 0;
-            if (isHead) {
-              switch (direction) {
-                case "UP": rotation = 270; break;
-                case "DOWN": rotation = 90; break;
-                case "LEFT": rotation = 180; break;
-                case "RIGHT": rotation = 0; break;
-              }
-            }
-
-            return (
-              <div
-                key={index}
-                className={cn(
-                  "absolute transition-all duration-100 ease-linear",
-                  isHead ? "z-10" : "z-0"
-                )}
-                style={{
-                  left: segment.x * CELL_SIZE,
-                  top: segment.y * CELL_SIZE,
-                  width: CELL_SIZE,
-                  height: CELL_SIZE,
-                  transform: isHead ? `rotate(${rotation}deg)` : 'none',
-                }}
-              >
-                {isHead ? (
-                  // Tête du serpent avec texture réaliste
-                  <div className="relative w-full h-full">
-                    <div 
-                      className="absolute inset-0 rounded-full shadow-xl" 
-                      style={{
-                        background: 'radial-gradient(circle at 30% 30%, #4ade80 0%, #22c55e 40%, #16a34a 100%)',
-                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.5), inset 0 -2px 4px rgba(0, 0, 0, 0.3), inset 0 2px 4px rgba(255, 255, 255, 0.4)',
-                      }}
-                    >
-                      {/* Motif écailles sur la tête */}
-                      <div 
-                        className="absolute inset-0 rounded-full opacity-40"
-                        style={{
-                          background: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0, 0, 0, 0.15) 2px, rgba(0, 0, 0, 0.15) 3px)',
-                        }}
-                      />
-                    </div>
-                    {/* Yeux brillants */}
-                    <div 
-                      className="absolute w-2 h-2 rounded-full"
-                      style={{
-                        top: '25%',
-                        left: '25%',
-                        background: 'radial-gradient(circle at 30% 30%, #fff 0%, #1f2937 40%, #000 100%)',
-                        boxShadow: '0 1px 2px rgba(255, 255, 255, 0.8)',
-                      }}
-                    />
-                    <div 
-                      className="absolute w-2 h-2 rounded-full"
-                      style={{
-                        top: '25%',
-                        right: '25%',
-                        background: 'radial-gradient(circle at 30% 30%, #fff 0%, #1f2937 40%, #000 100%)',
-                        boxShadow: '0 1px 2px rgba(255, 255, 255, 0.8)',
-                      }}
-                    />
-                    {/* Langue */}
-                    <div 
-                      className="absolute bottom-1 left-1/2 -translate-x-1/2 w-0.5 h-2 bg-red-600 rounded-full"
-                      style={{
-                        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.5)',
-                      }}
-                    />
-                  </div>
-                ) : (
-                  // Corps du serpent avec texture écailles réaliste
-                  <div className="relative w-full h-full">
-                    <div 
-                      className={cn(
-                        "absolute inset-0.5 rounded-lg transition-all duration-100",
-                      )}
-                      style={{
-                        background: isTail 
-                          ? 'linear-gradient(135deg, #16a34a 0%, #15803d 50%, #14532d 100%)'
-                          : 'linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%)',
-                        boxShadow: 'inset 0 2px 4px rgba(255, 255, 255, 0.3), inset 0 -2px 4px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      }}
-                    >
-                      {/* Texture écailles hexagonales */}
-                      <div 
-                        className="absolute inset-0 rounded-lg opacity-50"
-                        style={{
-                          backgroundImage: `
-                            radial-gradient(circle at 25% 25%, rgba(0, 0, 0, 0.2) 0%, transparent 50%),
-                            radial-gradient(circle at 75% 75%, rgba(0, 0, 0, 0.2) 0%, transparent 50%)
-                          `,
-                          backgroundSize: '8px 8px',
-                        }}
-                      />
-                      {/* Reflet brillant */}
-                      <div 
-                        className="absolute top-0 left-0 right-0 h-1/2 rounded-t-lg"
-                        style={{
-                          background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, transparent 100%)',
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Food - Fruit réaliste */}
-          <div
-            className="absolute transition-all duration-300"
-            style={{
-              left: food.x * CELL_SIZE,
-              top: food.y * CELL_SIZE,
-              width: CELL_SIZE,
-              height: CELL_SIZE,
-            }}
-          >
-            <div className="relative w-full h-full flex items-center justify-center">
-              {/* Pomme réaliste */}
-              <div 
-                className="relative w-4/5 h-4/5 rounded-full animate-pulse"
-                style={{
-                  background: 'radial-gradient(circle at 30% 30%, #ff6b6b 0%, #ff5252 30%, #dc143c 60%, #8b0000 100%)',
-                  boxShadow: '0 4px 8px rgba(0, 0, 0, 0.5), inset -2px -2px 4px rgba(0, 0, 0, 0.3), inset 2px 2px 4px rgba(255, 255, 255, 0.4)',
-                }}
-              >
-                {/* Reflet brillant */}
-                <div 
-                  className="absolute top-1 left-1 w-1/3 h-1/3 rounded-full"
-                  style={{
-                    background: 'radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.8) 0%, transparent 70%)',
-                  }}
-                />
-                {/* Tige */}
-                <div 
-                  className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-2 rounded-t-full"
-                  style={{
-                    background: 'linear-gradient(180deg, #8b4513 0%, #654321 100%)',
-                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.5)',
-                  }}
-                />
-                {/* Feuille */}
-                <div 
-                  className="absolute -top-1 left-1/2 w-2 h-1.5"
-                  style={{
-                    background: 'linear-gradient(135deg, #4ade80 0%, #22c55e 100%)',
-                    borderRadius: '0 50% 50% 0',
-                    transform: 'rotate(-45deg) translateX(-2px)',
-                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
-                  }}
-                />
-              </div>
+      {/* HEADER */}
+      <div className="z-10 w-full max-w-[600px] flex justify-between items-center mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-800 backdrop-blur-md">
+         <h1 className="text-2xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-600 drop-shadow-[0_0_10px_rgba(34,197,94,0.5)]">
+            NEON SNAKE <span className="text-xs not-italic text-slate-500 font-normal ml-2">CANVAS</span>
+         </h1>
+         <div className="flex gap-4 text-white">
+            <div className="text-right">
+                <p className="text-[10px] text-slate-500 uppercase">Score</p>
+                <p className="text-xl font-bold font-mono text-white">{score}</p>
             </div>
-          </div>
-
-          {/* Game Over Overlay */}
-          {gameOver && (
-            <div className="absolute inset-0 bg-black/80 flex items-center justify-center flex-col gap-4 backdrop-blur-sm">
-              <div className="text-4xl font-bold text-red-500 animate-bounce">
-                Game Over!
-              </div>
-              <div className="text-2xl text-white">Score final: {score}</div>
+            <div className="text-right">
+                <p className="text-[10px] text-slate-500 uppercase">Best</p>
+                <p className="text-xl font-bold font-mono text-yellow-500">{Math.max(score, highScore)}</p>
             </div>
-          )}
+         </div>
+      </div>
 
-          {/* Paused Overlay */}
-          {isPaused && !gameOver && (
-            <div className="absolute inset-0 bg-black/50 flex items-center justify-center backdrop-blur-sm">
-              <div className="text-3xl font-bold text-white animate-pulse">
-                PAUSE
-              </div>
-            </div>
-          )}
-          </div>
-        </div>
-
-        {/* Controls */}
-        <div className="flex items-center justify-center gap-3 mt-6">
-          <Button
-            onClick={() => router.push("/dashboard")}
-            size="lg"
-            variant="outline"
-          >
-            <Home className="mr-2 h-5 w-5" />
-            Dashboard
-          </Button>
-          <Button
-            onClick={() => setIsPaused(!isPaused)}
-            disabled={gameOver}
-            size="lg"
-            variant={isPaused ? "default" : "secondary"}
-          >
-            {isPaused ? (
-              <>
-                <Play className="mr-2 h-5 w-5" />
-                Jouer
-              </>
+      <div className="w-full max-w-[600px] mb-4">
+        <div className="bg-slate-800/90 border-2 border-green-500/30 rounded-xl p-4 shadow-2xl backdrop-blur-sm">
+            <h3 className="text-base font-bold flex items-center gap-2 text-white mb-4">
+                <Trophy className="w-5 h-5 text-yellow-400" /> Classement
+            </h3>
+            {leaderboard.length === 0 ? (
+                <p className="text-sm text-slate-400">Aucun score enregistré</p>
             ) : (
-              <>
-                <Pause className="mr-2 h-5 w-5" />
-                Pause
-              </>
+                <div className="space-y-2">
+                    {leaderboard.map((entry, index) => {
+                        const name = (entry as any).userName || (entry as any).name || 'Anonyme';
+                        const score = (entry as any).score ?? (entry as any).bestScore ?? 0;
+                        const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index+1}`;
+                        return (
+                            <div
+                                key={(entry as any).userId || name + index}
+                                className={cn(
+                                    "flex items-center gap-3 p-3 rounded-lg transition-colors",
+                                    index < 3 ? "bg-green-500/20 border-2 border-green-500/50 shadow-lg" : "bg-slate-700/80 border border-slate-600/50"
+                                )}
+                            >
+                                <div className="w-8 text-center text-xl">{medal}</div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold truncate text-white">{name}</p>
+                                </div>
+                                <div className="text-base font-mono font-bold text-green-400">{score.toLocaleString()}</div>
+                            </div>
+                        );
+                    })}
+                </div>
             )}
-          </Button>
-          <Button onClick={resetGame} size="lg" variant="outline">
-            <RotateCcw className="mr-2 h-5 w-5" />
-            Recommencer
-          </Button>
-        </div>
-
-        {/* Instructions */}
-        <div className="mt-6 p-4 bg-muted/30 rounded-lg">
-          <h3 className="font-semibold mb-2 text-sm">Instructions:</h3>
-          <ul className="text-xs text-muted-foreground space-y-1">
-            <li>• Utilisez les flèches ⬆️⬇️⬅️➡️ pour diriger le serpent</li>
-            <li>• Appuyez sur ESPACE pour mettre en pause</li>
-            <li>• Mangez les pommes 🔴 pour grandir et marquer des points</li>
-            <li>• Évitez les murs et votre propre queue !</li>
-          </ul>
         </div>
       </div>
 
-      {/* Leaderboard */}
-      <div className="bg-card rounded-xl shadow-2xl p-6 w-full lg:w-80">
-        <h2 className="text-xl font-bold flex items-center gap-2 mb-4">
-          <Trophy className="h-5 w-5 text-yellow-500" />
-          Classement
-        </h2>
-        {leaderboard.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            Aucun score enregistré
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {leaderboard.map((entry, index) => (
-              <div
-                key={entry.userId}
-                className={cn(
-                  "flex items-center gap-3 p-3 rounded-lg transition-all",
-                  index < 3
-                    ? "bg-gradient-to-r from-yellow-500/10 to-transparent border border-yellow-500/20"
-                    : "bg-muted/50",
-                  session?.user?.id === entry.userId && "ring-2 ring-primary"
+      {/* GAME CANVAS WRAPPER */}
+      <div className="relative rounded-2xl border border-slate-800 bg-black overflow-hidden">
+        <canvas 
+            ref={canvasRef}
+            className="block"
+            // Width/Height set by JS for High DPI
+        />
+
+        {/* OVERLAYS (UI HTML au-dessus du Canvas) */}
+        {gameState !== "PLAYING" && (
+            <div className="absolute inset-0 z-20 bg-black/70 backdrop-blur-sm flex items-center justify-center flex-col gap-6 animate-in fade-in duration-300">
+                {gameState === "GAMEOVER" && (
+                    <div className="text-center animate-bounce">
+                        <h2 className="text-5xl font-black text-red-600 drop-shadow-[0_0_25px_red]">GAME OVER</h2>
+                        <p className="text-slate-300 mt-2">Score Final: {score}</p>
+                    </div>
                 )}
-              >
-                <div className="flex-shrink-0 w-8 flex items-center justify-center font-bold text-lg">
-                  {index === 0 && "🥇"}
-                  {index === 1 && "🥈"}
-                  {index === 2 && "🥉"}
-                  {index > 2 && `#${index + 1}`}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {entry.userName || "Anonyme"}
-                    {session?.user?.id === entry.userId && (
-                      <span className="text-xs text-primary ml-2">(Vous)</span>
-                    )}
-                  </p>
-                </div>
-                <div className="flex-shrink-0">
-                  <p className="text-lg font-bold text-green-500">
-                    {entry.bestScore.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
+                {gameState === "PAUSED" && <h2 className="text-5xl font-bold text-white animate-pulse tracking-widest">PAUSE</h2>}
+                {gameState === "IDLE" && (
+                     <div className="text-center space-y-2 animate-pulse">
+                        <div className="text-5xl font-black text-green-500 drop-shadow-[0_0_20px_#22c55e]">READY?</div>
+                        <p className="text-xs text-slate-500">Appuyez pour commencer</p>
+                     </div>
+                )}
+                
+                <Button 
+                    onClick={startGame} 
+                    className="mt-4 bg-green-600 hover:bg-green-500 text-white font-bold text-lg px-8 py-6 rounded-full shadow-[0_0_20px_rgba(34,197,94,0.4)] transition-transform hover:scale-105 active:scale-95"
+                >
+                    {gameState === "PAUSED" ? "REPRENDRE" : "JOUER"}
+                </Button>
+            </div>
         )}
       </div>
+
+      {/* MOBILE CONTROLS */}
+      <div className="mt-8 grid grid-cols-3 gap-3 sm:hidden">
+            <div />
+            <Button variant="secondary" size="icon" className="h-14 w-14 rounded-2xl bg-slate-800/50 text-white" onPointerDown={(e) => { e.preventDefault(); handleInput("UP"); }}>
+                <ChevronUp className="h-8 w-8" />
+            </Button>
+            <div />
+            <Button variant="secondary" size="icon" className="h-14 w-14 rounded-2xl bg-slate-800/50 text-white" onPointerDown={(e) => { e.preventDefault(); handleInput("LEFT"); }}>
+                <ChevronLeft className="h-8 w-8" />
+            </Button>
+            <Button variant="destructive" size="icon" className="h-14 w-14 rounded-2xl opacity-80" onClick={() => setGameState(g => g === "PLAYING" ? "PAUSED" : "PLAYING")}>
+                {gameState === "PLAYING" ? <Pause /> : <Play />}
+            </Button>
+            <Button variant="secondary" size="icon" className="h-14 w-14 rounded-2xl bg-slate-800/50 text-white" onPointerDown={(e) => { e.preventDefault(); handleInput("RIGHT"); }}>
+                <ChevronRight className="h-8 w-8" />
+            </Button>
+            <div />
+            <Button variant="secondary" size="icon" className="h-14 w-14 rounded-2xl bg-slate-800/50 text-white" onPointerDown={(e) => { e.preventDefault(); handleInput("DOWN"); }}>
+                <ChevronDown className="h-8 w-8" />
+            </Button>
+            <div />
+      </div>
+
+      <div className="mt-12 flex gap-4 relative z-30">
+         <Button 
+            variant="outline" 
+            size="lg" 
+            onClick={() => router.push("/dashboard")} 
+            className="bg-slate-800/80 border-2 border-red-500/50 text-white hover:bg-red-500/20 hover:border-red-500 transition-all font-semibold"
+         >
+            <Home className="mr-2 h-5 w-5" /> Quitter
+        </Button>
+      </div>
+
     </div>
   );
 }
