@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { Widget, Category } from "@/lib/db/schema";
 import { useAlert } from "@/components/ui/confirm-provider";
+import { usePermissions, WIDGET_TYPE_TO_PERMISSION } from "@/lib/hooks/use-permissions";
 
 interface WidgetSelectorDialogProps {
   open: boolean;
@@ -55,6 +56,7 @@ const widgetTypes = [
 
 export function WidgetSelectorDialog({ open, onOpenChange, dashboardId, categories = [], onWidgetAdded }: WidgetSelectorDialogProps) {
   const alert = useAlert();
+  const { hasPermission } = usePermissions();
   const [selectedType, setSelectedType] = useState<WidgetType | null>(null);
   const [loading, setLoading] = useState(false);
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -65,6 +67,15 @@ export function WidgetSelectorDialog({ open, onOpenChange, dashboardId, categori
   const [linkPingForm, setLinkPingForm] = useState({ title: "", url: "", openInNewTab: true, icon: "🔗", iconUrl: undefined });
   const [iframeForm, setIframeForm] = useState({ title: "", iframeUrl: "" });
   const [weatherForm, setWeatherForm] = useState({ city: "Paris" });
+
+  // Filtrer les widgets selon les permissions
+  const availableWidgetTypes = widgetTypes.filter(widget => {
+    const permissionKey = WIDGET_TYPE_TO_PERMISSION[widget.type];
+    // Si pas de permission définie, on autorise
+    if (!permissionKey) return true;
+    // Sinon, vérifier la permission
+    return hasPermission(permissionKey);
+  });
 
   const handleSelectWidget = (type: WidgetType) => {
     setSelectedType(type);
@@ -159,7 +170,7 @@ export function WidgetSelectorDialog({ open, onOpenChange, dashboardId, categori
         {!selectedType && (
           <ScrollArea className="flex-1 pr-4">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 py-4">
-              {widgetTypes.map((widget) => {
+              {availableWidgetTypes.map((widget) => {
                 const Icon = widget.icon;
                 return (
                   <button

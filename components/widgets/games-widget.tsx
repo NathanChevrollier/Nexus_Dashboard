@@ -9,6 +9,7 @@ type Game = {
   title: string;
   icon: string;
   gameUrl: string;
+  iconType?: 'emoji' | 'image'; // emoji or image path
 };
 
 type GamesWidgetProps = {
@@ -54,6 +55,13 @@ const GAMES: Game[] = [
     icon: "💰",
     gameUrl: "/games/MoneyMaker",
   },
+  {
+    id: "pokechill",
+    title: "PokeChill",
+    icon: "/images/pokechill.jpg",
+    iconType: "image",
+    gameUrl: "https://play-pokechill.github.io",
+  },
 ];
 
 export default function GamesWidget({
@@ -68,7 +76,13 @@ export default function GamesWidget({
 
   const handleGameClick = (game: Game) => {
     if (!isEditMode && game.gameUrl) {
-      window.location.href = game.gameUrl;
+      // Si c'est une URL externe, ouvrir dans un nouvel onglet
+      if (game.gameUrl.startsWith("http://") || game.gameUrl.startsWith("https://")) {
+        window.open(game.gameUrl, "_blank");
+      } else {
+        // Sinon, navigation interne
+        window.location.href = game.gameUrl;
+      }
     }
   };
 
@@ -114,7 +128,15 @@ export default function GamesWidget({
                 sizeClasses[iconSize]
               )}
             >
-              <span className="select-none">{game.icon}</span>
+              {game.iconType === "image" ? (
+                <img
+                  src={game.icon}
+                  alt={game.title}
+                  className="w-full h-full object-contain p-1"
+                />
+              ) : (
+                <span className="select-none">{game.icon}</span>
+              )}
             </div>
 
             {/* Title */}

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { requirePermission } from "@/lib/actions/permissions";
 import {
   dashboards,
   widgets,
@@ -18,8 +19,13 @@ const bodySchema = z.object({ userId: z.string().min(1) });
 export async function POST(request: Request) {
   try {
     const session = await auth();
-    if (!session || session.user.role !== "ADMIN") {
+    if (!session) {
       return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+    }
+    
+    const {allowed, error: permError} = await requirePermission("MANAGE_USERS");
+    if (!allowed) {
+      return NextResponse.json({ error: permError || "Accès refusé" }, { status: 403 });
     }
 
     const json = await request.json();

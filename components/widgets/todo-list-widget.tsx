@@ -81,7 +81,9 @@ export function TodoListWidget({ widget }: TodoListWidgetProps) {
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
 
   // --- STATE AFFICHAGE & FILTRES ---
-  const [showCompleted, setShowCompleted] = useState(true);
+  const [showCompleted, setShowCompleted] = useState<boolean>(() => {
+    return widget.options.showCompleted !== undefined ? widget.options.showCompleted : true;
+  });
   const [sortMode, setSortMode] = useState<SortMode>('recent');
   const [tagFilter, setTagFilter] = useState<string | 'all'>('all');
 
@@ -180,7 +182,7 @@ export function TodoListWidget({ widget }: TodoListWidgetProps) {
     if (activeCategory === oldName) setActiveCategory(name);
   };
 
-  // Sauvegarde automatique
+  // Sauvegarde automatique des todos
   useEffect(() => {
     const saveTodos = async () => {
       try {
@@ -195,6 +197,22 @@ export function TodoListWidget({ widget }: TodoListWidgetProps) {
     const timer = setTimeout(saveTodos, 1000);
     return () => clearTimeout(timer);
   }, [todos, widget.id, widget.options]);
+
+  // Sauvegarde automatique de showCompleted
+  useEffect(() => {
+    const saveShowCompleted = async () => {
+      try {
+        const { updateWidget } = await import('@/lib/actions/widgets');
+        await updateWidget(widget.id, {
+          options: { ...widget.options, showCompleted },
+        }, true);
+      } catch (error) {
+        console.error('Error saving showCompleted:', error);
+      }
+    };
+    const timer = setTimeout(saveShowCompleted, 500);
+    return () => clearTimeout(timer);
+  }, [showCompleted, widget.id, widget.options]);
 
   // --- LOGIQUE METIER ---
 

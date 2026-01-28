@@ -5,6 +5,7 @@ import { announcements } from "@/lib/db/schema";
 import { auth } from "@/lib/auth";
 import { eq, desc, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { createNotification } from "@/lib/notifications";
 
 export async function createAnnouncement(data: {
   title: string;
@@ -28,8 +29,9 @@ export async function createAnnouncement(data: {
   }
 
   try {
-    const newAnnouncement = await db.insert(announcements).values({
-      id: nanoid(),
+    const announcementId = nanoid();
+    await db.insert(announcements).values({
+      id: announcementId,
       title: data.title,
       content: data.content,
       type: data.type,
@@ -37,29 +39,36 @@ export async function createAnnouncement(data: {
       createdBy: session.user.id,
     });
 
-    // Si l'annonce est publiée, envoyer une notification à tous via le socket server
+    // Si l'annonce est publiée, créer les notifications pour tous les utilisateurs
     if (data.isPublished) {
-      const socketUrl = process.env.SOCKET_SERVER_URL || 'http://localhost:4001';
-      const announcementPayload = {
-        id: nanoid(),
-        title: data.title,
-        content: data.content,
-        type: data.type,
-        createdAt: new Date().toISOString(),
+      const allUsers = await db.query.users.findMany();
+      
+      const typeEmojis: Record<string, string> = {
+        info: '📋',
+        update: '🚀',
+        alert: '⚠️'
       };
 
-      try {
-        await fetch(`${socketUrl}/broadcast`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ event: 'announcement:new', data: announcementPayload }),
+      for (const user of allUsers) {
+        await createNotification({
+          userId: user.id,
+          type: "announcement:new",
+          title: `${typeEmojis[data.type] || '📢'} ${data.title}`,
+          message: data.content.substring(0, 100) + (data.content.length > 100 ? '...' : ''),
+          payload: {
+            id: announcementId,
+            title: data.title,
+            content: data.content,
+            type: data.type,
+            createdAt: new Date().toISOString(),
+          },
+          link: `/announcements/${announcementId}`,
+          emit: true,
         });
-      } catch (err) {
-        console.error('Failed to broadcast announcement to socket server:', err);
       }
     }
 
-    return { success: true, announcementId: newAnnouncement[0].insertId };
+    return { success: true, announcementId };
   } catch (error) {
     console.error("Error creating announcement:", error);
     return { error: "Erreur lors de la création de l'annonce" };
@@ -136,37 +145,47 @@ export async function updateAnnouncement(
   }
 
   try {
+    // Récupérer l'ancienne annonce avant mise à jour
+    const oldAnnouncement = await db.query.announcements.findFirst({
+      where: (announcements, { eq }) => eq(announcements.id, id),
+    });
+
     await db
       .update(announcements)
       .set(data)
       .where(eq(announcements.id, id));
 
-    // Si l'annonce passe en publiée, envoyer une notification
-    if (data.isPublished === true) {
-      // Récupérer l'annonce mise à jour
+    // Si l'annonce passe en publiée (et ne l'était pas avant), créer les notifications
+    if (data.isPublished === true && oldAnnouncement && !oldAnnouncement.isPublished) {
       const updatedAnnouncement = await db.query.announcements.findFirst({
         where: (announcements, { eq }) => eq(announcements.id, id),
       });
 
       if (updatedAnnouncement) {
-        const socketUrl = process.env.SOCKET_SERVER_URL || 'http://localhost:4001';
-        try {
-          await fetch(`${socketUrl}/broadcast`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              event: 'announcement:new',
-              data: {
-                id: updatedAnnouncement.id,
-                title: updatedAnnouncement.title,
-                content: updatedAnnouncement.content,
-                type: updatedAnnouncement.type,
-                createdAt: updatedAnnouncement.createdAt.toISOString(),
-              }
-            })
+        const allUsers = await db.query.users.findMany();
+        
+        const typeEmojis: Record<string, string> = {
+          info: '📋',
+          update: '🚀',
+          alert: '⚠️'
+        };
+
+        for (const user of allUsers) {
+          await createNotification({
+            userId: user.id,
+            type: "announcement:new",
+            title: `${typeEmojis[updatedAnnouncement.type] || '📢'} ${updatedAnnouncement.title}`,
+            message: updatedAnnouncement.content.substring(0, 100) + (updatedAnnouncement.content.length > 100 ? '...' : ''),
+            payload: {
+              id: updatedAnnouncement.id,
+              title: updatedAnnouncement.title,
+              content: updatedAnnouncement.content,
+              type: updatedAnnouncement.type,
+              createdAt: updatedAnnouncement.createdAt.toISOString(),
+            },
+            link: `/announcements/${updatedAnnouncement.id}`,
+            emit: true,
           });
-        } catch (err) {
-          console.error('Failed to broadcast announcement to socket server:', err);
         }
       }
     }

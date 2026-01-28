@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useSocket } from '@/components/ui/socket-provider';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { 
   TrendingUp, TrendingDown, Wallet, Activity, 
@@ -35,8 +36,10 @@ type Stock = {
   price: number;
   type: MarketType;
   history: number[];
-  volatility: number; // Force des mouvements
-  riskFactor: number; // Probabilité de crash/moon
+  volatility: number;
+  riskFactor: number;
+  minPrice?: number;
+  maxPrice?: number;
 };
 
 type LeaderboardEntry = {
@@ -50,23 +53,23 @@ type LeaderboardEntry = {
 
 // --- DONNÉES INITIALES (Pour éviter l'écran blanc) ---
 const INITIAL_STOCKS: Record<string, Stock> = {
-  'BTC': { symbol: 'BTC', name: 'Bitcoin', price: 64000, type: 'CRYPTO', history: Array(MAX_HISTORY).fill(64000), volatility: 0.08, riskFactor: 0.05 },
-  'ETH': { symbol: 'ETH', name: 'Ethereum', price: 3400, type: 'CRYPTO', history: Array(MAX_HISTORY).fill(3400), volatility: 0.07, riskFactor: 0.04 },
-  'NVDA': { symbol: 'NVDA', name: 'Nvidia Corp', price: 900, type: 'STOCK', history: Array(MAX_HISTORY).fill(900), volatility: 0.03, riskFactor: 0.01 },
-  'AAPL': { symbol: 'AAPL', name: 'Apple Inc.', price: 175, type: 'STOCK', history: Array(MAX_HISTORY).fill(175), volatility: 0.02, riskFactor: 0.01 },
-  'EUR/USD': { symbol: 'EUR/USD', name: 'Euro / Dollar', price: 1.08, type: 'FOREX', history: Array(MAX_HISTORY).fill(1.08), volatility: 0.005, riskFactor: 0.001 },
-  'JPY/USD': { symbol: 'JPY/USD', name: 'Yen / Dollar', price: 0.0065, type: 'FOREX', history: Array(MAX_HISTORY).fill(0.0065), volatility: 0.006, riskFactor: 0.001 },
-  'DOGE': { symbol: 'DOGE', name: 'DogeCoin', price: 0.15, type: 'CRYPTO', history: Array(MAX_HISTORY).fill(0.15), volatility: 0.15, riskFactor: 0.1 },
-  'AI-START': { symbol: 'AI-START', name: 'Unknown AI Startup', price: 10, type: 'STARTUP', history: Array(MAX_HISTORY).fill(10), volatility: 0.25, riskFactor: 0.2 },
+  'BTC': { symbol: 'BTC', name: 'Bitcoin', price: 64000, type: 'CRYPTO', history: Array(MAX_HISTORY).fill(64000), volatility: 0.08, riskFactor: 0.05, minPrice: 60000, maxPrice: 68000 },
+  'ETH': { symbol: 'ETH', name: 'Ethereum', price: 3400, type: 'CRYPTO', history: Array(MAX_HISTORY).fill(3400), volatility: 0.07, riskFactor: 0.04, minPrice: 3100, maxPrice: 3800 },
+  'NVDA': { symbol: 'NVDA', name: 'Nvidia Corp', price: 900, type: 'STOCK', history: Array(MAX_HISTORY).fill(900), volatility: 0.03, riskFactor: 0.01, minPrice: 850, maxPrice: 950 },
+  'AAPL': { symbol: 'AAPL', name: 'Apple Inc.', price: 175, type: 'STOCK', history: Array(MAX_HISTORY).fill(175), volatility: 0.02, riskFactor: 0.01, minPrice: 170, maxPrice: 180 },
+  'EUR/USD': { symbol: 'EUR/USD', name: 'Euro / Dollar', price: 1.08, type: 'FOREX', history: Array(MAX_HISTORY).fill(1.08), volatility: 0.005, riskFactor: 0.001, minPrice: 1.05, maxPrice: 1.11 },
+  'JPY/USD': { symbol: 'JPY/USD', name: 'Yen / Dollar', price: 0.0065, type: 'FOREX', history: Array(MAX_HISTORY).fill(0.0065), volatility: 0.006, riskFactor: 0.001, minPrice: 0.006, maxPrice: 0.007 },
+  'DOGE': { symbol: 'DOGE', name: 'DogeCoin', price: 0.15, type: 'CRYPTO', history: Array(MAX_HISTORY).fill(0.15), volatility: 0.15, riskFactor: 0.1, minPrice: 0.1, maxPrice: 0.25 },
+  'AI-START': { symbol: 'AI-START', name: 'Unknown AI Startup', price: 10, type: 'STARTUP', history: Array(MAX_HISTORY).fill(10), volatility: 0.25, riskFactor: 0.2, minPrice: 5, maxPrice: 20 },
 };
 
-// --- COMPOSANT GRAPHIQUE SVG ---
+// --- COMPOSANT GRAPHIQUE SVG AMÉLIORÉ ---
 const StockChart = ({ data, color, height = 60 }: { data: number[], color: string, height?: number }) => {
   if (!data || data.length < 2) return <div className="h-full w-full bg-muted/10 animate-pulse" />;
 
   const max = Math.max(...data) * 1.02;
   const min = Math.min(...data) * 0.98;
-  const range = max - min || 1; // Eviter division par zero
+  const range = max - min || 1;
   const width = 100;
   
   const points = data.map((price, i) => {
@@ -75,14 +78,27 @@ const StockChart = ({ data, color, height = 60 }: { data: number[], color: strin
     return `${x},${y}`;
   }).join(' ');
 
-  const strokeColor = color === 'green' ? '#22c55e' : '#ef4444';
-  const fillColor = color === 'green' ? '#22c55e20' : '#ef444420';
+  const strokeColor = color === 'green' ? '#10b981' : '#ef4444';
+  const fillGradientColor = color === 'green' ? '#10b98140' : '#ef444440';
 
   return (
     <div className="w-full overflow-hidden" style={{ height: `${height}px` }}>
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
-        <path d={`M0,100 L0,${100 - ((data[0]-min)/range)*100} ${points} L100,100 Z`} fill={fillColor} stroke="none" />
-        <polyline points={points} fill="none" stroke={strokeColor} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full filter drop-shadow-lg">
+        <defs>
+          <linearGradient id={`grad-${color}`} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor={fillGradientColor} />
+            <stop offset="100%" stopColor={color === 'green' ? '#10b98108' : '#ef444408'} />
+          </linearGradient>
+        </defs>
+        {/* Grille légère */}
+        <line x1="0" y1="25" x2="100" y2="25" stroke="white" strokeWidth="0.5" opacity="0.05" />
+        <line x1="0" y1="50" x2="100" y2="50" stroke="white" strokeWidth="0.5" opacity="0.05" />
+        <line x1="0" y1="75" x2="100" y2="75" stroke="white" strokeWidth="0.5" opacity="0.05" />
+        {/* Aire remplie */}
+        <path d={`M0,100 L0,${100 - ((data[0]-min)/range)*100} ${points} L100,100 Z`} fill={`url(#grad-${color})`} stroke="none" />
+        {/* Ligne principale avec glow */}
+        <polyline points={points} fill="none" stroke={strokeColor} strokeWidth="2.5" vectorEffect="non-scaling-stroke" opacity="0.8" />
+        <polyline points={points} fill="none" stroke={strokeColor} strokeWidth="4" vectorEffect="non-scaling-stroke" opacity="0.2" />
       </svg>
     </div>
   );
@@ -176,13 +192,22 @@ export default function TraderTerminal() {
                 const transformedStocks: Record<string, Stock> = {};
                 Object.keys(data.stocks).forEach(symbol => {
                     const serverStock = data.stocks[symbol];
+                    const prevStock = prev[symbol];
+                    
+                    // Calculer les min/max à partir de l'historique
+                    const stockHistory = serverStock.history || [];
+                    const historyMin = stockHistory.length > 0 ? Math.min(...stockHistory) : serverStock.price;
+                    const historyMax = stockHistory.length > 0 ? Math.max(...stockHistory) : serverStock.price;
+                    
                     transformedStocks[symbol] = {
                         ...serverStock,
-                        symbol: symbol, // Ajouter le symbol qui manque
-                        type: serverStock.type || 'CRYPTO', // Type par défaut si manquant
+                        symbol: symbol,
+                        type: serverStock.type || 'CRYPTO',
                         volatility: serverStock.volatility || 0.05,
                         riskFactor: serverStock.riskFactor || 0.01,
-                        history: serverStock.history || []
+                        history: stockHistory,
+                        minPrice: prevStock?.minPrice ? Math.min(prevStock.minPrice, historyMin) : historyMin,
+                        maxPrice: prevStock?.maxPrice ? Math.max(prevStock.maxPrice, historyMax) : historyMax,
                     };
                 });
                 
@@ -454,14 +479,18 @@ export default function TraderTerminal() {
                                     ${stock.price < 1 ? stock.price.toFixed(4) : stock.price.toFixed(2)}
                                 </span>
                             </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-[10px] text-gray-600">{stock.type}</span>
-                                {portfolio.holdings[symbol] > 0 && (
-                                    <span className="text-[9px] bg-blue-900/30 text-blue-400 px-1.5 rounded">
-                                        x{portfolio.holdings[symbol]}
-                                    </span>
-                                )}
+                            <div className="flex justify-between items-center text-[9px]">
+                                <span className="text-gray-600">{stock.type}</span>
+                                <div className="space-x-2 flex">
+                                    {stock.minPrice && <span className="text-red-400">↓${stock.minPrice.toFixed(2)}</span>}
+                                    {stock.maxPrice && <span className="text-green-400">↑${stock.maxPrice.toFixed(2)}</span>}
+                                </div>
                             </div>
+                            {portfolio.holdings[symbol] > 0 && (
+                                <span className="text-[9px] bg-blue-900/30 text-blue-400 px-1.5 rounded inline-block mt-1">
+                                    x{portfolio.holdings[symbol]}
+                                </span>
+                            )}
                         </div>
                     );
                 })}
@@ -516,6 +545,59 @@ export default function TraderTerminal() {
                     <span className="text-orange-500 font-bold mr-2">NEWS:</span> {news}
                 </div>
             </div>
+
+            {/* Portefeuille - Table des actions */}
+            {Object.keys(portfolio.holdings).filter(sym => portfolio.holdings[sym] > 0).length > 0 && (
+                <div className="bg-[#0a0a0a] border-t border-white/10 max-h-[200px] overflow-y-auto">
+                    <div className="p-3 border-b border-white/5 bg-white/[0.02] text-xs font-bold text-gray-500 uppercase">
+                        📊 Portefeuille Actif
+                    </div>
+                    <table className="w-full text-[10px] font-mono">
+                        <thead>
+                            <tr className="border-b border-white/5">
+                                <th className="text-left p-2 text-gray-600">Action</th>
+                                <th className="text-center p-2 text-gray-600">Quantité</th>
+                                <th className="text-right p-2 text-gray-600">Prix Unit.</th>
+                                <th className="text-right p-2 text-gray-600">Coût Total</th>
+                                <th className="text-right p-2 text-gray-600">Valeur Act.</th>
+                                <th className="text-right p-2 text-gray-600">P&L</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {Object.keys(portfolio.holdings).filter(sym => portfolio.holdings[sym] > 0).map(sym => {
+                                const stock = stocks[sym];
+                                const quantity = portfolio.holdings[sym];
+                                if (!stock) return null;
+                                
+                                // Estimation du coût d'achat (basée sur le prix moyen de l'historique)
+                                const avgPrice = stock.history.length > 0 
+                                    ? stock.history.reduce((a, b) => a + b, 0) / stock.history.length 
+                                    : stock.price;
+                                const costTotal = avgPrice * quantity;
+                                const valueNow = stock.price * quantity;
+                                const pnl = valueNow - costTotal;
+                                const pnlPercent = costTotal > 0 ? ((pnl / costTotal) * 100) : 0;
+                                
+                                return (
+                                    <tr key={sym} className="border-b border-white/5 hover:bg-white/5">
+                                        <td className="p-2">
+                                            <span className="mr-1">{STOCK_EMOJI[sym] || '📊'}</span>
+                                            <span className="font-bold">{sym}</span>
+                                        </td>
+                                        <td className="text-center p-2 text-white">{quantity}</td>
+                                        <td className="text-right p-2 text-gray-400">${stock.price.toFixed(2)}</td>
+                                        <td className="text-right p-2 text-gray-400">${costTotal.toFixed(2)}</td>
+                                        <td className="text-right p-2 text-white font-bold">${valueNow.toFixed(2)}</td>
+                                        <td className={cn("text-right p-2 font-bold", pnl >= 0 ? "text-green-500" : "text-red-500")}>
+                                            {pnl >= 0 ? "+" : ""}{pnl.toFixed(2)} ({pnlPercent.toFixed(1)}%)
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </section>
 
         {/* RIGHT: TRADING PANEL */}
@@ -526,27 +608,30 @@ export default function TraderTerminal() {
                 </h3>
 
                 <div className="space-y-4">
-                    {/* Amount Selector */}
+                    {/* Amount Input */}
                     <div className="bg-white/5 p-3 rounded border border-white/5">
                         <div className="flex justify-between text-[10px] text-gray-500 mb-2">
-                            <span>QUANTITÉ</span>
-                            <span className="text-blue-400">MAX: {Math.floor(portfolio.cash / currentStock.price)}</span>
+                            <span className="uppercase font-bold">Quantité</span>
+                            <span className="text-blue-400 cursor-pointer hover:text-blue-300" onClick={() => setTradeAmount(Math.floor(portfolio.cash / currentStock.price))}>
+                                MAX: {Math.floor(portfolio.cash / currentStock.price)}
+                            </span>
                         </div>
                         <div className="flex items-center gap-2">
-                             <Button variant="secondary" size="icon" onClick={() => setTradeAmount(Math.max(1, tradeAmount - 1))} className="h-8 w-8 bg-white/10 text-white">-</Button>
-                             <div className="flex-1 text-center font-mono text-lg font-bold text-white">{tradeAmount}</div>
-                             <Button variant="secondary" size="icon" onClick={() => setTradeAmount(tradeAmount + 1)} className="h-8 w-8 bg-white/10 text-white">+</Button>
-                        </div>
-                        <div className="flex gap-2 mt-2">
-                            {[1, 10, 100].map(v => (
-                                <button 
-                                    key={v}
-                                    onClick={() => setTradeAmount(v)}
-                                    className="flex-1 bg-black hover:bg-white/10 text-[9px] py-1 rounded border border-white/10 transition-colors"
-                                >
-                                    x{v}
-                                </button>
-                            ))}
+                            <Input 
+                                type="number" 
+                                min="1" 
+                                value={tradeAmount}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTradeAmount(Math.max(1, parseInt(e.target.value) || 1))}
+                                className="flex-1 bg-black border-white/10 text-white text-center font-mono text-lg font-bold h-10"
+                            />
+                            <Button 
+                                variant="secondary" 
+                                size="sm"
+                                onClick={() => setTradeAmount(Math.floor(portfolio.cash / currentStock.price))}
+                                className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold h-10 px-3"
+                            >
+                                MAX
+                            </Button>
                         </div>
                     </div>
 

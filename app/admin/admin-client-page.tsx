@@ -7,7 +7,8 @@ import IframeRequestsAdmin from "@/components/admin/iframe-requests-admin";
 import IframeAllowlistAdmin from "@/components/admin/iframe-allowlist-admin";
 import AnnouncementsManager from "@/components/admin/announcements-manager";
 import PermissionsManager from "@/components/admin/permissions-manager";
-import { Users, MessageSquare, Shield, Megaphone, ShieldCheck } from "lucide-react";
+import GamesManagementAdmin from "@/components/admin/games-management";
+import { Users, MessageSquare, Shield, Megaphone, ShieldCheck, Gamepad2 } from "lucide-react";
 import { User } from "@/lib/db/schema";
 
 interface AdminClientPageProps {
@@ -27,7 +28,7 @@ export default function AdminClientPage({ users }: AdminClientPageProps) {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="users" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Utilisateurs
@@ -35,6 +36,10 @@ export default function AdminClientPage({ users }: AdminClientPageProps) {
           <TabsTrigger value="permissions" className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4" />
             Permissions
+          </TabsTrigger>
+          <TabsTrigger value="games" className="flex items-center gap-2">
+            <Gamepad2 className="h-4 w-4" />
+            Jeux
           </TabsTrigger>
           <TabsTrigger value="iframe-requests" className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />
@@ -56,6 +61,10 @@ export default function AdminClientPage({ users }: AdminClientPageProps) {
 
         <TabsContent value="permissions" className="space-y-4">
           <PermissionsManager />
+        </TabsContent>
+
+        <TabsContent value="games" className="space-y-4">
+          <GamesManagementAdmin />
         </TabsContent>
 
         <TabsContent value="iframe-requests" className="space-y-4">

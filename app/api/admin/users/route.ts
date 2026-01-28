@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { requirePermission } from "@/lib/actions/permissions";
 
 const updateUserSchema = z.object({
   userId: z.string(),
@@ -15,9 +16,18 @@ export async function GET() {
   try {
     const session = await auth();
 
-    if (!session || session.user.role !== "ADMIN") {
+    if (!session) {
       return NextResponse.json(
-        { error: "Non autorisé" },
+        { error: "Non authentifié" },
+        { status: 401 },
+      );
+    }
+
+    // Vérifier la permission MANAGE_USERS
+    const {allowed, error} = await requirePermission("MANAGE_USERS");
+    if (!allowed) {
+      return NextResponse.json(
+        { error: error || "Accès refusé" },
         { status: 403 },
       );
     }
@@ -38,9 +48,18 @@ export async function PATCH(request: Request) {
   try {
     const session = await auth();
     
-    if (!session || session.user.role !== "ADMIN") {
+    if (!session) {
       return NextResponse.json(
-        { error: "Non autorisé" },
+        { error: "Non authentifié" },
+        { status: 401 }
+      );
+    }
+
+    // Vérifier la permission MANAGE_USERS
+    const {allowed, error: permError} = await requirePermission("MANAGE_USERS");
+    if (!allowed) {
+      return NextResponse.json(
+        { error: permError || "Accès refusé" },
         { status: 403 }
       );
     }

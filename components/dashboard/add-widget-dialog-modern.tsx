@@ -16,6 +16,7 @@ import AssetPicker from "@/components/ui/asset-picker";
 import { createWidget } from "@/lib/actions/widgets";
 import { getIntegrations } from "@/lib/actions/integrations";
 import { REGIONS, getCitiesByRegion } from "@/lib/cities";
+import { usePermissions, WIDGET_TYPE_TO_PERMISSION } from "@/lib/hooks/use-permissions";
 import type { Widget } from "@/lib/db/schema";
 import { 
   Link as LinkIcon, Activity, Frame, Clock, Cloud, StickyNote, BarChart3, 
@@ -62,6 +63,7 @@ const widgetDefinitions = [
 // Data
 export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWidgetAdded }: AddWidgetDialogProps) {
   const alert = useAlert();
+  const { hasPermission } = usePermissions();
 
   // Local UI state
   const [step, setStep] = useState<'select' | 'configure'>('select');
@@ -74,6 +76,35 @@ export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWid
   const [loadingIntegrations, setLoadingIntegrations] = useState(false);
   const [availableCities, setAvailableCities] = useState<any[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<string>("");
+
+  // Vérifier les permissions pour chaque widget
+  const getWidgetStatus = (widget: typeof widgetDefinitions[0]) => {
+    const permKey = WIDGET_TYPE_TO_PERMISSION[widget.type];
+    const hasWidgetPerm = !permKey || hasPermission(permKey);
+    const heavy = ["torrent-overview", "monitoring", "media-requests", "media-library"].includes(widget.type);
+    const isHeavyBlocked = !!(role === 'USER' && heavy);
+    const reqInt = ["media-requests", "torrent-overview", "monitoring"].includes(widget.type);
+    const hasInt = !reqInt || availableIntegrations.some(i => 
+      (widget.type === "media-requests" && i.type === "overseerr") ||
+      (widget.type === "torrent-overview" && i.type === "torrent-client") ||
+      (widget.type === "monitoring" && i.type === "monitoring")
+    );
+    const isIntBlocked = !hasInt && reqInt;
+
+    return {
+      isAvailable: hasWidgetPerm && !isHeavyBlocked && !isIntBlocked,
+      hasWidgetPerm,
+      isHeavyBlocked,
+      isIntBlocked,
+      reason: !hasWidgetPerm 
+        ? `Permission requise: ${permKey}` 
+        : isHeavyBlocked 
+        ? 'VIP requis' 
+        : isIntBlocked 
+        ? 'Intégration requise'
+        : null,
+    };
+  };
 
   // Form State (Single object for simplicity, cleared on open)
   const [formState, setFormState] = useState<any>({});
@@ -535,29 +566,24 @@ export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWid
                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-6">
                    {widgetDefinitions.map((w) => {
                     const Icon = w.icon;
-                    // Disable heavy widgets for USER role
-                    const heavy = ["torrent-overview", "monitoring", "media-requests", "media-library"].includes(w.type);
-                    const disabledByRole = !!(role === 'USER' && heavy);
-                    // Check integration requirement
-                    const reqInt = ["media-requests", "torrent-overview", "monitoring"].includes(w.type);
-                    const hasInt = !reqInt || availableIntegrations.some(i => 
-                        (w.type === "media-requests" && i.type === "overseerr") ||
-                        (w.type === "torrent-overview" && i.type === "torrent-client") ||
-                        (w.type === "monitoring" && i.type === "monitoring")
-                    );
+                    const status = getWidgetStatus(w);
 
                     return (
                       <button
                         key={w.type}
-                        onClick={() => handleWidgetSelect(w.type as any)}
-                        disabled={disabledByRole || (!hasInt && reqInt)}
+                        onClick={() => {
+                          if (status.isAvailable) handleWidgetSelect(w.type as any);
+                          else alert(`❌ ${status.reason}`);
+                        }}
+                        disabled={!status.isAvailable}
+                        title={status.reason ? `Désactivé: ${status.reason}` : w.description}
                         className={`group relative flex flex-col items-center p-4 rounded-xl border text-center gap-3 transition-all duration-200
-                          ${!hasInt && reqInt 
-                            ? "opacity-60 cursor-not-allowed bg-muted/20 border-transparent grayscale" 
+                          ${!status.isAvailable 
+                            ? "opacity-50 cursor-not-allowed bg-muted/20 border-muted grayscale" 
                             : "bg-card border-border hover:border-primary/50 hover:shadow-lg hover:-translate-y-1"
                         }`}
                       >
-                         <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${w.color} flex items-center justify-center shadow-md transition-transform group-hover:scale-110`}>
+                         <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${w.color} flex items-center justify-center shadow-md transition-transform ${status.isAvailable && 'group-hover:scale-110'}`}>
                             <Icon className="text-white h-6 w-6" />
                          </div>
                          <div className="space-y-1">
@@ -565,19 +591,20 @@ export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWid
                             <span className="text-xs text-muted-foreground line-clamp-2 leading-tight px-1">{w.description}</span>
                          </div>
                          
-                         {disabledByRole && (
-                           <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-background/60 backdrop-blur-[1px]">
-                             <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded border border-amber-200 shadow-sm">
-                              VIP requis
-                             </span>
+                         {!status.isAvailable && (
+                           <div className="absolute inset-0 z-50 flex items-center justify-center rounded-xl bg-background/85 backdrop-blur-sm">
+                             <div className="flex flex-col items-center gap-1.5 text-center px-2">
+                               <div className={`text-[11px] font-bold px-2 py-1 rounded-full border shadow-md ${
+                                 status.isHeavyBlocked 
+                                   ? 'text-amber-700 bg-amber-100 border-amber-200' 
+                                   : status.isIntBlocked
+                                   ? 'text-orange-700 bg-orange-100 border-orange-200'
+                                   : 'text-red-700 bg-red-100 border-red-200'
+                               }`}>
+                                 {status.reason}
+                               </div>
+                             </div>
                            </div>
-                         )}
-                         {!hasInt && reqInt && (
-                            <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-background/60 backdrop-blur-[1px]">
-                               <span className="text-[10px] font-bold text-destructive bg-destructive/10 px-2 py-1 rounded border border-destructive/20 shadow-sm">
-                                 Intégration requise
-                               </span>
-                            </div>
                          )}
                       </button>
                     );

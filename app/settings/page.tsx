@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useSession, signOut } from "next-auth/react";
+import { usePermissions } from "@/lib/hooks/use-permissions";
 
 // Import des sous-composants
 import { AccountSettings } from "@/components/settings/account-settings";
@@ -46,8 +47,10 @@ export default function SettingsPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("appearance");
   const { data: session } = useSession();
+  const { hasPermission } = usePermissions();
 
-  const isAdmin = session?.user?.role === "ADMIN";
+  // Vérifier la permission ACCESS_ADMIN au lieu du rôle
+  const canAccessAdmin = hasPermission("ACCESS_ADMIN");
 
   // Menu items avec sections admin intégrées
   const menuItems: MenuItem[] = [
@@ -55,7 +58,7 @@ export default function SettingsPage() {
     { id: "appearance", label: "Apparence", icon: Palette, section: "user" },
     { id: "integrations", label: "Intégrations", icon: Puzzle, section: "user" },
     { id: "contact", label: "Contact", icon: MessageSquare, section: "user" },
-    ...(isAdmin ? [
+    ...(canAccessAdmin ? [
       { id: "admin-users", label: "Utilisateurs", icon: Users, section: "admin" as const, badge: "Admin" },
       { id: "admin-permissions", label: "Permissions", icon: ShieldCheck, section: "admin" as const, badge: "Admin" },
       { id: "admin-iframe", label: "Iframe", icon: List, section: "admin" as const },
@@ -241,7 +244,7 @@ export default function SettingsPage() {
               </>
             )}
 
-            {activeTab === "admin-users" && isAdmin && (
+            {activeTab === "admin-users" && canAccessAdmin && (
               <>
                 <div className="mb-6">
                   <div className="flex items-center gap-2">
@@ -255,7 +258,7 @@ export default function SettingsPage() {
               </>
             )}
 
-            {activeTab === "admin-permissions" && isAdmin && (
+            {activeTab === "admin-permissions" && canAccessAdmin && (
               <>
                 <div className="mb-6">
                   <div className="flex items-center gap-2">
@@ -269,7 +272,7 @@ export default function SettingsPage() {
               </>
             )}
 
-            {activeTab === "admin-iframe" && isAdmin && (
+            {activeTab === "admin-iframe" && canAccessAdmin && (
               <>
                 <div className="mb-6">
                   <div className="flex items-center gap-2">
@@ -293,7 +296,7 @@ export default function SettingsPage() {
               </>
             )}
 
-            {activeTab === "admin-announcements" && isAdmin && (
+            {activeTab === "admin-announcements" && canAccessAdmin && (
               <>
                 <div className="mb-6">
                   <div className="flex items-center gap-2">

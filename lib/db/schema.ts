@@ -516,6 +516,7 @@ export interface WidgetOptions {
     priority: 'low' | 'medium' | 'high';
     createdAt: number;
   }>;
+  showCompleted?: boolean; // Afficher ou masquer les tâches terminées
   
   // Watchlist Widget
   watchlist?: Array<{

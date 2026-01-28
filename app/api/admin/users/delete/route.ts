@@ -15,14 +15,21 @@ import {
   verificationTokens,
 } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { requirePermission } from "@/lib/actions/permissions";
 
 const bodySchema = z.object({ userId: z.string().min(1) });
 
 export async function POST(request: Request) {
   try {
     const session = await auth();
-    if (!session || session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+    if (!session) {
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    }
+
+    // Vérifier la permission MANAGE_USERS
+    const {allowed, error: permError} = await requirePermission("MANAGE_USERS");
+    if (!allowed) {
+      return NextResponse.json({ error: permError || "Accès refusé" }, { status: 403 });
     }
 
     const json = await request.json();

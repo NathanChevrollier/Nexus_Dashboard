@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, User } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -21,7 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 
 export function AccountSettings() {
-  const { data: session } = useSession();
+  const { data: session, update: updateSession } = useSession();
   const confirm = useConfirm();
   const alert = useAlert();
   const router = useRouter();
@@ -167,14 +167,51 @@ export function AccountSettings() {
     // handled inside dialog
   };
 
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Vérifier la taille (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setFormError('La taille du fichier doit être inférieure à 5MB');
+      return;
+    }
+    
+    // Vérifier le type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setFormError('Format non supporté. Utilisez JPG, PNG, GIF ou WebP');
+      return;
+    }
+    
+    setAvatarFile(file);
+    setFormError(null);
+    
+    // Créer une preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAvatarPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatarFile(null);
+    setAvatarPreview(null);
+  };
+
   const [editOpen, setEditOpen] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const handleSubmitProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
     const fd = new FormData(form);
+    const name = fd.get('name')?.toString();
     const email = fd.get('email')?.toString();
     const currentPassword = fd.get('currentPassword')?.toString();
     const newPassword = fd.get('newPassword')?.toString();
@@ -182,19 +219,54 @@ export function AccountSettings() {
     setFormLoading(true);
     setFormError(null);
     try {
-      const res = await fetch('/api/users/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, currentPassword, newPassword }) });
+      let imageUrl: string | undefined = undefined;
+      
+      // Upload de l'avatar si un fichier a été sélectionné
+      if (avatarFile) {
+        setUploadingAvatar(true);
+        const avatarFormData = new FormData();
+        avatarFormData.append('file', avatarFile);
+        const uploadRes = await fetch('/api/users/upload-avatar', { method: 'POST', body: avatarFormData });
+        const uploadData = await uploadRes.json().catch(() => ({}));
+        if (!uploadRes.ok) {
+          setFormError(uploadData?.error || 'Erreur lors de l\'upload de l\'avatar');
+          return;
+        }
+        imageUrl = uploadData.url;
+        setUploadingAvatar(false);
+      }
+
+      const res = await fetch('/api/users/update', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ 
+          ...(name ? { name } : {}),
+          ...(email ? { email } : {}),
+          ...(currentPassword ? { currentPassword } : {}),
+          ...(newPassword ? { newPassword } : {}),
+          ...(imageUrl ? { image: imageUrl } : {})
+        }) 
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setFormError(data?.error || 'Erreur');
         return;
       }
       setEditOpen(false);
+      setAvatarFile(null);
+      setAvatarPreview(null);
+      
+      // Forcer la mise à jour de la session NextAuth
+      await updateSession();
+      
+      // Recharger les données du serveur
       router.refresh();
     } catch (err) {
       console.error(err);
       setFormError('Erreur réseau');
     } finally {
       setFormLoading(false);
+      setUploadingAvatar(false);
     }
   };
 
@@ -206,10 +278,25 @@ export function AccountSettings() {
           <CardDescription>Informations de votre compte</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            <div>
-              <div className="text-sm text-muted-foreground">Nom</div>
-              <div className="font-medium">{session?.user?.name || "-"}</div>
+          <div className="space-y-4">
+            <div className="flex items-center gap-4">
+              {session?.user?.image ? (
+                <img 
+                  src={session.user.image} 
+                  alt="Avatar" 
+                  className="w-16 h-16 rounded-full object-cover border-2 border-border flex-shrink-0"
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center border-2 border-border flex-shrink-0">
+                  <User className="w-8 h-8 text-muted-foreground" />
+                </div>
+              )}
+              <div className="flex-1">
+                <div className="text-sm text-muted-foreground">Nom</div>
+                <div className="font-medium">{session?.user?.name || "-"}</div>
+              </div>
             </div>
             <div>
               <div className="text-sm text-muted-foreground">E-mail</div>
@@ -333,29 +420,79 @@ export function AccountSettings() {
       </Card>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Modifier mes informations</DialogTitle>
-            <DialogDescription>Changez votre e-mail et mot de passe.</DialogDescription>
+            <DialogDescription>Changez votre nom, photo de profil, e-mail et mot de passe.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmitProfile} className="space-y-3 mt-4">
+          <form onSubmit={handleSubmitProfile} className="space-y-4 mt-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm text-muted-foreground">Nom</label>
+              <Input name="name" defaultValue={session?.user?.name || ''} placeholder="Votre nom" />
+            </div>
+            
+            <div className="flex flex-col gap-2">
+              <label className="text-sm text-muted-foreground">Photo de profil</label>
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  {avatarPreview || session?.user?.image ? (
+                    <img 
+                      src={avatarPreview || session?.user?.image || ''} 
+                      alt="Avatar" 
+                      className="w-20 h-20 rounded-full object-cover border-2 border-border"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center border-2 border-border">
+                      <User className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2 flex-1">
+                  <Input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handleAvatarChange}
+                    className="cursor-pointer"
+                  />
+                  {(avatarPreview || session?.user?.image) && (
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleRemoveAvatar}
+                    >
+                      Retirer l'image
+                    </Button>
+                  )}
+                  <p className="text-xs text-muted-foreground">JPG, PNG, GIF ou WebP. Max 2MB.</p>
+                </div>
+              </div>
+            </div>
+
             <div className="flex flex-col gap-2">
               <label className="text-sm text-muted-foreground">E-mail</label>
-              <Input name="email" defaultValue={session?.user?.email || ''} />
+              <Input name="email" type="email" defaultValue={session?.user?.email || ''} />
             </div>
             <div className="flex flex-col gap-2">
               <label className="text-sm text-muted-foreground">Mot de passe actuel (optionnel pour changer l'e-mail)</label>
-              <Input name="currentPassword" type="password" />
+              <Input name="currentPassword" type="password" autoComplete="current-password" />
             </div>
             <div className="flex flex-col gap-2">
               <label className="text-sm text-muted-foreground">Nouveau mot de passe (laisser vide pour ne pas changer)</label>
-              <Input name="newPassword" type="password" />
+              <Input name="newPassword" type="password" autoComplete="new-password" />
             </div>
             {formError && <div className="text-sm text-red-600">{formError}</div>}
             <DialogFooter>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setEditOpen(false)}>Annuler</Button>
-                <Button type="submit" disabled={formLoading}>{formLoading ? '...' : 'Enregistrer'}</Button>
+                <Button type="button" variant="outline" onClick={() => {
+                  setEditOpen(false);
+                  setAvatarFile(null);
+                  setAvatarPreview(null);
+                  setFormError(null);
+                }}>Annuler</Button>
+                <Button type="submit" disabled={formLoading || uploadingAvatar}>
+                  {uploadingAvatar ? 'Upload en cours...' : formLoading ? 'Enregistrement...' : 'Enregistrer'}
+                </Button>
               </div>
             </DialogFooter>
           </form>

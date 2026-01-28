@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { requirePermission } from '@/lib/actions/permissions';
 
 export async function POST(req: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
+  
+  const {allowed, error: permError} = await requirePermission('ACCESS_ADMIN');
+  if (!allowed) return NextResponse.json({ error: permError || 'Accès refusé' }, { status: 403 });
 
   try {
     const body = await req.json().catch(() => ({}));

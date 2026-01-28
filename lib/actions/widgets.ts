@@ -7,6 +7,35 @@ import { iframeAllowlist, iframeRequests } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { generateId } from "@/lib/utils";
+import { hasPermission, type Role } from "@/lib/actions/permissions";
+
+// Mapping des types de widgets vers leurs permissions
+const WIDGET_TYPE_TO_PERMISSION: Record<string, string> = {
+  'link': 'USE_LINK_WIDGET',
+  'ping': 'USE_PING_WIDGET',
+  'link-ping': 'USE_LINK_PING_WIDGET',
+  'iframe': 'USE_IFRAME_WIDGET',
+  'datetime': 'USE_DATETIME_WIDGET',
+  'weather': 'USE_WEATHER_WIDGET',
+  'notes': 'USE_NOTES_WIDGET',
+  'chart': 'USE_CHART_WIDGET',
+  'anime-calendar': 'USE_ANIME_CALENDAR_WIDGET',
+  'todo-list': 'USE_TODO_LIST_WIDGET',
+  'watchlist': 'USE_WATCHLIST_WIDGET',
+  'timer': 'USE_TIMER_WIDGET',
+  'bookmarks': 'USE_BOOKMARKS_WIDGET',
+  'quote': 'USE_QUOTE_WIDGET',
+  'countdown': 'USE_COUNTDOWN_WIDGET',
+  'universal-calendar': 'USE_UNIVERSAL_CALENDAR_WIDGET',
+  'movies-tv-calendar': 'USE_MOVIES_TV_CALENDAR_WIDGET',
+  'media-requests': 'USE_MEDIA_REQUESTS_WIDGET',
+  'torrent-overview': 'USE_TORRENT_OVERVIEW_WIDGET',
+  'monitoring': 'USE_MONITORING_WIDGET',
+  'media-library': 'USE_MEDIA_LIBRARY_WIDGET',
+  'library': 'USE_LIBRARY_WIDGET',
+  'games': 'USE_GAMES_WIDGET',
+  'game-leaderboard': 'USE_GAME_LEADERBOARD_WIDGET',
+};
 
 export async function createWidget(
   dashboardId: string,
@@ -24,6 +53,21 @@ export async function createWidget(
   
   if (!session) {
     throw new Error("Non authentifié");
+  }
+
+  // Vérifier que l'utilisateur a la permission générale de créer des widgets
+  const canCreateWidgets = await hasPermission(session.user.role as Role, 'CREATE_WIDGETS', session.user.id);
+  if (!canCreateWidgets) {
+    throw new Error("Vous n'avez pas la permission de créer des widgets");
+  }
+
+  // Vérifier la permission spécifique pour ce type de widget
+  const widgetPermission = WIDGET_TYPE_TO_PERMISSION[widgetData.type];
+  if (widgetPermission) {
+    const hasWidgetPermission = await hasPermission(session.user.role as Role, widgetPermission, session.user.id);
+    if (!hasWidgetPermission) {
+      throw new Error(`Vous n'avez pas la permission d'utiliser le widget "${widgetData.type}"`);
+    }
   }
 
   // Vérifier que l'utilisateur possède ce dashboard

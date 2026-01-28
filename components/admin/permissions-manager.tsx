@@ -15,7 +15,9 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
-  Info
+  Info,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { useAlert } from "@/components/ui/confirm-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
@@ -30,6 +32,7 @@ import {
   AVAILABLE_PERMISSIONS, 
   getCategories, 
   getPermissionsByCategory,
+  PERMISSION_DEPENDENCIES,
   type Permission 
 } from "@/lib/constants/permissions";
 
@@ -51,6 +54,13 @@ export default function PermissionsManager() {
   });
   const [updating, setUpdating] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const [widgetSectionExpanded, setWidgetSectionExpanded] = useState<Record<Role, boolean>>({
+    USER: false,
+    VIP: false,
+    ADMIN: false,
+  });
+  const [currentUserPermissions, setCurrentUserPermissions] = useState<string[]>([]);
+  const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
     loadPermissions();
@@ -81,6 +91,8 @@ export default function PermissionsManager() {
         });
 
         setPermissions(permState);
+        setCurrentUserPermissions(result.currentUserPermissions || []);
+        setIsOwner(result.isOwner || false);
         setInitialized(Object.values(permState).some(role => Object.keys(role).length > 0));
       }
     } catch (error) {
@@ -92,13 +104,9 @@ export default function PermissionsManager() {
   };
 
   const handleTogglePermission = async (role: Role, permissionKey: string, enabled: boolean) => {
-    if (role === "ADMIN") {
-      await alert("Les permissions ADMIN ne peuvent pas être modifiées (toujours actives)");
-      return;
-    }
-
     setUpdating(permissionKey);
     try {
+      // Mise à jour de la permission principale
       const result = await toggleRolePermission(role, permissionKey, enabled);
       
       if (result.error) {
@@ -106,13 +114,47 @@ export default function PermissionsManager() {
         return;
       }
 
-      setPermissions(prev => ({
-        ...prev,
-        [role]: {
-          ...prev[role],
-          [permissionKey]: enabled,
-        },
-      }));
+      // Créer une copie de l'état des permissions
+      const newPermissions = { ...permissions };
+      newPermissions[role] = { ...newPermissions[role] };
+
+      // Désactiver les permissions liées si nous décactivons une permission
+      if (!enabled && permissionKey === "ACCESS_ADMIN") {
+        // Récupérer toutes les permissions qui dépendent de ACCESS_ADMIN
+        const dependentPerms = Object.entries(PERMISSION_DEPENDENCIES)
+          .filter(([_, deps]) => deps && deps.includes("ACCESS_ADMIN"))
+          .map(([perm, _]) => perm);
+
+        // Désactiver les permissions dépendantes côté client immédiatement
+        for (const depPerm of dependentPerms) {
+          newPermissions[role][depPerm] = false;
+          // Appeler le serveur pour désactiver aussi côté base de données
+          try {
+            await toggleRolePermission(role, depPerm, false);
+          } catch (e) {
+            console.error(`Erreur lors de la désactivation de ${depPerm}:`, e);
+          }
+        }
+
+        if (dependentPerms.length > 0) {
+          await alert(`✅ ACCESS_ADMIN désactivé. Les ${dependentPerms.length} permissions dépendantes ont été automatiquement désactivées: ${dependentPerms.join(", ")}`);
+        }
+      }
+
+      // Empêcher d'activer une permission si ses dépendances ne sont pas activées
+      if (enabled && PERMISSION_DEPENDENCIES[permissionKey as keyof typeof PERMISSION_DEPENDENCIES]) {
+        const requiredPerms = PERMISSION_DEPENDENCIES[permissionKey as keyof typeof PERMISSION_DEPENDENCIES] || [];
+        const missingDeps = requiredPerms.filter(dep => !newPermissions[role][dep]);
+
+        if (missingDeps.length > 0) {
+          await alert(`⚠️ Impossible d'activer ${permissionKey}. Permissions requises manquantes: ${missingDeps.join(", ")}`);
+          setUpdating(null);
+          return;
+        }
+      }
+
+      newPermissions[role][permissionKey] = enabled;
+      setPermissions(newPermissions);
     } catch (error) {
       console.error("Error toggling permission:", error);
       await alert("Erreur lors de la modification");
@@ -146,8 +188,8 @@ export default function PermissionsManager() {
   };
 
   const handleReset = async (role: Role) => {
-    if (role === "ADMIN") {
-      await alert("Le rôle ADMIN ne peut pas être réinitialisé");
+    if (!isOwner) {
+      await alert("Seul le propriétaire peut réinitialiser les permissions");
       return;
     }
 
@@ -191,8 +233,16 @@ export default function PermissionsManager() {
   };
 
   const isPermissionEnabled = (role: Role, permKey: string): boolean => {
-    if (role === "ADMIN") return true; // ADMIN a toujours tout
+    // Toujours montrer l'état réel de la DB, même pour le owner
+    // Le owner peut modifier n'importe quelle permission, mais on affiche l'état DB
     return permissions[role][permKey] ?? false;
+  };
+
+  const canModifyPermission = (permKey: string): boolean => {
+    // Le owner peut tout modifier
+    if (isOwner) return true;
+    // Un admin ne peut modifier que les permissions qu'il possède
+    return currentUserPermissions.includes(permKey);
   };
 
   const categories = getCategories();
@@ -292,18 +342,18 @@ export default function PermissionsManager() {
 
         {(["USER", "VIP", "ADMIN"] as Role[]).map((role) => (
           <TabsContent key={role} value={role} className="space-y-6">
-            {/* Info banner pour ADMIN */}
-            {role === "ADMIN" && (
+            {/* Info banner pour les permissions */}
+            {!isOwner && (
               <Card className="bg-muted">
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-3">
                     <Info className="h-5 w-5 text-muted-foreground mt-0.5" />
                     <div className="space-y-1">
                       <p className="text-sm font-medium">
-                        Les administrateurs ont toutes les permissions
+                        Vous ne pouvez modifier que les permissions que vous possédez
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        Les permissions ADMIN ne peuvent pas être modifiées et sont toujours actives.
+                        Les permissions grisées ne peuvent pas être modifiées car vous ne les avez pas.
                       </p>
                     </div>
                   </div>
@@ -311,8 +361,8 @@ export default function PermissionsManager() {
               </Card>
             )}
 
-            {/* Bouton reset pour USER et VIP */}
-            {role !== "ADMIN" && (
+            {/* Bouton reset pour tous les rôles si owner */}
+            {isOwner && (
               <div className="flex justify-end">
                 <Button
                   onClick={() => handleReset(role)}
@@ -330,6 +380,148 @@ export default function PermissionsManager() {
             {categories.map((category) => {
               const categoryPerms = getPermissionsByCategory(category);
               
+              // Si c'est la catégorie Widget, créer un affichage spécial
+              if (category === 'Widget') {
+                // Séparer les permissions générales des permissions spécifiques aux widgets
+                const generalWidgetPerms = categoryPerms.filter(p => 
+                  p.key === 'CREATE_WIDGETS' || p.key === 'MANAGE_WIDGETS'
+                );
+                const specificWidgetPerms = categoryPerms.filter(p => 
+                  p.key.startsWith('USE_') && p.key.includes('_WIDGET')
+                );
+
+                return (
+                  <Card key={category}>
+                    <CardHeader>
+                      <CardTitle className="text-lg">{category}</CardTitle>
+                      <CardDescription>
+                        {categoryPerms.length} permission{categoryPerms.length > 1 ? "s" : ""} disponible{categoryPerms.length > 1 ? "s" : ""}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Permissions générales des widgets */}
+                      {generalWidgetPerms.map((perm) => {
+                        const isEnabled = isPermissionEnabled(role, perm.key);
+                        const isUpdating = updating === perm.key;
+                        const canModify = canModifyPermission(perm.key);
+                        const isDisabled = !canModify || isUpdating;
+
+                        return (
+                          <div
+                            key={perm.key}
+                            className={`flex items-start justify-between gap-4 p-4 rounded-lg border bg-card ${!canModify ? 'opacity-50' : ''}`}
+                          >
+                            <div className="flex-1 space-y-1">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-medium text-sm">{perm.label}</h4>
+                                {isEnabled && (
+                                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                )}
+                                {!canModify && (
+                                  <Badge variant="secondary" className="text-xs">Verrouillé</Badge>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                {perm.description}
+                              </p>
+                              <code className="text-xs bg-muted px-2 py-1 rounded">
+                                {perm.key}
+                              </code>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={isEnabled}
+                                onCheckedChange={(checked) => 
+                                  handleTogglePermission(role, perm.key, checked)
+                                }
+                                disabled={isDisabled}
+                              />
+                              {isUpdating && (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Accordéon pour les widgets spécifiques */}
+                      {specificWidgetPerms.length > 0 && (
+                        <div className="border rounded-lg overflow-hidden">
+                          <button
+                            onClick={() => setWidgetSectionExpanded(prev => ({
+                              ...prev,
+                              [role]: !prev[role]
+                            }))}
+                            className="w-full flex items-center justify-between p-4 bg-muted/50 hover:bg-muted transition-colors"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Shield className="h-4 w-4" />
+                              <span className="font-medium">
+                                Widgets individuels ({specificWidgetPerms.length})
+                              </span>
+                              <Badge variant="secondary">
+                                {specificWidgetPerms.filter(p => isPermissionEnabled(role, p.key)).length} actifs
+                              </Badge>
+                            </div>
+                            {widgetSectionExpanded[role] ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </button>
+                          
+                          {widgetSectionExpanded[role] && (
+                            <div className="p-4 space-y-2 bg-background">
+                              {specificWidgetPerms.map((perm) => {
+                                const isEnabled = isPermissionEnabled(role, perm.key);
+                                const isUpdating = updating === perm.key;
+                                const canModify = canModifyPermission(perm.key);
+                                const isDisabled = !canModify || isUpdating;
+
+                                return (
+                                  <div
+                                    key={perm.key}
+                                    className={`flex items-start justify-between gap-4 p-3 rounded-lg border bg-card hover:bg-accent/5 transition-colors ${!canModify ? 'opacity-50' : ''}`}
+                                  >
+                                    <div className="flex-1 space-y-1">
+                                      <div className="flex items-center gap-2">
+                                        <h4 className="font-medium text-sm">{perm.label}</h4>
+                                        {isEnabled && (
+                                          <CheckCircle2 className="h-3 w-3 text-green-500" />
+                                        )}
+                                        {!canModify && (
+                                          <Badge variant="secondary" className="text-xs">Verrouillé</Badge>
+                                        )}
+                                      </div>
+                                      <p className="text-xs text-muted-foreground">
+                                        {perm.description}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Switch
+                                        checked={isEnabled}
+                                        onCheckedChange={(checked) => 
+                                          handleTogglePermission(role, perm.key, checked)
+                                        }
+                                        disabled={isDisabled}
+                                      />
+                                      {isUpdating && (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              }
+              
+              // Pour les autres catégories, affichage normal
               return (
                 <Card key={category}>
                   <CardHeader>
@@ -343,18 +535,22 @@ export default function PermissionsManager() {
                       {categoryPerms.map((perm) => {
                         const isEnabled = isPermissionEnabled(role, perm.key);
                         const isUpdating = updating === perm.key;
-                        const isDisabled = role === "ADMIN" || isUpdating;
+                        const canModify = canModifyPermission(perm.key);
+                        const isDisabled = !canModify || isUpdating;
 
                         return (
                           <div
                             key={perm.key}
-                            className="flex items-start justify-between gap-4 p-4 rounded-lg border bg-card"
+                            className={`flex items-start justify-between gap-4 p-4 rounded-lg border bg-card ${!canModify ? 'opacity-50' : ''}`}
                           >
                             <div className="flex-1 space-y-1">
                               <div className="flex items-center gap-2">
                                 <h4 className="font-medium text-sm">{perm.label}</h4>
                                 {isEnabled && (
                                   <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                )}
+                                {!canModify && (
+                                  <Badge variant="secondary" className="text-xs">Verrouillé</Badge>
                                 )}
                               </div>
                               <p className="text-sm text-muted-foreground">

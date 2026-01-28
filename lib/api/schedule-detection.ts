@@ -1,3 +1,4 @@
+
 /**
  * Auto-detection des horaires de sortie pour la Library
  * Recherche sur AniList (anime/manga) et TMDB (séries/films)
@@ -12,12 +13,21 @@ export interface ScheduleInfo {
     number: number;
     airingAt: number; // timestamp
   };
+  releaseDate?: {
+    number: number;
+    airingAt: number;
+    date: string;
+  };
   confidence: 'high' | 'medium' | 'low';
   title?: string;
   coverUrl?: string;
   detectedType?: string; // 'anime', 'manga', 'manhwa', etc.
   detectedStatus?: string; // 'reading', 'completed', 'plan_to_read', etc.
   totalProgress?: number | null; // Nombre total d'épisodes/chapitres
+  streamingLinks?: {
+    crunchyroll?: string | null;
+    voiranime?: string | null;
+  };
 }
 
 /**

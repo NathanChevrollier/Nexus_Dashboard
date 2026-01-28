@@ -169,22 +169,41 @@ io.on('connection', (socket) => {
     socket.data.userId = userKey;
     socket.join(userKey);
 
-    if (!market.players[userKey]) {
-      market.players[userKey] = {
+    // NE PAS ajouter automatiquement les joueurs
+    // Les joueurs sont ajoutés uniquement quand ils commencent à faire des transactions
+    // On envoie juste le portfolio s'il existe
+    if (market.players[userKey]) {
+      if (userName) {
+        market.players[userKey].name = userName;
+      }
+      socket.emit('trader:portfolio', market.players[userKey]);
+    } else {
+      // Envoyer un portfolio initial sans ajouter le joueur à market.players
+      socket.emit('trader:portfolio', {
         userId: userKey,
         name: userName || `Trader-${userKey.slice(0,4)}`,
-        cash: 1000,
+        cash: 10000,
         holdings: {},
-        netWorth: 1000
-      };
-    } else if (userName) {
-      market.players[userKey].name = userName;
+        netWorth: 10000
+      });
     }
-    
-    socket.emit('trader:portfolio', market.players[userKey]);
   });
 
   // --- Actions de Jeu Trader ---
+  
+  // Helper pour assurer que le joueur existe dans market.players
+  const ensurePlayer = (userId, userName) => {
+    if (!market.players[userId]) {
+      market.players[userId] = {
+        userId,
+        name: userName || `Trader-${userId.slice(0,4)}`,
+        cash: 10000,
+        holdings: {},
+        netWorth: 10000
+      };
+    }
+    return market.players[userId];
+  };
   
   socket.on('trader:getState', () => {
     const response = {
@@ -200,10 +219,15 @@ io.on('connection', (socket) => {
   });
 
   socket.on('trader:buy', ({ userId, symbol, quantity }) => {
-    const player = market.players[userId];
+    let player = market.players[userId];
     const stock = market.stocks[symbol];
     
-    if (!player || !stock || quantity <= 0) return;
+    if (!stock || quantity <= 0) return;
+
+    // Créer le joueur s'il n'existe pas (première transaction)
+    if (!player) {
+      player = ensurePlayer(userId, socket.data?.userName);
+    }
 
     const cost = stock.price * quantity;
     
@@ -223,10 +247,15 @@ io.on('connection', (socket) => {
   });
 
   socket.on('trader:sell', ({ userId, symbol, quantity }) => {
-    const player = market.players[userId];
+    let player = market.players[userId];
     const stock = market.stocks[symbol];
     
-    if (!player || !stock || quantity <= 0) return;
+    if (!stock || quantity <= 0) return;
+
+    // Créer le joueur s'il n'existe pas (première transaction)
+    if (!player) {
+      player = ensurePlayer(userId, socket.data?.userName);
+    }
 
     const owned = player.holdings?.[symbol] || 0;
     

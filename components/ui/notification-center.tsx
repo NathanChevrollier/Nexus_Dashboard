@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSocket } from "@/components/ui/socket-provider";
-import { Bell, Check, Trash2, X } from "lucide-react";
+import { Bell, Check, Trash2, X, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -33,6 +33,7 @@ export default function NotificationCenter() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [showAnnouncementsButton, setShowAnnouncementsButton] = useState(false);
   const [announcementDialog, setAnnouncementDialog] = useState<{
     open: boolean;
     announcement: any | null;
@@ -288,8 +289,9 @@ export default function NotificationCenter() {
   };
   const handleNotificationClick = (notification: Notification) => {
     markAsRead(notification.id);
-    // Si c'est une announcement, ouvrir le dialog de détail
-    if (notification.type === 'announcement:new' && notification.payload) {
+    
+    // Si c'est une annonce/patchnote, ouvrir le dialog de détail
+    if (notification.type === 'announcement:new' && notification.payload?.id) {
       setAnnouncementDialog({
         open: true,
         announcement: {
@@ -304,7 +306,7 @@ export default function NotificationCenter() {
       return;
     }
 
-    // Sinon, navigation normale
+    // Sinon, navigation normale via le lien
     if (notification.link) {
       router.push(notification.link);
       setIsOpen(false);
@@ -374,30 +376,44 @@ export default function NotificationCenter() {
               {unreadCount > 0 ? `${unreadCount} non lue${unreadCount > 1 ? 's' : ''}` : 'Aucune nouvelle notification'}
             </p>
           </div>
-          {notifications.length > 0 && (
-            <div className="flex gap-1">
-              {unreadCount > 0 && (
+          <div className="flex gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                router.push('/announcements');
+                setIsOpen(false);
+              }}
+              title="Voir toutes les annonces"
+            >
+              <Megaphone className="h-4 w-4" />
+            </Button>
+            {notifications.length > 0 && (
+              <>
+                {unreadCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={markAllAsRead}
+                    className="h-8 text-xs"
+                  >
+                    <Check className="h-3 w-3 mr-1" />
+                    Tout lire
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={markAllAsRead}
-                  className="h-8 text-xs"
+                  onClick={deleteAllNotifications}
+                  className="h-8 text-xs text-destructive hover:text-destructive"
                 >
-                  <Check className="h-3 w-3 mr-1" />
-                  Tout lire
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={deleteAllNotifications}
-                className="h-8 text-xs text-destructive hover:text-destructive"
-              >
-                <Trash2 className="h-3 w-3 mr-1" />
+                  <Trash2 className="h-3 w-3 mr-1" />
                 Effacer
               </Button>
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </div>
 
         {notifications.length === 0 ? (

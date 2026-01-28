@@ -23,7 +23,9 @@ import {
   Megaphone, 
   Info, 
   AlertTriangle,
-  Sparkles 
+  Sparkles,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -108,6 +110,24 @@ export default function AnnouncementsManager() {
     }
   };
 
+  const handleTogglePublish = async (announcement: Announcement) => {
+    const result = await updateAnnouncement(announcement.id, {
+      isPublished: !announcement.isPublished,
+    });
+    
+    if (result.success) {
+      const action = announcement.isPublished ? "Dépubliée" : "Publiée";
+      pushToast({ 
+        title: "Succès", 
+        description: `Annonce ${action.toLowerCase()}`, 
+        type: "success" 
+      });
+      loadAnnouncements();
+    } else {
+      pushToast({ title: "Erreur", description: result.error || "Erreur", type: "error" });
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       title: "",
@@ -159,25 +179,25 @@ export default function AnnouncementsManager() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Annonces & Patch Notes</h2>
+          <h2 className="text-2xl font-bold">📢 Annonces & Patch Notes</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Gérer les annonces visibles par tous les utilisateurs
           </p>
         </div>
-        <Button onClick={openCreateDialog}>
-          <Plus className="h-4 w-4 mr-2" />
+        <Button onClick={openCreateDialog} className="gap-2">
+          <Plus className="h-4 w-4" />
           Nouvelle annonce
         </Button>
       </div>
 
       {(editingAnnouncement !== null || isCreating || formData.title || formData.content) && (
-        <Card>
+        <Card className="border-primary/30 bg-primary/5">
           <CardHeader>
             <CardTitle>
-              {editingAnnouncement ? "Modifier l'annonce" : "Créer une annonce"}
+              {editingAnnouncement ? "✏️ Modifier l'annonce" : "✨ Créer une annonce"}
             </CardTitle>
             <CardDescription>
-              Les annonces publiées seront visibles par tous les utilisateurs
+              Les annonces publiées seront visibles par tous les utilisateurs et des notifications seront envoyées
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -269,80 +289,183 @@ export default function AnnouncementsManager() {
       )}
 
       {loading ? (
-        <div className="text-center py-8 text-muted-foreground">
-          Chargement...
+        <div className="text-center py-12 text-muted-foreground">
+          <div className="inline-block">
+            <div className="h-8 w-8 border-4 border-muted border-t-primary rounded-full animate-spin mb-3"></div>
+            <p>Chargement des annonces...</p>
+          </div>
         </div>
       ) : announcements.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            Aucune annonce créée
+        <Card className="border-dashed">
+          <CardContent className="py-12 text-center text-muted-foreground">
+            <div className="text-4xl mb-3">📭</div>
+            <p className="font-medium">Aucune annonce créée</p>
+            <p className="text-sm mt-1">Créez votre première annonce pour la partager avec vos utilisateurs</p>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {announcements.map((announcement) => (
-            <Card key={announcement.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-3 flex-1">
-                    <div className="mt-1">
-                      {getTypeIcon(announcement.type)}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <CardTitle className="text-lg">
-                          {announcement.title}
-                        </CardTitle>
-                        <Badge
-                          variant="outline"
-                          className={getTypeBadgeColor(announcement.type)}
-                        >
-                          {announcement.type}
-                        </Badge>
-                        {announcement.isPublished ? (
-                          <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
-                            Publié
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-gray-500/10 text-gray-500 border-gray-500/20">
-                            Brouillon
-                          </Badge>
-                        )}
+        <div className="space-y-3">
+          {/* Grouper les publiées et brouillons */}
+          <div>
+            <h3 className="text-sm font-semibold text-green-600 dark:text-green-400 mb-3 flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-green-500"></div>
+              Publiées ({announcements.filter(a => a.isPublished).length})
+            </h3>
+            <div className="space-y-2">
+              {announcements.filter(a => a.isPublished).length === 0 ? (
+                <p className="text-sm text-muted-foreground px-3 py-2">Aucune annonce publiée</p>
+              ) : (
+                announcements.filter(a => a.isPublished).map((announcement) => (
+                  <Card key={announcement.id} className="hover:shadow-md transition-shadow">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          <div className="text-lg mt-0.5">
+                            {announcement.type === 'info' ? '📋' : announcement.type === 'update' ? '🚀' : '⚠️'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <CardTitle className="text-base line-clamp-2">
+                                {announcement.title}
+                              </CardTitle>
+                              <Badge
+                                variant="outline"
+                                className={getTypeBadgeColor(announcement.type)}
+                                className="shrink-0"
+                              >
+                                {announcement.type}
+                              </Badge>
+                            </div>
+                            <CardDescription className="text-xs">
+                              {new Date(announcement.createdAt).toLocaleDateString("fr-FR", {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </CardDescription>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleTogglePublish(announcement)}
+                            className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
+                            title="Dépublier cette annonce"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditDialog(announcement)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(announcement.id)}
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <CardDescription>
-                        {new Date(announcement.createdAt).toLocaleDateString("fr-FR", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openEditDialog(announcement)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(announcement.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm whitespace-pre-wrap">{announcement.content}</p>
-              </CardContent>
-            </Card>
-          ))}
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {announcement.content}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Brouillons */}
+          {announcements.some(a => !a.isPublished) && (
+            <div>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-muted-foreground"></div>
+                Brouillons ({announcements.filter(a => !a.isPublished).length})
+              </h3>
+              <div className="space-y-2 opacity-75">
+                {announcements.filter(a => !a.isPublished).map((announcement) => (
+                  <Card key={announcement.id} className="bg-muted/30 hover:shadow-md transition-shadow">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          <div className="text-lg mt-0.5">
+                            {announcement.type === 'info' ? '📋' : announcement.type === 'update' ? '🚀' : '⚠️'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <CardTitle className="text-base line-clamp-2">
+                                {announcement.title}
+                              </CardTitle>
+                              <Badge
+                                variant="outline"
+                                className={getTypeBadgeColor(announcement.type)}
+                                className="shrink-0"
+                              >
+                                {announcement.type}
+                              </Badge>
+                            </div>
+                            <CardDescription className="text-xs">
+                              {new Date(announcement.createdAt).toLocaleDateString("fr-FR", {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </CardDescription>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleTogglePublish(announcement)}
+                            className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-500/10"
+                            title="Publier cette annonce"
+                          >
+                            <EyeOff className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditDialog(announcement)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(announcement.id)}
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {announcement.content}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

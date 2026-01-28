@@ -7,6 +7,8 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 
 const schema = z.object({
+  name: z.string().min(1).optional(),
+  image: z.string().optional(),
   email: z.string().email().optional(),
   currentPassword: z.string().min(1).optional(),
   newPassword: z.string().min(6).optional(),
@@ -21,8 +23,18 @@ export async function POST(request: Request) {
     const parsed = schema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: "Données invalides" }, { status: 400 });
 
-    const { email, currentPassword, newPassword } = parsed.data;
+    const { name, image, email, currentPassword, newPassword } = parsed.data;
     const userId = session.user.id;
+
+    // Mise à jour du nom
+    if (name !== undefined) {
+      await db.update(users).set({ name }).where(eq(users.id, userId));
+    }
+
+    // Mise à jour de l'image
+    if (image !== undefined) {
+      await db.update(users).set({ image }).where(eq(users.id, userId));
+    }
 
     if (email) {
       await db.update(users).set({ email }).where(eq(users.id, userId));

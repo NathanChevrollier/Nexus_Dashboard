@@ -54,10 +54,18 @@ export async function getRolePermissions() {
       permissionsByRole[perm.role as Role].push(perm as RolePermission);
     });
 
+    // Récupérer les permissions de l'utilisateur actuel
+    const currentUserPermissions = await getActivePermissions(
+      session.user.role as Role,
+      session.user.id
+    );
+
     return { 
       success: true, 
       permissions: permissionsByRole,
       availablePermissions: AVAILABLE_PERMISSIONS,
+      currentUserPermissions,
+      isOwner: session.user.isOwner,
     };
   } catch (error) {
     console.error("Error fetching role permissions:", error);
@@ -88,6 +96,14 @@ export async function toggleRolePermission(
     const permissionExists = AVAILABLE_PERMISSIONS.some(p => p.key === permission);
     if (!permissionExists) {
       return { error: "Permission invalide" };
+    }
+
+    // Si l'utilisateur n'est pas le owner, vérifier qu'il possède lui-même cette permission
+    if (!session.user.isOwner) {
+      const userHasPermission = await hasPermission(session.user.role as Role, permission, session.user.id);
+      if (!userHasPermission) {
+        return { error: "Vous ne pouvez pas gérer une permission que vous ne possédez pas" };
+      }
     }
 
     // Chercher si la permission existe déjà en DB
@@ -140,12 +156,30 @@ export async function toggleRolePermission(
  */
 export async function hasPermission(
   role: Role,
-  permissionKey: string
+  permissionKey: string,
+  userId?: string
 ): Promise<boolean> {
   try {
-    // Les admins ont toutes les permissions par défaut
-    if (role === 'ADMIN') {
-      return true;
+    // ACCESS_ADMIN est une permission spéciale réservée aux propriétaires seulement
+    if (permissionKey === 'ACCESS_ADMIN') {
+      if (userId) {
+        const user = await db.query.users.findFirst({
+          where: (users, { eq }) => eq(users.id, userId),
+        });
+        return !!user?.isOwner;
+      }
+      // Sans userId, on ne peut pas accorder ACCESS_ADMIN
+      return false;
+    }
+
+    // Si un userId est fourni, vérifier s'il est owner
+    if (userId) {
+      const user = await db.query.users.findFirst({
+        where: (users, { eq }) => eq(users.id, userId),
+      });
+      if (user?.isOwner) {
+        return true;
+      }
     }
 
     // Chercher la permission en DB
@@ -183,11 +217,12 @@ export async function currentUserHasPermission(
   try {
     const session = await auth();
     
-    if (!session?.user?.role) {
+    if (!session?.user?.role || !session?.user?.id) {
       return false;
     }
 
-    return await hasPermission(session.user.role as Role, permissionKey);
+    // Passer l'userId pour que hasPermission puisse vérifier isOwner
+    return await hasPermission(session.user.role as Role, permissionKey, session.user.id);
   } catch (error) {
     console.error("Error checking current user permission:", error);
     return false;
@@ -197,13 +232,19 @@ export async function currentUserHasPermission(
 /**
  * Récupère toutes les permissions actives d'un rôle
  * @param role Le rôle concerné
+ * @param userId Optionnel: ID de l'utilisateur pour vérifier isOwner
  * @returns Liste des clés de permissions actives
  */
-export async function getActivePermissions(role: Role): Promise<string[]> {
+export async function getActivePermissions(role: Role, userId?: string): Promise<string[]> {
   try {
-    // Les admins ont toutes les permissions
-    if (role === 'ADMIN') {
-      return AVAILABLE_PERMISSIONS.map(p => p.key);
+    // Si un userId est fourni et que c'est le owner, toutes les permissions
+    if (userId) {
+      const user = await db.query.users.findFirst({
+        where: (users, { eq }) => eq(users.id, userId),
+      });
+      if (user?.isOwner) {
+        return AVAILABLE_PERMISSIONS.map(p => p.key);
+      }
     }
 
     // Récupérer les permissions depuis la DB
@@ -332,3 +373,39 @@ export async function resetRolePermissions(role: Role) {
     return { error: "Erreur lors de la réinitialisation des permissions" };
   }
 }
+
+/**
+ * Fonction helper pour vérifier les permissions dans les API routes
+ * Retourne {allowed: true} ou {allowed: false, error: string}
+ * @param requiredPermission La permission requise
+ * @returns {allowed: boolean, error?: string}
+ */
+export async function requirePermission(requiredPermission: string): Promise<{allowed: boolean; error?: string}> {
+  try {
+    const session = await auth();
+    
+    if (!session?.user?.id || !session?.user?.role) {
+      return {allowed: false, error: "Non authentifié"};
+    }
+
+    // Le owner a toutes les permissions
+    if (session.user.isOwner) {
+      return {allowed: true};
+    }
+
+    // Vérifier la permission via hasPermission
+    const allowed = await hasPermission(
+      session.user.role as Role,
+      requiredPermission,
+      session.user.id
+    );
+
+    return allowed 
+      ? {allowed: true}
+      : {allowed: false, error: "Accès refusé - permission manquante"};
+  } catch (error) {
+    console.error("Error in requirePermission:", error);
+    return {allowed: false, error: "Erreur serveur"};
+  }
+}
+

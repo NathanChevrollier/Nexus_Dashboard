@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requirePermission } from "@/lib/actions/permissions";
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,9 +10,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Vérifier que l'utilisateur est admin
-    if (session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    // Vérifier que l'utilisateur a la permission MANAGE_ANNOUNCEMENTS
+    const {allowed, error: permError} = await requirePermission("MANAGE_ANNOUNCEMENTS");
+    if (!allowed) {
+      return NextResponse.json({ error: permError || "Forbidden" }, { status: 403 });
     }
 
     const body = await req.json();

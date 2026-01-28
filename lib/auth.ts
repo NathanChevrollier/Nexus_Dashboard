@@ -13,12 +13,14 @@ declare module "next-auth" {
       id: string;
       role: "USER" | "VIP" | "ADMIN";
       status: "PENDING" | "ACTIVE" | "BANNED";
+      isOwner: boolean;
     } & DefaultSession["user"];
   }
 
   interface User {
     role: "USER" | "VIP" | "ADMIN";
     status: "PENDING" | "ACTIVE" | "BANNED";
+    isOwner: boolean;
   }
 }
 
@@ -82,6 +84,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           name: user.name,
           role: user.role,
           status: user.status,
+          isOwner: user.isOwner,
         };
       },
     }),
@@ -92,6 +95,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.id = user.id;
         token.role = user.role;
         token.status = user.status;
+        token.isOwner = user.isOwner;
       }
       return token;
     },
@@ -100,6 +104,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.id as string;
         session.user.role = token.role as "USER" | "VIP" | "ADMIN";
         session.user.status = token.status as "PENDING" | "ACTIVE" | "BANNED";
+        session.user.isOwner = token.isOwner as boolean;
       }
       return session;
     },

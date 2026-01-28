@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { iframeAllowlist } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
+import { requirePermission } from '@/lib/actions/permissions';
 
 const postSchema = z.object({ origin: z.string().min(3) });
 const patchSchema = z.object({ id: z.string(), removed: z.boolean().optional() });
@@ -16,7 +17,9 @@ export async function GET(request: Request) {
   try {
     const session = await auth();
     if (!session) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
-    if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
+    
+    const {allowed, error: permError} = await requirePermission('MANAGE_IFRAME_ALLOWLIST');
+    if (!allowed) return NextResponse.json({ error: permError || 'Accès refusé' }, { status: 403 });
 
     // serve cached response when fresh
     if (allowlistCache && (Date.now() - allowlistCache.ts) / 1000 < ALLOWLIST_CACHE_TTL) {
@@ -36,7 +39,9 @@ export async function POST(request: Request) {
   try {
     const session = await auth();
     if (!session) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
-    if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
+    
+    const {allowed, error: permError} = await requirePermission('MANAGE_IFRAME_ALLOWLIST');
+    if (!allowed) return NextResponse.json({ error: permError || 'Accès refusé' }, { status: 403 });
 
     const json = await request.json().catch(() => ({}));
     const parsed = postSchema.safeParse(json);
@@ -69,7 +74,9 @@ export async function PATCH(request: Request) {
   try {
     const session = await auth();
     if (!session) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
-    if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
+    
+    const {allowed, error: permError} = await requirePermission('MANAGE_IFRAME_ALLOWLIST');
+    if (!allowed) return NextResponse.json({ error: permError || 'Accès refusé' }, { status: 403 });
 
     const json = await request.json().catch(() => ({}));
     const parsed = patchSchema.safeParse(json);
@@ -92,7 +99,9 @@ export async function DELETE(request: Request) {
   try {
     const session = await auth();
     if (!session) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
-    if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
+    
+    const {allowed, error: permError} = await requirePermission('MANAGE_IFRAME_ALLOWLIST');
+    if (!allowed) return NextResponse.json({ error: permError || 'Accès refusé' }, { status: 403 });
 
     const json = await request.json().catch(() => ({}));
     const id = json.id as string | undefined;

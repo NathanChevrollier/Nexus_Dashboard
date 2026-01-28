@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { conversations, participants, messages } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { and } from 'drizzle-orm';
+import { requirePermission } from '@/lib/actions/permissions';
 
 export async function DELETE(req: Request, { params }: any) {
   try {
@@ -15,8 +16,8 @@ export async function DELETE(req: Request, { params }: any) {
     })();
     if (!convId) return NextResponse.json({ error: 'conversation id required' }, { status: 400 });
 
-    // check if user is participant or admin
-    const isAdmin = session.user.role === 'ADMIN';
+    // check if user is participant or has admin permission
+    const {allowed: isAdmin} = await requirePermission('ACCESS_ADMIN');
     const part = await db.select().from(participants).where(and(eq(participants.conversationId, convId), eq(participants.userId, session.user.id))).limit(1).catch(() => []);
     if (!isAdmin && (!part || part.length === 0)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
@@ -47,7 +48,7 @@ export async function PATCH(req: Request, { params }: any) {
     if (!title) return NextResponse.json({ error: 'title required' }, { status: 400 });
 
     // check permission: participant or admin
-    const isAdmin = session.user.role === 'ADMIN';
+    const {allowed: isAdmin} = await requirePermission('ACCESS_ADMIN');
     const part = await db.select().from(participants).where(and(eq(participants.conversationId, convId), eq(participants.userId, session.user.id))).limit(1).catch(() => []);
     if (!isAdmin && (!part || part.length === 0)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
