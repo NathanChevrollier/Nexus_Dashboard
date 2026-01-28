@@ -5,7 +5,7 @@ import { Widget } from "@/lib/db/schema";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Settings, Trash2, GripVertical, AlertTriangle } from "lucide-react";
-import { useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-v2";
+import { useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-context";
 import ErrorBoundary from "@/components/ui/error-boundary";
 
 // Imports des widgets

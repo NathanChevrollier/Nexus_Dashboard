@@ -71,7 +71,6 @@ export default function GamesManagementAdmin() {
       setScores((scoresData as GameScore[]) || []);
       setStats(statsData as GameStats);
     } catch (error) {
-      console.error("Erreur:", error);
       alert("Erreur lors du chargement");
     } finally {
       setLoading(false);
@@ -83,7 +82,6 @@ export default function GamesManagementAdmin() {
       const res = await fetch("/api/admin/users");
       if (res.ok) setUsers(await res.json());
     } catch (error) {
-      console.error("Erreur users:", error);
     }
   };
 
@@ -100,7 +98,7 @@ export default function GamesManagementAdmin() {
       setNewScore({ userId: "", score: 0 });
       await loadGameData();
     } catch (error) {
-      console.error("Erreur:", error);
+
       alert("❌ Erreur lors de l'ajout");
     } finally {
       setSubmitting(false);
@@ -115,7 +113,6 @@ export default function GamesManagementAdmin() {
       setEditingScore(null);
       await loadGameData();
     } catch (error) {
-      console.error("Erreur:", error);
       alert("❌ Erreur lors de la modification");
     } finally {
       setSubmitting(false);
@@ -130,7 +127,6 @@ export default function GamesManagementAdmin() {
       alert("✅ Score supprimé");
       await loadGameData();
     } catch (error) {
-      console.error("Erreur:", error);
       alert("❌ Erreur lors de la suppression");
     } finally {
       setSubmitting(false);
@@ -160,8 +156,7 @@ export default function GamesManagementAdmin() {
       alert("✅ Classement vidé");
       await loadGameData();
     } catch (error) {
-      console.error("Erreur:", error);
-      alert("❌ Erreur");
+      alert("❌ Erreur lors du nettoyage");
     } finally {
       setSubmitting(false);
     }

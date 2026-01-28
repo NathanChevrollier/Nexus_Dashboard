@@ -3,12 +3,13 @@ import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-// Seulement en dev
-if (process.env.NODE_ENV === 'production') {
-  throw new Error('API dev-db not allowed in production');
-}
 
 export async function POST(req: Request) {
+  // Only allow in non-production at runtime
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
   try {
     const { userId, isOwner } = await req.json();
 

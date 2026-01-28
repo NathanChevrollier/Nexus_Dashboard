@@ -28,6 +28,7 @@ import {
   EyeOff
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import { cn } from '@/lib/utils';
 import {
   createAnnouncement,
   getAllAnnouncements,
@@ -330,8 +331,7 @@ export default function AnnouncementsManager() {
                               </CardTitle>
                               <Badge
                                 variant="outline"
-                                className={getTypeBadgeColor(announcement.type)}
-                                className="shrink-0"
+                                className={cn(getTypeBadgeColor(announcement.type), 'shrink-0')}
                               >
                                 {announcement.type}
                               </Badge>
@@ -410,8 +410,7 @@ export default function AnnouncementsManager() {
                               </CardTitle>
                               <Badge
                                 variant="outline"
-                                className={getTypeBadgeColor(announcement.type)}
-                                className="shrink-0"
+                                className={cn(getTypeBadgeColor(announcement.type), 'shrink-0')}
                               >
                                 {announcement.type}
                               </Badge>

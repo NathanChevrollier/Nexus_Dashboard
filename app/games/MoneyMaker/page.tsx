@@ -147,7 +147,9 @@ export default function TraderTerminal() {
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
         osc.start();
         osc.stop(now + 0.15);
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      // Silent error handling
+    }
   };
 
   // --- HELPERS ---
@@ -162,17 +164,15 @@ export default function TraderTerminal() {
     const handleConnect = () => {
         setIsConnected(true);
         addLog("Connecté au serveur boursier", "info");
-        console.log('🔌 Socket connected, session:', session);
+
         if (session?.user?.id) {
             // Envoyer userId et userName pour l'identification
             const identifyPayload = { 
                 userId: session.user.id,
                 userName: session.user.name || session.user.email?.split('@')[0] || 'Trader'
             };
-            console.log('🔵 Sending identify:', identifyPayload);
             socket.emit('identify', identifyPayload);
         } else {
-            console.warn('⚠️ No session.user.id available, cannot identify');
             addLog("Session non trouvée", "error");
         }
         socket.emit('trader:getState');
@@ -185,7 +185,6 @@ export default function TraderTerminal() {
     };
 
     const handleState = (data: any) => {
-        console.log('📊 trader:state/update received:', data);
         if (data?.stocks) {
             setStocks(prev => {
                 // Transformer les données du serveur pour ajouter le champ 'symbol' manquant
@@ -231,17 +230,14 @@ export default function TraderTerminal() {
         }
 
         if (data?.portfolio) {
-            console.log('💼 Portfolio update from state:', data.portfolio);
             setPortfolio(data.portfolio);
         }
         if (data?.leaderboard) {
-            console.log('🏆 Leaderboard update:', data.leaderboard);
             setLeaderboard(data.leaderboard);
         }
     };
 
     const handlePortfolio = (data: any) => {
-        console.log('💰 trader:portfolio received:', data);
         setPortfolio(data);
         // Confirmer la mise à jour dans les logs
         if (data.cash !== undefined) {
@@ -271,25 +267,22 @@ export default function TraderTerminal() {
   // Effet séparé pour identifier le joueur quand la session devient disponible
   useEffect(() => {
     if (!socket?.connected) {
-      console.log('❌ Socket not connected, cannot identify');
       return;
     }
     if (!session?.user?.id) {
-      console.log('❌ No session.user.id, cannot identify');
       return;
     }
     
-    console.log('👤 Session available, sending identify');
     const identifyPayload = { 
         userId: session.user.id,
         userName: session.user.name || session.user.email?.split('@')[0] || 'Trader'
     };
-    console.log('📤 Emitting identify:', identifyPayload);
+
     socket.emit('identify', identifyPayload);
     
     // Petit délai puis demander l'état
     setTimeout(() => {
-      console.log('📤 Requesting state after identify');
+
       socket.emit('trader:getState');
     }, 100);
   }, [socket?.connected, session?.user?.id, session?.user?.name, session?.user?.email]);
@@ -304,7 +297,6 @@ export default function TraderTerminal() {
   const handleTransaction = (type: 'BUY' | 'SELL') => {
     const stock = stocks[selectedSymbol];
     if (!stock || !socket?.connected || !session?.user?.id) {
-      console.error('❌ Cannot trade:', { hasStock: !!stock, socketConnected: socket?.connected, hasUserId: !!session?.user?.id });
       addLog("Impossible de trader (connexion ou session manquante)", "error");
       return;
     }
@@ -323,7 +315,6 @@ export default function TraderTerminal() {
             playSound('buy');
             addLog(`Commande d'achat: ${tradeAmount} ${stock.symbol}`, "info");
         } else {
-            console.warn(`⚠️ Insufficient funds: need $${cost.toFixed(2)}, have $${portfolio.cash.toFixed(2)}`);
             playSound('alert');
             addLog("Fonds insuffisants", "error");
         }
@@ -340,7 +331,6 @@ export default function TraderTerminal() {
             playSound('sell');
             addLog(`Commande de vente: ${tradeAmount} ${stock.symbol}`, "info");
         } else {
-            console.warn(`⚠️ Insufficient holdings: need ${tradeAmount}, have ${owned}`);
             playSound('alert');
             addLog("Pas assez d'actions", "error");
         }

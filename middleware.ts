@@ -80,7 +80,6 @@ export async function middleware(request: NextRequest) {
       }
     } catch (e) {
       // ignore - fallback to empty
-      console.error('Middleware: could not fetch dynamic iframe allowlist', e);
     }
   }
   const iframeAllowlist = iframeAllowlistRaw

@@ -3,12 +3,9 @@ import { db } from "@/lib/db";
 import { announcements } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: Request, context: any) {
   try {
-    const { id } = params;
+    const id = context?.params?.id as string;
 
     const announcement = await db
       .select()

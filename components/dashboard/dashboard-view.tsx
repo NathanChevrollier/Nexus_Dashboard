@@ -13,7 +13,7 @@ import { EditWidgetDialog } from "@/components/dashboard/edit-widget-dialog";
 import { ShareDashboardDialog } from "@/components/dashboard/share-dashboard-dialog";
 import { updateWidgetPositions, deleteWidget } from "@/lib/actions/widgets";
 import { updateCategoryPositions, deleteCategory, toggleCategoryCollapse as toggleCategoryCollapseAction } from "@/lib/actions/categories";
-import { CrossGridDragProvider, useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-v2";
+import { CrossGridDragProvider, useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-context";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { useAlert } from "@/components/ui/confirm-provider";
 

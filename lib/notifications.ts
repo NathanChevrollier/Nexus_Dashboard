@@ -28,7 +28,6 @@ export async function createNotification(opts: {
       read: false,
     });
   } catch (e) {
-    console.warn('Failed to persist notification', e);
   }
   // Check user preferences before emitting in-app (socket)
   try {
@@ -39,11 +38,9 @@ export async function createNotification(opts: {
       try {
         await emitToUser(userId, type, { ...payload, title, message, link, id, timestamp: Date.now() });
       } catch (e) {
-        console.warn('Failed to emit notification to socket server', e);
       }
     }
   } catch (e) {
-    console.warn('Failed to check preferences before emit', e);
   }
 
   return id;
@@ -63,7 +60,6 @@ export async function markNotificationsRead(userId: string, ids: string[]) {
     await db.update(notifications).set({ read: true }).where(and(eq(notifications.userId, userId), inArray(notifications.id, ids)));
     return true;
   } catch (e) {
-    console.warn('markNotificationsRead error', e);
     return false;
   }
 }
@@ -73,7 +69,6 @@ export async function markAllReadForUser(userId: string) {
     await db.update(notifications).set({ read: true }).where(eq(notifications.userId, userId));
     return true;
   } catch (e) {
-    console.warn('markAllReadForUser error', e);
     return false;
   }
 }

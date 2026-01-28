@@ -2,7 +2,7 @@
 
 import { Widget } from "@/lib/db/schema";
 import { WidgetComponent } from "@/components/widgets/widget-component";
-import { useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-v2"; // Correction de l'import
+import { useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-context";
 import { cn } from "@/lib/utils";
 import { CSSProperties } from "react";
 

@@ -35,15 +35,11 @@ export interface ScheduleInfo {
  * Appelle l'API serveur pour éviter les problèmes CORS et proxy
  */
 export async function detectSchedule(title: string, type: string): Promise<ScheduleInfo | null> {
-  console.log('[detectSchedule] Called with:', { title, type });
-  
   if (!title || title.trim().length < 2) {
-    console.log('[detectSchedule] Invalid title');
     return null;
   }
 
   try {
-    console.log('[detectSchedule] Fetching API...');
     const response = await fetch('/api/library/detect-schedule', {
       method: 'POST',
       headers: {
@@ -55,18 +51,13 @@ export async function detectSchedule(title: string, type: string): Promise<Sched
       }),
     });
 
-    console.log('[detectSchedule] Response status:', response.status);
-
     if (!response.ok) {
-      console.error('Schedule detection API error:', response.status);
       return null;
     }
 
     const data = await response.json();
-    console.log('[detectSchedule] Response data:', data);
     return data.schedule || null;
   } catch (error) {
-    console.error('Schedule detection failed:', error);
     return null;
   }
 }

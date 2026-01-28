@@ -23,7 +23,6 @@ export async function emitToUser(targetUserId: string, event: string, payload: a
       body: JSON.stringify({ event, targetUserId, payload, timestamp: Number(ts) }),
     });
   } catch (e) {
-    console.warn('emitToUser error', e);
   }
 }
 

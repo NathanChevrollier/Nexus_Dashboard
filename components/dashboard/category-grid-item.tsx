@@ -5,7 +5,7 @@ import { ChevronDown, ChevronUp, Trash2, Folder, GripVertical, Plus, LogOut, Arr
 import { Button } from "@/components/ui/button";
 import { WidgetComponent } from "@/components/widgets/widget-component";
 import { CustomGridLayout, GridItem } from "@/components/ui/custom-grid-layout";
-import { useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-v2";
+import { useCrossGridDrag } from "@/lib/contexts/cross-grid-drag-context";
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 

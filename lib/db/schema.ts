@@ -239,25 +239,6 @@ export const gameScores = mysqlTable('game_scores', {
   scoreIdx: index('game_scores_score_idx').on(table.score),
 }));
 
-// ============= DEPRECATED: GAMES TABLE (no longer needed) =============
-// export const games = mysqlTable('games', {
-//   id: varchar('id', { length: 255 }).primaryKey(),
-//   userId: varchar('user_id', { length: 255 }).notNull(),
-//   title: varchar('title', { length: 255 }).notNull(),
-//   description: text('description'),
-//   icon: text('icon'),
-//   gameUrl: text('game_url'),
-//   gameType: varchar('game_type', { length: 100 }),
-//   config: json('config').$type<Record<string, any>>(),
-//   isActive: boolean('is_active').default(true).notNull(),
-//   order: int('order').default(0).notNull(),
-//   createdAt: timestamp('created_at').defaultNow().notNull(),
-//   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
-// }, (table) => ({
-//   userIdIdx: index('games_user_id_idx').on(table.userId),
-//   orderIdx: index('games_order_idx').on(table.order),
-// }));
-
 // ============= RELATIONS =============
 export const usersRelations = relations(users, ({ many }) => ({
   dashboards: many(dashboards),
