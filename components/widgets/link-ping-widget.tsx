@@ -61,10 +61,16 @@ export function LinkPingWidget({ widget }: LinkPingWidgetProps) {
   const latency = data?.responseTime || 0;
 
   // 3. Gestion du Click
-  const handleOpen = () => {
+  const handleOpen = (e?: React.MouseEvent) => {
     if (!target.effectiveUrl) return;
-    const dest = openInNewTab ? "_blank" : "_self";
-    window.open(target.effectiveUrl, dest, openInNewTab ? 'noopener,noreferrer' : undefined);
+    
+    // Support Ctrl+Click pour forcer le nouvel onglet même si la config dit autrement
+    const forceNewTab = e?.ctrlKey || e?.metaKey || e?.button === 1;
+    const dest = forceNewTab || openInNewTab ? "_blank" : "_self";
+    
+    // Si c'est un clic milieu ou ctrl, on laisse le navigateur faire si c'était un lien <a>
+    // Mais ici on est sur une <div> onClick, donc on doit gérer window.open
+    window.open(target.effectiveUrl, dest, (forceNewTab || openInNewTab) ? 'noopener,noreferrer' : undefined);
   };
 
   // 4. Styles dynamiques pour la pastille
@@ -78,9 +84,10 @@ export function LinkPingWidget({ widget }: LinkPingWidgetProps) {
 
   return (
     <div
-      onClick={() => { if (target.effectiveUrl) handleOpen(); }}
+      onClick={(e) => { if (target.effectiveUrl) handleOpen(e); }}
+      onAuxClick={(e) => { if (e.button === 1 && target.effectiveUrl) handleOpen(e); }} // Support molette
       className={cn(
-        "group h-full w-full flex flex-col items-center justify-between p-2 rounded-xl bg-card border border-border/50 shadow-sm transition-all duration-300 relative overflow-hidden",
+        "group h-full w-full flex flex-col items-center justify-between p-2 rounded-xl bg-card border border-border/50 shadow-sm transition-all duration-300 relative overflow-hidden link-widget-trigger",
         target.effectiveUrl ? 'cursor-pointer hover:border-primary/50 hover:shadow-md' : ''
       )}
     >

@@ -13,7 +13,7 @@ interface DraggableWidgetProps {
   sourceCategoryId?: string;
   onEdit?: () => void;
   onDelete?: () => void;
-  // Props injectées par CustomGridLayout (nécessaires pour le positionnement)
+  // Props pour le drag & drop (nécessaires pour le positionnement)
   style?: CSSProperties;
   className?: string;
   onPointerDown?: (e: React.PointerEvent) => void;

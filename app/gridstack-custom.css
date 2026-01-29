@@ -1,0 +1,181 @@
+/* Custom Gridstack Styles to fix visuals */
+
+/* 1. Spacing - Force gap */
+.grid-stack {
+    background: transparent;
+}
+
+/* 
+   FIX: GridStack items need to be positioned relative to allow absolute content to fill them 
+   AND margins need to be handled correctly. 
+   If using GridStack 'margin' option, it sets the `grid-stack-item-content` to have offsets usually?
+   OR `grid-stack-item` has offsets.
+*/
+
+.grid-stack-item-content {
+    /* We want the content to fill the tile but respect the margin */
+    /* using !important to override any incline styles or other interference */
+    
+    position: absolute !important;
+    top: 5px !important;   /* Increased gap */
+    bottom: 5px !important;
+    left: 5px !important;
+    right: 5px !important;
+    
+    /* Reset margins that might double up */
+    margin: 0 !important;
+    
+    border-radius: 0.75rem; 
+    overflow: hidden;
+    box-sizing: border-box;
+    
+    /* Ensure visible/block */
+    display: block !important;
+    /* Smooth transition for hover effects */
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+
+/* Ensure the wrapper doesn't collapse */
+.grid-stack-item {
+    border: none !important; /* Visual cleanup */
+}
+
+/* 2. Resize Handle Customization */
+.ui-resizable-handle {
+    width: 20px !important;
+    height: 20px !important;
+    right: 2px !important;
+    bottom: 2px !important;
+    z-index: 1000 !important; /* Higher than anything else */
+    background-image: none !important; /* Reset default */
+    opacity: 0;
+    transition: opacity 0.2s;
+    cursor: se-resize !important;
+}
+.grid-stack-item:hover .ui-resizable-handle {
+    opacity: 1;
+}
+
+/* Custom Icon for SE handle */
+.ui-resizable-se::after {
+    content: '';
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    width: 12px; /* Bigger */
+    height: 12px;
+    border-right: 3px solid rgba(255,255,255,0.6); /* Thicker and brighter */
+    border-bottom: 3px solid rgba(255,255,255,0.6);
+    border-bottom-right-radius: 3px;
+    pointer-events: none;
+    transition: border-color 0.2s, transform 0.2s;
+}
+.ui-resizable-se:hover::after {
+    border-color: #fff;
+    box-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    transform: scale(1.1);
+}
+
+/* 3. Improved Placeholder Preview */
+.grid-stack-placeholder > .placeholder-content {
+    background-color: hsl(var(--primary) / 0.2) !important; /* More visible */
+    border: 2px dashed hsl(var(--primary)) !important; /* Solid color for border */
+    border-radius: 0.75rem !important;
+    top: 5px !important; /* Match current gap */
+    bottom: 5px !important;
+    left: 5px !important;
+    right: 5px !important;
+    width: auto !important;
+    height: auto !important;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 0 15px hsl(var(--primary) / 0.2);
+}
+
+/* 4. Ctrl+Click Visual Indicator */
+body.ctrl-pressed .link-widget-trigger {
+    cursor: alias !important; /* Arrow with little arrow */
+    position: relative;
+    z-index: 10; /* Ensure container is above other things if needed */
+}
+body.ctrl-pressed .link-widget-trigger::after {
+    content: '↗';
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    font-size: 14px;
+    font-weight: bold;
+    background: hsl(var(--primary)); /* Use primary color */
+    color: hsl(var(--primary-foreground));
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    border-radius: 50%;
+    pointer-events: none;
+    animation: fade-in 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 50; /* Ensure icon is on top of images */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.2);
+}
+body.ctrl-pressed .link-widget-trigger:hover {
+     box-shadow: 0 0 0 2px hsl(var(--primary)/0.6);
+}
+
+@keyframes fade-in {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+/* Custom visual for handle */
+.ui-resizable-handle::after {
+    content: "";
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid rgba(255, 255, 255, 0.5);
+    border-bottom: 2px solid rgba(255, 255, 255, 0.5);
+    pointer-events: none;
+}
+
+/* Dark mode handle color */
+.dark .ui-resizable-handle::after {
+    border-color: rgba(255, 255, 255, 0.6);
+}
+.light .ui-resizable-handle::after {
+    border-color: rgba(0, 0, 0, 0.4);
+}
+
+/* Hide handle when not in edit mode (Gridstack does this via disableResize, but double check) */
+.grid-stack-static .ui-resizable-handle {
+    display: none !important;
+}
+
+/* 3. Placeholder (Highlight where dropping) */
+.grid-stack-placeholder > .placeholder-content {
+    background-color: rgba(59, 130, 246, 0.1) !important; /* blue-500/10 */
+    border: 2px dashed rgba(59, 130, 246, 0.5) !important;
+    border-radius: 0.75rem !important;
+    width: 100%;
+    height: 100%;
+}
+
+/* 4. Fix Nested Category Overflow */
+.grid-stack-nested {
+    /* Allow scrolling inside category if needed, but usually we expand height? */
+    /* If we scroll: */
+    overflow-y: auto; 
+    overflow-x: hidden;
+    /* Ensure drop target works */
+    min-height: 100px; 
+}
+
+/* Ensure widgets inside category don't get clipped weirdly */
+.grid-stack-nested .grid-stack-item-content {
+    overflow: hidden !important; /* Restore hidden for inner widgets */
+}

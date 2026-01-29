@@ -3,7 +3,8 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dashboards, widgets, categories } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { DashboardView } from "@/components/dashboard/dashboard-view";
+// import { DashboardView } from "@/components/dashboard/dashboard-view"; OLD
+import { DashboardGridstack } from "@/components/dashboard/dashboard-gridstack"; // NEW
 import { Navbar } from "@/components/dashboard/navbar";
 
 export default async function DashboardSlugPage({
@@ -46,18 +47,20 @@ export default async function DashboardSlugPage({
     .orderBy(categories.order);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-full flex flex-col overflow-hidden bg-background">
       <Navbar 
         user={session.user} 
         dashboards={userDashboards}
         currentDashboardId={currentDashboard.id}
       />
-      <DashboardView 
-        dashboard={currentDashboard}
-        isOwner={true}
-        initialWidgets={dashboardWidgets}
-        initialCategories={dashboardCategories}
-      />
+      <div className="flex-1 overflow-y-auto">
+        <DashboardGridstack 
+          dashboard={currentDashboard}
+          isOwner={true}
+          initialWidgets={dashboardWidgets}
+          initialCategories={dashboardCategories}
+        />
+      </div>
     </div>
   );
 }

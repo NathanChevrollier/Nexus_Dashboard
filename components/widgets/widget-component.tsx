@@ -93,33 +93,9 @@ export const WidgetComponent = memo(function WidgetComponent({
   const isSeamless = SEAMLESS_WIDGETS.includes(widget.type);
 
   // Gestion du Drag
-  // NOTE: laisser le drag "normal" géré par `CustomGridLayout` lorsque l'utilisateur
-  // clique simplement sur la poignée. N'activer le drag cross-grid (déplacer entre
-  // catégories) que si Ctrl/Cmd est pressé.
+  // Gridstack handles drag natively via .widget-drag-handle class
   const handleDragHandlePointerDown = (event: React.PointerEvent) => {
-    const activateCrossGrid = event.ctrlKey || event.metaKey;
-
-    if (!activateCrossGrid) {
-      // Ne rien intercepter : laisser le layout gérer le drag natif
-      return;
-    }
-
-    // Si Ctrl/Cmd est pressé, on intercepte et on déclenche le drag global
-    event.preventDefault();
-    event.stopPropagation();
-
-    // Effet visuel "Pop"
-    const widgetElement = event.currentTarget.closest('.widget-container') as HTMLElement;
-    if (widgetElement) {
-      widgetElement.animate([
-        { transform: 'scale(1)' },
-        { transform: 'scale(1.02)' },
-        { transform: 'scale(1)' }
-      ], { duration: 250, easing: 'ease-out' });
-    }
-
-    // Déclenchement du drag global (cross-grid)
-    startDrag(widget, sourceType, sourceCategoryId);
+     // Legacy handler kept empty just to satisfy interface if needed
   };
 
   const WidgetToRender = WIDGET_REGISTRY[widget.type];
@@ -190,9 +166,10 @@ interface WidgetEditControlsProps {
 }
 
 function WidgetEditControls({ type, onEdit, onDelete, onPointerDown }: WidgetEditControlsProps) {
-  // Empêcher le clic de traverser vers le widget
-  const handleMouseDown = (e: React.MouseEvent) => e.stopPropagation();
-
+  // IMPORTANT: Do NOT stop propagation here for mouse down.
+  // Gridstack needs to receive the mousedown event to initiate dragging.
+  // If we stop propagation, the drag handle becomes a dead zone.
+  
   return (
     <div 
       className="absolute top-2 inset-x-0 z-[60] flex justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
@@ -203,14 +180,18 @@ function WidgetEditControls({ type, onEdit, onDelete, onPointerDown }: WidgetEdi
         className="flex items-center gap-1 p-1 rounded-full bg-foreground/90 text-background backdrop-blur-md border border-white/20 shadow-xl transform translate-y-[-2px] hover:translate-y-0 transition-transform"
         // Réactiver les pointer-events sur la bulle elle-même
         style={{ pointerEvents: 'auto' }}
-        onMouseDown={handleMouseDown}
       >
         
         {/* HANDLE DE DRAG */}
         <div
-          className="widget-drag-handle cursor-grab active:cursor-grabbing flex items-center gap-1.5 px-2 py-1 rounded-full hover:bg-white/20 transition-colors"
-          onPointerDown={onPointerDown}
+          className="widget-drag-handle widget-header cursor-grab active:cursor-grabbing flex items-center gap-1.5 px-2 py-1 rounded-full hover:bg-white/20 transition-colors"
+          // We don't need manual pointer down handler anymore as Gridstack handles it via class selector
           title="Maintenir pour déplacer"
+          // Empêcher la propagation pour éviter les conflits
+          onPointerDown={(e) => {
+            // Marquer comme zone de drag prioritaire
+            e.currentTarget.setAttribute('data-drag-priority', 'true');
+          }}
         >
           <GripVertical className="h-3.5 w-3.5" />
           <span className="text-[10px] font-bold uppercase tracking-wider max-w-[80px] truncate select-none">
@@ -221,7 +202,7 @@ function WidgetEditControls({ type, onEdit, onDelete, onPointerDown }: WidgetEdi
         <div className="w-px h-3 bg-white/20 mx-0.5" />
 
         {/* ACTIONS */}
-        <div className="flex items-center gap-1 pr-1">
+        <div className="flex items-center gap-1 pr-1 ui-disable-drag" style={{ pointerEvents: 'auto' }}>
           {onEdit && (
             <Button
               variant="ghost"

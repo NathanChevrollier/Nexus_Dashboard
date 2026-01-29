@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dashboards, widgets, categories } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { DashboardView } from "@/components/dashboard/dashboard-view";
+import { DashboardGridstack } from "@/components/dashboard/dashboard-gridstack";
 import { Navbar } from "@/components/dashboard/navbar";
 import { checkHasSeenGuide } from "@/lib/actions/users";
 
@@ -31,7 +31,7 @@ export default async function DashboardPage() {
           currentDashboardId={currentDashboard.id}
         />
         <div className="flex-1 overflow-y-auto">
-          <DashboardView 
+          <DashboardGridstack 
             dashboard={currentDashboard}
             isOwner={true}
             initialWidgets={dashboardWidgets}
@@ -101,7 +101,7 @@ export default async function DashboardPage() {
         hasSeenGuide={hasSeenGuide}
       />
       <div className="flex-1 overflow-y-auto">
-        <DashboardView 
+        <DashboardGridstack 
           dashboard={currentDashboard}
           isOwner={true}
           initialWidgets={dashboardWidgets}

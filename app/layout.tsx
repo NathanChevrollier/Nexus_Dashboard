@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import "./themes-glassmorphism.css";
+import "./category-animations.css";
 import { Providers } from "@/components/providers";
 import { cookies } from 'next/headers';
 

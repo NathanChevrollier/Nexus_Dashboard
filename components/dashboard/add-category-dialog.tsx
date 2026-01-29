@@ -18,6 +18,7 @@ interface AddCategoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   dashboardId: string;
+  isEditMode?: boolean;
   onCategoryAdded: () => void;
 }
 
@@ -31,6 +32,7 @@ export function AddCategoryDialog({
   open,
   onOpenChange,
   dashboardId,
+  isEditMode,
   onCategoryAdded,
 }: AddCategoryDialogProps) {
   const alert = useAlert();
@@ -59,7 +61,10 @@ export function AddCategoryDialog({
       setName("");
       setIcon("📁");
       setColor("#3b82f6");
-      onOpenChange(false);
+      // Ne ferme le dialog qu'en dehors du mode édition  
+      if (!isEditMode) {
+        onOpenChange(false);
+      }
       onCategoryAdded();
     } catch (error) {
       console.error("Erreur:", error);

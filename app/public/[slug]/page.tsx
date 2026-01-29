@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { dashboards, widgets, categories } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { DashboardView } from "@/components/dashboard/dashboard-view";
+import { DashboardGridstack } from "@/components/dashboard/dashboard-gridstack";
 
 export default async function PublicDashboardPage({
   params,
@@ -53,7 +53,7 @@ export default async function PublicDashboardPage({
         </div>
       </div>
       
-      <DashboardView 
+      <DashboardGridstack 
         dashboard={dashboard}
         isOwner={false}
         initialWidgets={dashboardWidgets}

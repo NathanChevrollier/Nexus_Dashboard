@@ -1,0 +1,105 @@
+/* Animations spécifiques pour les catégories - Performance optimisée */
+
+/* Animation d'ouverture/fermeture des catégories */
+@keyframes category-expand {
+  from {
+    max-height: 0;
+    opacity: 0;
+    transform: scaleY(0);
+  }
+  to {
+    max-height: 2000px;
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes category-collapse {
+  from {
+    max-height: 2000px;
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  to {
+    max-height: 0;
+    opacity: 0;
+    transform: scaleY(0);
+  }
+}
+
+/* Classe pour les animations fluides des catégories */
+.category-content-expanding {
+  animation: category-expand 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.category-content-collapsing {
+  animation: category-collapse 0.4s cubic-bezier(0.32, 0, 0.67, 0) forwards;
+}
+
+/* Amélioration des performances pour les transformations */
+.category-smooth-transform {
+  will-change: transform, opacity, max-height;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+}
+
+/* Animation du chevron plus fluide */
+.category-chevron {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+.category-chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
+/* Hover effects optimisés */
+.category-header {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: background-color, box-shadow;
+}
+
+.category-header:hover {
+  transform: translateZ(0); /* Force hardware acceleration */
+}
+
+/* Animation pour les boutons d'action */
+.category-actions {
+  transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+  will-change: opacity, transform;
+}
+
+.category-actions.visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.category-actions.hidden {
+  opacity: 0;
+  transform: translateX(8px);
+}
+
+/* Améliorations pour le glassmorphism */
+.category-glass-effect {
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+}
+
+/* Optimisation pour les grilles imbriquées */
+.grid-stack-nested {
+  contain: layout style paint;
+}
+
+/* Réduction du motion pour les utilisateurs sensibles */
+@media (prefers-reduced-motion: reduce) {
+  .category-content-expanding,
+  .category-content-collapsing {
+    animation: none !important;
+  }
+  
+  .category-chevron,
+  .category-header,
+  .category-actions {
+    transition: none !important;
+  }
+}

@@ -25,29 +25,37 @@ interface WidgetSizePresetsProps {
 const sizePresetsByType: Record<string, Array<{ name: string; w: number; h: number; icon: any }>> = {
   // --- LIENS & TOOLS ---
   link: [
-    { name: "Standard", w: 1, h: 1, icon: Square },
-    { name: "Moyen", w: 2, h: 2, icon: Square },
-    { name: "Grand", w: 3, h: 3, icon: Maximize2 },
+    { name: "Mini", w: 1, h: 1, icon: Square },
+    { name: "Petit carré", w: 2, h: 2, icon: Square },
+    { name: "Rectangle H", w: 3, h: 2, icon: RectangleHorizontal },
+    { name: "Rectangle V", w: 2, h: 3, icon: RectangleVertical },
+    { name: "Grand carré", w: 3, h: 3, icon: Maximize2 },
   ],
   "link-ping": [
-    { name: "Standard", w: 1, h: 1, icon: Square },
-    { name: "Moyen", w: 2, h: 2, icon: Square },
-    { name: "Grand", w: 3, h: 3, icon: Maximize2 },
+    { name: "Mini", w: 1, h: 1, icon: Square },
+    { name: "Petit carré", w: 2, h: 2, icon: Square },
+    { name: "Rectangle H", w: 3, h: 2, icon: RectangleHorizontal },
+    { name: "Rectangle V", w: 2, h: 3, icon: RectangleVertical },
+    { name: "Grand carré", w: 3, h: 3, icon: Maximize2 },
   ],
   ping: [
-    { name: "Compact", w: 2, h: 1, icon: RectangleHorizontal },
+    { name: "Mini", w: 2, h: 1, icon: RectangleHorizontal },
     { name: "Standard", w: 3, h: 2, icon: RectangleHorizontal },
+    { name: "Carré", w: 3, h: 3, icon: Square },
   ],
   
   // --- CONTENU & LISTES ---
   notes: [
-    { name: "Post-it", w: 2, h: 2, icon: Square },
+    { name: "Mini", w: 2, h: 2, icon: Square },
+    { name: "Petit rectangle", w: 3, h: 2, icon: RectangleHorizontal },
+    { name: "Carré moyen", w: 3, h: 3, icon: Square },
     { name: "Standard", w: 4, h: 4, icon: Square },
     { name: "Large", w: 6, h: 4, icon: RectangleHorizontal },
   ],
   "todo-list": [
+    { name: "Mini liste", w: 2, h: 3, icon: RectangleVertical },
+    { name: "Compact", w: 3, h: 3, icon: Square },
     { name: "Liste", w: 3, h: 4, icon: RectangleVertical },
-    { name: "Compact", w: 2, h: 3, icon: RectangleVertical },
     { name: "Large", w: 4, h: 5, icon: RectangleVertical },
   ],
   watchlist: [
@@ -55,8 +63,10 @@ const sizePresetsByType: Record<string, Array<{ name: string; w: number; h: numb
     { name: "Mur", w: 6, h: 4, icon: RectangleHorizontal },
   ],
   bookmarks: [
-    { name: "Grille", w: 4, h: 4, icon: Square },
+    { name: "Mini", w: 2, h: 2, icon: Square },
     { name: "Compact", w: 3, h: 3, icon: Square },
+    { name: "Liste", w: 3, h: 4, icon: RectangleVertical },
+    { name: "Grille", w: 4, h: 4, icon: Square },
   ],
 
   // --- MÉDIAS & INTÉGRATIONS ---
@@ -75,20 +85,25 @@ const sizePresetsByType: Record<string, Array<{ name: string; w: number; h: numb
     { name: "Large", w: 5, h: 4, icon: Square },
   ],
   monitoring: [
+    { name: "Mini carré", w: 2, h: 2, icon: Square },
+    { name: "Petit rect", w: 3, h: 2, icon: RectangleHorizontal },
+    { name: "Carré moyen", w: 3, h: 3, icon: Square },
     { name: "Standard", w: 4, h: 3, icon: RectangleHorizontal },
-    { name: "Compact", w: 2, h: 2, icon: Square },
     { name: "Dashboard", w: 6, h: 3, icon: RectangleHorizontal },
   ],
 
   // --- CALENDRIERS & TEMPS ---
   weather: [
-    { name: "Compact", w: 2, h: 2, icon: Square },
+    { name: "Mini", w: 2, h: 2, icon: Square },
+    { name: "Rectangle", w: 3, h: 2, icon: RectangleHorizontal },
+    { name: "Carré moyen", w: 3, h: 3, icon: Square },
     { name: "Semaine", w: 4, h: 2, icon: RectangleHorizontal },
-    { name: "Détaillé", w: 3, h: 3, icon: Square },
+    { name: "Grand carré", w: 4, h: 4, icon: Maximize2 },
   ],
   datetime: [
-    { name: "Compact", w: 2, h: 1, icon: RectangleHorizontal },
-    { name: "Horloge", w: 2, h: 2, icon: Square },
+    { name: "Mini", w: 2, h: 1, icon: RectangleHorizontal },
+    { name: "Petit carré", w: 2, h: 2, icon: Square },
+    { name: "Rectangle", w: 3, h: 2, icon: RectangleHorizontal },
     { name: "Complet", w: 4, h: 2, icon: RectangleHorizontal },
   ],
   "anime-calendar": [
@@ -126,13 +141,29 @@ const sizePresetsByType: Record<string, Array<{ name: string; w: number; h: numb
   quote: [
     { name: "Carte", w: 4, h: 3, icon: RectangleHorizontal },
     { name: "Bannière", w: 6, h: 2, icon: RectangleHorizontal },
+    { name: "Carré", w: 3, h: 3, icon: Square },
+  ],
+  
+  // --- NOUVEAUX WIDGETS AVEC PRESETS ---
+  games: [
+    { name: "Mini", w: 2, h: 2, icon: Square },
+    { name: "Carré", w: 3, h: 3, icon: Square },
+    { name: "Grand", w: 4, h: 4, icon: Maximize2 },
+  ],
+  library: [
+    { name: "Mini", w: 3, h: 2, icon: RectangleHorizontal },
+    { name: "Carré", w: 3, h: 3, icon: Square },
+    { name: "Standard", w: 4, h: 3, icon: RectangleHorizontal },
+    { name: "Large", w: 5, h: 4, icon: Maximize2 },
   ],
 };
 
 const defaultSizePresets = [
-  { name: "Petit", w: 2, h: 2, icon: Minimize2 },
-  { name: "Moyen", w: 3, h: 3, icon: Square },
-  { name: "Grand", w: 4, h: 4, icon: Maximize2 },
+  { name: "Mini", w: 2, h: 2, icon: Minimize2 },
+  { name: "Petit carré", w: 3, h: 3, icon: Square },
+  { name: "Rectangle H", w: 4, h: 3, icon: RectangleHorizontal },
+  { name: "Rectangle V", w: 3, h: 4, icon: RectangleVertical },
+  { name: "Grand carré", w: 4, h: 4, icon: Maximize2 },
 ];
 
 export function WidgetSizePresets({

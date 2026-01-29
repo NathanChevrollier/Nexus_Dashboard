@@ -30,6 +30,7 @@ interface AddWidgetDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   dashboardId: string;
+  isEditMode?: boolean;
   onWidgetAdded?: (widget: Widget) => void;
 }
 type WidgetType = "link" | "ping" | "link-ping" | "iframe" | "datetime" | "weather" | "notes" | "chart" | "anime-calendar" | "todo-list" | "watchlist" | "timer" | "bookmarks" | "quote" | "countdown" | "universal-calendar" | "movies-tv-calendar" | "media-requests" | "torrent-overview" | "monitoring" | "media-library" | "library" | "games";
@@ -61,7 +62,7 @@ const widgetDefinitions = [
 ];
 
 // Data
-export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWidgetAdded }: AddWidgetDialogProps) {
+export default function AddWidgetDialog({ open, onOpenChange, dashboardId, isEditMode, onWidgetAdded }: AddWidgetDialogProps) {
   const alert = useAlert();
   const { hasPermission } = usePermissions();
 
@@ -170,10 +171,10 @@ export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWid
 
       // Default dimensions mapping
       const sizeMap: Partial<Record<WidgetType, { w: number, h: number }>> = {
-         "link": { w: 1, h: 1 },
+         "link": { w: 1, h: 1 }, // Default 1x1 for Links (small icons)
          "link-ping": { w: 1, h: 1 },
          "ping": { w: 3, h: 2 },
-         "weather": { w: 2, h: 2 },
+         "weather": { w: 3, h: 3 }, // Amélioration: plus d'espace pour les infos météo
          "datetime": { w: 4, h: 2 },
          "iframe": { w: 4, h: 3 },
          "notes": { w: 4, h: 4 },
@@ -188,13 +189,14 @@ export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWid
          "universal-calendar": { w: 5, h: 5 },
          "movies-tv-calendar": { w: 4, h: 4 },
          "countdown": { w: 3, h: 3 },
-         "timer": { w: 3, h: 4 },
+         "timer": { w: 3, h: 3 }, // Amélioration: format plus carré
          "watchlist": { w: 4, h: 4 },
-         "bookmarks": { w: 4, h: 4 },
+         "bookmarks": { w: 3, h: 4 }, // Amélioration: moins large pour la liste
          "quote": { w: 4, h: 3 },
+         "games": { w: 3, h: 3 }, // Ajout: widget de jeux
       };
 
-      const size = sizeMap[selectedWidget] || { w: 2, h: 2 };
+      const size = sizeMap[selectedWidget] || { w: 3, h: 3 }; // Taille par défaut plus généreuse
 
       const newWidget = await createWidget(dashboardId, {
         type: selectedWidget,
@@ -206,7 +208,10 @@ export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWid
       if (newWidget && onWidgetAdded) {
         onWidgetAdded({ ...newWidget, categoryId: null } as any);
       }
-      onOpenChange(false);
+      // Ne ferme le dialog qu'en dehors du mode édition
+      if (!isEditMode) {
+        onOpenChange(false);
+      }
     } catch (error) {
       console.error("Création widget échouée:", error);
       await alert("Erreur lors de la création.");

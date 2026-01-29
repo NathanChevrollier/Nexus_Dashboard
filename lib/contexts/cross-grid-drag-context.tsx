@@ -59,8 +59,20 @@ export function CrossGridDragProvider({ children }: { children: ReactNode }) {
 
 export function useCrossGridDrag() {
   const context = useContext(CrossGridDragContext);
+  // Gridstack Migration Safe-guard:
+  // If we are using Gridstack, we might not have provided this context.
+  // Instead of crashing, return a dummy api so components don't break.
   if (!context) {
-    throw new Error('useCrossGridDrag must be used within CrossGridDragProvider');
+    return {
+      draggingWidget: null,
+      draggedWidget: null,
+      sourceType: null,
+      sourceCategoryId: null,
+      startDrag: () => {}, // No-op
+      endDrag: () => null,
+      cancelDrag: () => {},
+      isDragging: false
+    } as CrossGridDragContextType;
   }
   return context;
 }
