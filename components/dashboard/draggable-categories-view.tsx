@@ -89,30 +89,14 @@ export function DraggableCategoriesView({
                     {...draggableProvided.draggableProps}
                     className={draggableSnapshot.isDragging ? "opacity-50" : ""}
                   >
-                    {/* Droppable zone inside category for widgets */}
-                    <Droppable 
-                      droppableId={category.id} 
-                      type="widget"
-                      isDropDisabled={!isEditMode}
-                    >
-                      {(droppableProvided, droppableSnapshot) => (
-                        <div
-                          ref={droppableProvided.innerRef}
-                          {...droppableProvided.droppableProps}
-                          className={droppableSnapshot.isDraggingOver ? "ring-2 ring-primary rounded-lg" : ""}
-                        >
-                          <CategorySection
-                            category={category}
-                            widgets={getWidgetsByCategory(category.id)}
-                            isEditMode={isEditMode}
-                            onWidgetDelete={onWidgetDelete}
-                            onWidgetEdit={onWidgetEdit}
-                            dragHandleProps={draggableProvided.dragHandleProps}
-                          />
-                          {droppableProvided.placeholder}
-                        </div>
-                      )}
-                    </Droppable>
+                    <CategorySection
+                      category={category}
+                      widgets={getWidgetsByCategory(category.id)}
+                      isEditMode={isEditMode}
+                      onWidgetDelete={onWidgetDelete}
+                      onWidgetEdit={onWidgetEdit}
+                      dragHandleProps={draggableProvided.dragHandleProps}
+                    />
                   </div>
                 )}
               </Draggable>

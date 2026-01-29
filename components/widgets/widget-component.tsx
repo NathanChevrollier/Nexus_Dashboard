@@ -31,7 +31,9 @@ import { TorrentOverviewWidget } from "./torrent-overview-widget";
 import { MonitoringWidget } from "./monitoring-widget";
 import { MediaLibraryWidget } from "./media-library-widget";
 import { LibraryWidget } from './library-widget';
+import { SpotifyPersonalWidget } from './spotify-personal-widget';
 import GamesWidget from './games-widget';
+
 import GameLeaderboardWidget from './game-leaderboard-widget';
 
 interface WidgetComponentProps {
@@ -66,7 +68,9 @@ const WIDGET_REGISTRY: Record<string, React.ComponentType<any>> = {
   "monitoring": MonitoringWidget,
   "media-library": MediaLibraryWidget,
   "library": LibraryWidget,
+  "spotify-personal": SpotifyPersonalWidget,
   "games": GamesWidget,
+
   "game-leaderboard": GameLeaderboardWidget,
 };
 

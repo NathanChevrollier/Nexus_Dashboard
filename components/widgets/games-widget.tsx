@@ -56,6 +56,12 @@ const GAMES: Game[] = [
     gameUrl: "/games/MoneyMaker",
   },
   {
+    id: "neural-nexus",
+    title: "Neural Nexus",
+    icon: "🧠",
+    gameUrl: "/games/neural-nexus",
+  },
+  {
     id: "pokechill",
     title: "PokeChill",
     icon: "/images/pokechill.jpg",

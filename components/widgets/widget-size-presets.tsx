@@ -25,14 +25,14 @@ interface WidgetSizePresetsProps {
 const sizePresetsByType: Record<string, Array<{ name: string; w: number; h: number; icon: any }>> = {
   // --- LIENS & TOOLS ---
   link: [
-    { name: "Compact", w: 1, h: 1, icon: Minimize2 },
-    { name: "Tuile", w: 2, h: 2, icon: Square },
-    { name: "Bannière", w: 3, h: 1, icon: RectangleHorizontal },
+    { name: "Standard", w: 1, h: 1, icon: Square },
+    { name: "Moyen", w: 2, h: 2, icon: Square },
+    { name: "Grand", w: 3, h: 3, icon: Maximize2 },
   ],
   "link-ping": [
-    { name: "Compact", w: 2, h: 1, icon: RectangleHorizontal },
-    { name: "Carte", w: 2, h: 2, icon: Square },
-    { name: "Large", w: 3, h: 2, icon: RectangleHorizontal },
+    { name: "Standard", w: 1, h: 1, icon: Square },
+    { name: "Moyen", w: 2, h: 2, icon: Square },
+    { name: "Grand", w: 3, h: 3, icon: Maximize2 },
   ],
   ping: [
     { name: "Compact", w: 2, h: 1, icon: RectangleHorizontal },

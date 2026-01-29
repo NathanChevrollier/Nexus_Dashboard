@@ -96,11 +96,11 @@ export function WidgetSelectorDialog({ open, onOpenChange, dashboardId, categori
       switch (selectedType) {
         case "link":
           options = linkForm;
-          defaultSize = { w: 2, h: 1 };
+          defaultSize = { w: 1, h: 1 };
           break;
         case "link-ping":
           options = linkPingForm;
-          defaultSize = { w: 2, h: 1 };
+          defaultSize = { w: 1, h: 1 };
           break;
           break;
         case "ping":

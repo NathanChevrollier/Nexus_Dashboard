@@ -9,6 +9,9 @@ import {
   json,
   primaryKey,
   index,
+  double,
+  uniqueIndex,
+  bigint,
 } from 'drizzle-orm/mysql-core';
 import { relations } from 'drizzle-orm';
 
@@ -38,6 +41,11 @@ export const users = mysqlTable('users', {
   hasSeenGuide: boolean('has_seen_guide').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+
+  // Spotify Integration
+  spotifyAccessToken: text('spotify_access_token'),
+  spotifyRefreshToken: text('spotify_refresh_token'),
+  spotifyTokenExpiresAt: bigint('spotify_token_expires_at', { mode: 'number' }),
 }, (table) => ({
   emailIdx: index('email_idx').on(table.email),
   statusIdx: index('status_idx').on(table.status),
@@ -368,6 +376,40 @@ export const libraryItems = mysqlTable('library_items', {
   
 }, (table) => ({
   userIdIdx: index('library_items_user_id_idx').on(table.userId),
+}));
+
+// ============= NEURAL NEXUS (GAME) =============
+export const neuralNexusSaves = mysqlTable('neural_nexus_saves', {
+  userId: varchar('user_id', { length: 255 }).notNull().primaryKey(),
+  saveData: json('save_data').notNull(),
+  lifetimeEntropy: double('lifetime_entropy').default(0).notNull(),
+  lastSavedAt: timestamp('last_saved_at').defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  entropyIdx: index('neural_nexus_lifetime_entropy_idx').on(table.lifetimeEntropy),
+}));
+
+export const neuralNexusAchievements = mysqlTable('neural_nexus_achievements', {
+  id: varchar('id', { length: 255 }).primaryKey(),
+  userId: varchar('user_id', { length: 255 }).notNull(),
+  achievementId: varchar('achievement_id', { length: 255 }).notNull(),
+  unlockedAt: timestamp('unlocked_at').defaultNow().notNull(),
+}, (table) => ({
+    userIdIdx: index('neural_nexus_achievements_user_idx').on(table.userId),
+    uniqueAchievement: uniqueIndex('unique_user_achievement').on(table.userId, table.achievementId),
+}));
+
+export const neuralNexusSavesRelations = relations(neuralNexusSaves, ({ one }) => ({
+  user: one(users, {
+    fields: [neuralNexusSaves.userId],
+    references: [users.id],
+  }),
+}));
+
+export const neuralNexusAchievementsRelations = relations(neuralNexusAchievements, ({ one }) => ({
+  user: one(users, {
+    fields: [neuralNexusAchievements.userId],
+    references: [users.id],
+  }),
 }));
 
 // ============= TYPES =============

@@ -46,6 +46,8 @@ export const LazyMediaLibraryWidget = lazy(() => import('@/components/widgets/me
 export const LazyLibraryWidget = lazy(() => import('@/components/widgets/library-widget').then(mod => ({ default: mod.LibraryWidget })));
 export const LazyGamesWidget = lazy(() => import('@/components/widgets/games-widget'));
 export const LazyGameLeaderboardWidget = lazy(() => import('@/components/widgets/game-leaderboard-widget'));
+export const LazySpotifyPersonalWidget = lazy(() => import('@/components/widgets/spotify-personal-widget').then(mod => ({ default: mod.SpotifyPersonalWidget })));
+
 
 /**
  * Wrapper avec Suspense pour un widget lazy-loaded

@@ -415,7 +415,7 @@ export function EditWidgetDialog({ widget, categories, open, onOpenChange, onWid
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 p-6">
+        <ScrollArea className="flex-1 p-6 min-h-0">
           <div className="grid gap-6">
             {/* Section Générale */}
             <div className="grid gap-4 p-4 border rounded-lg bg-card/50">

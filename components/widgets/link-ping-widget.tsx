@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Widget } from "@/lib/db/schema";
 import { useQuery } from "@tanstack/react-query";
 import { Globe, Loader2 } from "lucide-react";
@@ -12,6 +12,7 @@ interface LinkPingWidgetProps {
 
 export function LinkPingWidget({ widget }: LinkPingWidgetProps) {
   const { title, url, host, port, openInNewTab, icon, iconUrl } = widget.options as any;
+  const [imgError, setImgError] = useState(false);
 
   // 1. Calcul de la cible
   const target = useMemo(() => {
@@ -79,64 +80,46 @@ export function LinkPingWidget({ widget }: LinkPingWidgetProps) {
     <div
       onClick={() => { if (target.effectiveUrl) handleOpen(); }}
       className={cn(
-        "group relative h-full w-full flex flex-col p-1 rounded-xl bg-card border border-border/50 shadow-sm transition-all duration-300",
+        "group h-full w-full flex flex-col items-center justify-between p-2 rounded-xl bg-card border border-border/50 shadow-sm transition-all duration-300 relative overflow-hidden",
         target.effectiveUrl ? 'cursor-pointer hover:border-primary/50 hover:shadow-md' : ''
       )}
     >
-      {/* Conteneur interne pour l'image (arrondi légèrement plus petit) */}
-      <div className="relative h-full w-full overflow-hidden rounded-lg bg-background/50 flex items-center justify-center">
-        
-        {/* --- HEADER : Titre avec overlay sombre --- */}
-        <div className="absolute top-0 inset-x-0 z-20 p-2 bg-gradient-to-b from-black/70 via-black/30 to-transparent">
-          <h3 className="text-[11px] font-bold text-white text-center truncate drop-shadow-md tracking-wide">
-            {title || target.effectiveHost || "Service"}
-          </h3>
+        {/* --- Status Indicator (Absolute Top Right) --- */}
+        <div className="absolute top-2 right-2 z-20 flex items-center justify-center">
+            {isLoading ? (
+               <Loader2 className="h-2 w-2 animate-spin text-muted-foreground" />
+            ) : (
+               <div className={cn("h-2 w-2 rounded-full shadow-[0_0_4px_currentColor]", getStatusDotColor())} />
+            )}
         </div>
 
-        {/* --- BACKGROUND : Image ou Icône --- */}
-        <div className="absolute inset-0 z-0 flex items-center justify-center p-2">
-          {iconUrl ? (
+        {/* --- ICON / IMAGE CENTRALE --- */}
+        <div className="flex-1 w-full flex items-center justify-center p-1 overflow-hidden">
+          {iconUrl && !imgError ? (
             <img
               src={iconUrl}
-              alt="icon"
-              className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
+              alt={title || "icon"}
+              className="w-full h-full max-w-[80%] max-h-[80%] object-contain transition-transform duration-300 group-hover:scale-110"
+              onError={() => setImgError(true)}
+              referrerPolicy="no-referrer"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/50 transition-transform duration-500 group-hover:scale-105 rounded-md">
-              {icon ? (
-                <span className="text-5xl filter drop-shadow-sm">{icon}</span>
-              ) : (
-                <Globe className="h-12 w-12 text-muted-foreground/30" />
-              )}
+            <div className="text-3xl md:text-4xl transition-transform duration-300 group-hover:scale-110">
+              {icon || <Globe className="h-8 w-8 text-muted-foreground" />}
             </div>
           )}
         </div>
 
-        {/* --- FOOTER : La fameuse "Pillule" (Status + Latency) --- */}
-        <div className="absolute bottom-2 right-2 z-20">
-          <div className="flex items-center gap-1.5 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10 shadow-lg">
-            
-            {/* Le Point de couleur */}
-            <span className={cn("h-1.5 w-1.5 rounded-full shadow-[0_0_6px_currentColor]", getStatusDotColor())} />
-            
-            {/* Le Texte (ms) */}
-            <span className="text-[9px] font-bold text-white/90 tabular-nums leading-none">
-              {isLoading ? (
-                <Loader2 className="h-2 w-2 animate-spin" />
-              ) : error || !isUp ? (
-                "OFF"
-              ) : (
-                `${latency}ms`
-              )}
-            </span>
-          </div>
+        {/* --- Label (Bottom) --- */}
+        <div className="w-full mt-1 px-1">
+          <h3 className="text-[10px] sm:text-xs font-medium text-center truncate text-muted-foreground group-hover:text-foreground transition-colors">
+            {title || target.effectiveHost || "Service"}
+          </h3>
+          {/* Optional Latency on hover or if error */}
+          {(!isUp && !isLoading && error) && (
+              <p className="text-[9px] text-destructive text-center font-bold">DOWN</p>
+          )}
         </div>
-
-        {/* Petit indicateur de lien au survol */}
-        {target.effectiveUrl && (
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors z-10" />
-        )}
-      </div>
     </div>
   );
 }

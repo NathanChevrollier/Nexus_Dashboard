@@ -170,8 +170,8 @@ export default function AddWidgetDialog({ open, onOpenChange, dashboardId, onWid
 
       // Default dimensions mapping
       const sizeMap: Partial<Record<WidgetType, { w: number, h: number }>> = {
-         "link": { w: 2, h: 2 },
-         "link-ping": { w: 3, h: 2 },
+         "link": { w: 1, h: 1 },
+         "link-ping": { w: 1, h: 1 },
          "ping": { w: 3, h: 2 },
          "weather": { w: 2, h: 2 },
          "datetime": { w: 4, h: 2 },

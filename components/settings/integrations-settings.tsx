@@ -10,6 +10,7 @@ import { getIntegrations, upsertIntegration, deleteIntegration } from "@/lib/act
 import { Loader2, Plug, Trash2, CheckCircle2, AlertCircle, Clock } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useConfirm } from "@/components/ui/confirm-provider";
+import { SpotifyIntegrationCard } from "./spotify-integration-card";
 
 const INTEGRATION_TYPES = [
   { id: "overseerr", label: "Overseerr / Jellyseerr" },
@@ -164,7 +165,9 @@ export function IntegrationsSettings() {
   };
 
   return (
-    <Card className="mt-8">
+    <div className="space-y-6 mt-8">
+      <SpotifyIntegrationCard />
+      <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Plug className="h-5 w-5" />
@@ -456,5 +459,6 @@ export function IntegrationsSettings() {
         </Tabs>
       </CardContent>
     </Card>
+    </div>
   );
 }
